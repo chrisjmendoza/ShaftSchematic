@@ -108,6 +108,8 @@ import com.android.shaftschematic.ui.viewmodel.updateWornSection
 import com.android.shaftschematic.ui.viewmodel.updateWornSectionReference
 import com.android.shaftschematic.ui.viewmodel.setDyePenResult
 import com.android.shaftschematic.ui.viewmodel.setShowDyePenTest
+import com.android.shaftschematic.ui.viewmodel.setShowSparkTest
+import com.android.shaftschematic.ui.viewmodel.setSparkTestResult
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
@@ -805,6 +807,32 @@ fun OutputRoute(
                     label = "Result:",
                 )
             }
+            // The spark test row, printed after the dye pen boxes in the same lane.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(
+                    checked = runoutConfig.showSparkTest,
+                    onCheckedChange = { vm.setShowSparkTest(it) },
+                    modifier = Modifier.testTag("output_spark_test_switch"),
+                )
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text("Spark test", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Prints \"Spark test: PASS / FAIL\" boxes after the dye pen test. Leave both " +
+                            "blank to mark by hand, or pick one here. Saved with this job.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            if (runoutConfig.showSparkTest) {
+                DyePenResultChips(
+                    result = wearRecord.sparkTestResult,
+                    onSelect = { vm.setSparkTestResult(it) },
+                    label = "Result:",
+                    tagPrefix = "spark_test",
+                )
+            }
             Text(
                 "The consolidated sheet always carries the schematic's dimensions and spec " +
                     "footer; pick whether it features the runouts, the wear record, or both. " +
@@ -1067,6 +1095,8 @@ fun OutputRoute(
                     showDyePenRow = true,
                     dyePenOn = runoutConfig.showDyePenTest,
                     dyePenResult = wearRecord.dyePenResult,
+                    sparkTestOn = runoutConfig.showSparkTest,
+                    sparkTestResult = wearRecord.sparkTestResult,
                     showSBreak = true,
                     sBreakThresholdFrac = pdfSBreakThresholdFrac,
                     showDimensionArrows = true,

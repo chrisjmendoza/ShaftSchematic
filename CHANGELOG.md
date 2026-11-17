@@ -8,6 +8,16 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-16
 
+### feat(consolidated): a spark test PASS / FAIL row beside the dye pen test
+
+On-device request: the foreman hand-wrote "Spark test: FAIL" next to the dye pen boxes. The
+consolidated sheet can now print `Spark test: ☐ PASS ☐ FAIL` right after the dye pen row, by its
+own per-job "Spark test" switch on the Output tab and the preview's options panel (off by default,
+so existing sheets print as before). Pass | Fail chips mark the box, a second tap clears it, and a
+blank draft prints both boxes empty. When both rows cannot fit beside "TIR's taken looking:" — a
+large footer text size, or the coupling face on — the spark test drops to its own line under the
+dye pen row instead of running into the coupling face. The wear sheet's own form is unchanged.
+
 ### feat(sheets): project notes print on the sheet; shaft ends carry draw-plate and puller holes
 
 On-device request, from a printed schematic the foreman marked up by hand ("Partially clad

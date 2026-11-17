@@ -571,6 +571,12 @@ height" slider, the per-job **"Dye pen test" row** (`RunoutConfig.showDyePenTest
 OFF — `Dye pen test: ☐ PASS ☐ FAIL` in the TIR line's lane, the boxes marked from the ONE
 `WearRecord.dyePenResult` the wear sheet prints through the ONE `drawDyePenBoxes`; none or one,
 never both — the shared `DyePenResultChips` clears on re-tap, a blank draft prints both blank),
+its twin the per-job **"Spark test" row** (`RunoutConfig.showSparkTest`, default OFF —
+`Spark test: ☐ PASS ☐ FAIL` right after the dye pen row, marked from `WearRecord.sparkTestResult`
+through the same `drawDyePenBoxes`; the pair places as ONE block, and when it cannot keep an inch
+of TIR rule beside it the spark row drops to its own line under the dye pen row and the lane grows
+by that line — `sparkWrapsAt`, one decision for the budget and the draw; consolidated sheet only,
+the wear sheet's form is unchanged),
 the app-wide **"Wear areas on the shaft drawing"** chips in its PDF options' Shading
 section (a remote control for `PdfPrefs.wearAreaStyle`, also in Settings → Drawing),
 and **Export all** (checked documents batch-written to a picked folder).

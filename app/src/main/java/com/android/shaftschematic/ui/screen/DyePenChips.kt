@@ -16,13 +16,16 @@ import com.android.shaftschematic.model.DyePenResult
  * the Wear tab, the Consolidated Output tab and the consolidated preview's options panel from this
  * single construction. Selecting a chip marks that box on every sheet that prints the pair; the
  * other box stays present and blank. Tapping the selected chip deselects it, returning both boxes
- * to blank for hand-marking — none or one, never both (on-device request).
+ * to blank for hand-marking — none or one, never both (on-device request). The spark test's result
+ * (`WearRecord.sparkTestResult`) uses the same chips with its own label and [tagPrefix].
  */
 @Composable
 internal fun DyePenResultChips(
     result: DyePenResult?,
     onSelect: (DyePenResult?) -> Unit,
     label: String = "Dye pen inspection:",
+    /** Chip tag prefix — `dye_pen` for the dye pen, `spark_test` for the spark test's chips. */
+    tagPrefix: String = "dye_pen",
 ) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -33,10 +36,10 @@ internal fun DyePenResultChips(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        WearChip("Pass", result == DyePenResult.PASS, modifier = Modifier.testTag("dye_pen_pass")) {
+        WearChip("Pass", result == DyePenResult.PASS, modifier = Modifier.testTag("${tagPrefix}_pass")) {
             onSelect(if (result == DyePenResult.PASS) null else DyePenResult.PASS)
         }
-        WearChip("Fail", result == DyePenResult.FAIL, modifier = Modifier.testTag("dye_pen_fail")) {
+        WearChip("Fail", result == DyePenResult.FAIL, modifier = Modifier.testTag("${tagPrefix}_fail")) {
             onSelect(if (result == DyePenResult.FAIL) null else DyePenResult.FAIL)
         }
     }

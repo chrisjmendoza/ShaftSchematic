@@ -80,6 +80,13 @@ data class RunoutConfig(
      * request), blank for hand-marking while nothing is selected.
      */
     val showDyePenTest: Boolean = false,
+    /**
+     * Whether the consolidated sheet prints the "Spark test: ☐ PASS ☐ FAIL" row, right after the
+     * dye pen row in the same lane (on-device request: the result was hand-written beside the dye
+     * pen boxes). Per job, defaulted OFF so every existing document prints byte-identically; the
+     * boxes mark from `WearRecord.sparkTestResult`, blank for hand-marking while nothing is picked.
+     */
+    val showSparkTest: Boolean = false,
 ) {
     /**
      * The measured-component width floor as a fraction of true drawn width — what the
