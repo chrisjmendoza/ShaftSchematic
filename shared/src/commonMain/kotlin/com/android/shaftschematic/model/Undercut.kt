@@ -2,6 +2,7 @@
 package com.android.shaftschematic.model
 
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
@@ -126,12 +127,16 @@ data class Undercut(
  *   stored or printed Ø — but it is per-document (a sheet keeps its chosen look), so it
  *   lives here rather than in app prefs. Additive + defaulted; older files get 0.25.
  * @property drawToSet "Draw to the shaft end": a liner strip whose chain ends within
- *   `UNDERCUT_SET_REACH_MM` of an S.E.T. chains out to that S.E.T. and draws on to the shaft's
- *   physical end (a flat end), so its chain rail dimensions the run from the last cut to the
- *   S.E.T. (on-device request: the shop
- *   sketch's "to the S.E.T." figure). Display/dimensioning only — no stored value moves — but it
- *   is a FIT for this shaft's geometry, never a look pref, so it is per-document and lives
- *   here. Additive + defaulted; older files get `false`.
+ *   `UNDERCUT_SET_REACH_MM` of an S.E.T. — or of the inboard end of the taper that S.E.T. sits on
+ *   (`undercutSetReachAnchors`) — chains out to that S.E.T. and draws on to the shaft's physical end
+ *   (a flat end), so its chain rail dimensions the run from the last cut to the S.E.T. and a liner
+ *   next to the end taper never prints a break through the taper (on-device requests: the shop
+ *   sketch's "to the S.E.T." figure; "the taper is right there but it's cutting it in half").
+ *   Display/dimensioning only — no stored value moves — but a FIT for this shaft's geometry, never
+ *   a look pref, so it is per-document and lives here. Default ON. Serialized as
+ *   `draw_to_shaft_end`: the field first shipped as `drawToSet` defaulting off, and every job saved
+ *   since stored that `false`; the old key is ignored at decode so those jobs take the new default
+ *   (a job that had turned it off deliberately reads on again — the switch is still on the tab).
  * @property showTotalRail "Overall dimension": whether each section's strip prints the total
  *   rail across its top-level cuts above the chain. `null` = follow the Settings → PDF Export default
  *   (`PdfPrefs.undercutTotalRail`), so a job that never touched its switch tracks that default
@@ -178,7 +183,7 @@ data class Undercut(
 data class UndercutRecord(
     val undercuts: List<Undercut> = emptyList(),
     val exaggerationFrac: Float = 0.25f,
-    val drawToSet: Boolean = false,
+    @SerialName("draw_to_shaft_end") val drawToSet: Boolean = true,
     val showTotalRail: Boolean? = null,
     val pageOrientation: UndercutPageOrientation = UndercutPageOrientation.AUTO,
     val setDatum: UndercutSetDatum = UndercutSetDatum.NEAREST,

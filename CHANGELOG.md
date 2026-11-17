@@ -8,6 +8,18 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-16
 
+### fix(undercut): sections draw to the shaft end by default, and a zoomed preview pans
+
+On-device report, Pacific Warrior STBD aft liner: the section view put its break through the
+AFT taper. "Draw to the shaft end" is now on for every job, older jobs included, and its 24" reach
+is measured to the end taper as well as the S.E.T., so a liner next to a long taper also draws the
+taper whole out to the shaft end. Turn it off under the Undercut tab's Drawing settings for a sheet
+that should stop short.
+
+The undercut preview, with its options open, could be zoomed but not dragged around with one
+finger: only the narrow page strip listened, and a zoomed page draws well past it. The whole page
+area now takes the pinch, the drag and the double-tap, as on the schematic preview.
+
 ### feat(schematic): section sheets — one stretch of the shaft as its own document
 
 On-device request, from the shop's "FWD end finish" hand sketch: print a section of the finished

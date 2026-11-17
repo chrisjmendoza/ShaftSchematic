@@ -53,7 +53,8 @@ const val UNDERCUT_WINDOW_PAD_MM = 25.4f
 
 /**
  * "Draw to the shaft end" reach (`UndercutRecord.drawToSet`, 24 in): a liner strip whose chain
- * ends within this many mm of an S.E.T. extends its chain to that S.E.T. and its draw range to
+ * ends within this many mm of an S.E.T. — or of the inboard end of the taper it sits on
+ * (`undercutSetReachAnchors`) — extends its chain to that S.E.T. and its draw range to
  * the shaft's physical end beyond it, so the chain dimensions the run from the last cut to the
  * S.E.T. (on-device request). The knob: one value behind the route, the detail overlay, the PDF
  * strips and the Undercut tab's caption.
@@ -1295,7 +1296,10 @@ fun assignUndercutLiners(
  * while the DRAW range runs on to the shaft's physical end ([oalMm]: a flat end, no break), so
  * a FWD thread counted in the OAL draws beyond the S.E.T. undimensioned. The AFT end mirrors it
  * against [aftSetMm] and `0`. A chain already past its S.E.T. (a cut into the thread) is left
- * alone. `0` leaves the chain on the liner.
+ * alone. `0` leaves the chain on the liner. The reach is measured to [aftReachFromMm] /
+ * [fwdReachFromMm] — the inboard end of the end taper ([undercutSetReachAnchors]), the S.E.T.
+ * itself when there is none — so a liner butted against a long taper draws through it rather than
+ * putting a break in the taper (on-device report).
  */
 fun linerStripFor(
     liner: UndercutLinerSpan,
@@ -1309,8 +1313,12 @@ fun linerStripFor(
     reachToSetMm: Float = 0f,
     /** AFT S.E.T. x (physical mm) the reach measures from and the chain moves onto. */
     aftSetMm: Float = 0f,
-    /** FWD S.E.T. x (physical mm) the reach measures from and the chain moves onto. */
+    /** FWD S.E.T. x (physical mm) the chain moves onto. */
     fwdSetMm: Float = oalMm,
+    /** Where the AFT reach is measured to — the AFT end taper's inboard end ([undercutSetReachAnchors]). */
+    aftReachFromMm: Float = aftSetMm,
+    /** Where the FWD reach is measured to — the FWD end taper's inboard end. */
+    fwdReachFromMm: Float = fwdSetMm,
 ): UndercutStrip.LinerStrip {
     val hi = oalMm.coerceAtLeast(0f)
     val cutsMin = assignedSpans.minOfOrNull { it.startMm } ?: liner.startMm
@@ -1320,11 +1328,11 @@ fun linerStripFor(
     var drawToAftEnd = false
     var drawToFwdEnd = false
     if (reachToSetMm > 0f) {
-        if (chainEnd <= fwdSetMm && fwdSetMm - chainEnd <= reachToSetMm) {
+        if (chainEnd <= fwdSetMm && min(fwdSetMm, fwdReachFromMm) - chainEnd <= reachToSetMm) {
             chainEnd = fwdSetMm
             drawToFwdEnd = true
         }
-        if (chainStart >= aftSetMm && chainStart - aftSetMm <= reachToSetMm) {
+        if (chainStart >= aftSetMm && chainStart - max(aftSetMm, aftReachFromMm) <= reachToSetMm) {
             chainStart = aftSetMm
             drawToAftEnd = true
         }
@@ -1399,6 +1407,8 @@ fun undercutPreviewChainMm(
     reachToSetMm: Float = 0f,
     aftSetMm: Float = 0f,
     fwdSetMm: Float = oalMm,
+    aftReachFromMm: Float = aftSetMm,
+    fwdReachFromMm: Float = fwdSetMm,
 ): Pair<Float, Float> {
     val live = previewSpans.filter { it.endMm > it.startMm }
     if (live.isEmpty()) return strip.chainStartMm to strip.chainEndMm
@@ -1406,6 +1416,7 @@ fun undercutPreviewChainMm(
         is UndercutStrip.LinerStrip -> linerStripFor(
             UndercutLinerSpan(strip.linerId, strip.linerStartMm, strip.linerEndMm), live, oalMm, padMm,
             reachToSetMm = reachToSetMm, aftSetMm = aftSetMm, fwdSetMm = fwdSetMm,
+            aftReachFromMm = aftReachFromMm, fwdReachFromMm = fwdReachFromMm,
         ).let { it.chainStartMm to it.chainEndMm }
         is UndercutStrip.FreeStrip -> {
             val hi = oalMm.coerceAtLeast(0f)
@@ -1445,6 +1456,8 @@ fun buildUndercutStrips(
     reachToSetMm: Float = 0f,
     aftSetMm: Float = 0f,
     fwdSetMm: Float = oalMm,
+    aftReachFromMm: Float = aftSetMm,
+    fwdReachFromMm: Float = fwdSetMm,
 ): List<UndercutStrip> {
     val live = spans.filter { it.endMm > it.startMm }
     val linerOf = assignUndercutLiners(live, liners)
@@ -1455,6 +1468,7 @@ fun buildUndercutStrips(
         strips += linerStripFor(
             liner, assigned, oalMm, padMm, segs, cutSpans = assigned,
             reachToSetMm = reachToSetMm, aftSetMm = aftSetMm, fwdSetMm = fwdSetMm,
+            aftReachFromMm = aftReachFromMm, fwdReachFromMm = fwdReachFromMm,
         )
     }
     for (window in clusterUndercuts(byLiner[null].orEmpty(), oalMm, gapMm, padMm)) {

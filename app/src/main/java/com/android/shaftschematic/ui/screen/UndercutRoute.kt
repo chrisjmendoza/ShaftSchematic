@@ -92,6 +92,7 @@ import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.SurfaceSeg
+import com.android.shaftschematic.geom.undercutSetReachAnchors
 import com.android.shaftschematic.geom.undercutMachinedSpans
 import com.android.shaftschematic.geom.UNDERCUT_DEFAULT_LENGTH_MM
 import com.android.shaftschematic.geom.UNDERCUT_EXAGGERATION_MAX_FRAC
@@ -458,10 +459,13 @@ fun UndercutRoute(
     // on to the shaft's physical end.
     val setReachMm = undercutSetReachMm(undercutRecord.drawToSet)
     val (stripAftSetMm, stripFwdSetMm) = remember(spec) { undercutSetPositions(spec) }
-    val strips = remember(spans, linerSpans, oalMm, segs, setReachMm, stripAftSetMm, stripFwdSetMm) {
+    // Where that reach is measured to: the end tapers' inboard ends.
+    val (stripAftReachMm, stripFwdReachMm) = remember(spec) { undercutSetReachAnchors(spec) }
+    val strips = remember(spans, linerSpans, oalMm, segs, setReachMm, stripAftSetMm, stripFwdSetMm, stripAftReachMm, stripFwdReachMm) {
         buildUndercutStrips(
             spans, linerSpans, oalMm, segs = segs,
             reachToSetMm = setReachMm, aftSetMm = stripAftSetMm, fwdSetMm = stripFwdSetMm,
+            aftReachFromMm = stripAftReachMm, fwdReachFromMm = stripFwdReachMm,
         )
     }
     // Whether the printed sheet draws a thread anywhere — the gate on its options' Thread section.
@@ -477,6 +481,7 @@ fun UndercutRoute(
                 linerStripFor(
                     it, emptyList(), oalMm, segs = segs,
                     reachToSetMm = setReachMm, aftSetMm = stripAftSetMm, fwdSetMm = stripFwdSetMm,
+                    aftReachFromMm = stripAftReachMm, fwdReachFromMm = stripFwdReachMm,
                 )
             }
         }
@@ -526,6 +531,7 @@ fun UndercutRoute(
         return linerStripFor(
             liner, members, oalMm, segs = segs, cutSpans = members,
             reachToSetMm = setReachMm, aftSetMm = stripAftSetMm, fwdSetMm = stripFwdSetMm,
+            aftReachFromMm = stripAftReachMm, fwdReachFromMm = stripFwdReachMm,
         )
     }
 
@@ -1768,8 +1774,9 @@ private fun UndercutDrawToSetRow(
             Text(
                 "A liner section within " +
                     formatLenWithUnit(UNDERCUT_SET_REACH_MM.toDouble(), unit) +
-                    " of its S.E.T. is drawn out to the shaft end, taper included, and its " +
-                    "dimensions run to the S.E.T. Saved with this job.",
+                    " of the end taper or its S.E.T. is drawn out to the shaft end, taper " +
+                    "included, and its dimensions run to the S.E.T. On for a new job. Saved " +
+                    "with this job.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

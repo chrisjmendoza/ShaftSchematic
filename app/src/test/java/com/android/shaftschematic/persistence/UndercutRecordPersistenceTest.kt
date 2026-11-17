@@ -216,8 +216,8 @@ class UndercutRecordPersistenceTest {
         val decoded = ShaftDocCodec.decode(raw)
 
         assertEquals(0.25f, decoded.undercutRecord.exaggerationFrac, 0f)
-        // "Draw to the shaft end" postdates this payload too: it decodes off.
-        assertFalse(decoded.undercutRecord.drawToSet)
+        // "Draw to the shaft end" postdates this payload too: it takes the default, on.
+        assertTrue(decoded.undercutRecord.drawToSet)
         // So does the "Overall dimension" choice: the job follows the app default.
         assertNull(decoded.undercutRecord.showTotalRail)
     }
@@ -253,18 +253,32 @@ class UndercutRecordPersistenceTest {
     @Test
     fun `drawToSet round trips through the envelope`() {
         // A per-job fit for this shaft's geometry, so it rides the record rather than app prefs.
+        // On by default; a job that turns it off keeps it off.
         val doc = ShaftDocCodec.ShaftDocV1(
             spec = spec(),
             undercutRecord = UndercutRecord(
                 undercuts = listOf(Undercut(id = "u1", startFromAftMm = 10f, lengthMm = 5f)),
-                drawToSet = true,
+                drawToSet = false,
             ),
         )
 
-        val decoded = ShaftDocCodec.decode(ShaftDocCodec.encodeV1(doc))
+        val raw = ShaftDocCodec.encodeV1(doc)
+        val decoded = ShaftDocCodec.decode(raw)
 
-        assertTrue(decoded.undercutRecord.drawToSet)
-        assertFalse(UndercutRecord().drawToSet)
+        assertFalse(decoded.undercutRecord.drawToSet)
+        assertTrue(raw.contains("\"draw_to_shaft_end\""))
+        assertTrue(UndercutRecord().drawToSet)
+    }
+
+    @Test
+    fun `a job saved under the old drawToSet key takes the new default`() {
+        // Every job saved while the switch defaulted off stored "drawToSet": false; that key is
+        // retired so those jobs draw to the shaft end like a new one (on-device request).
+        val raw = ShaftDocCodec.encodeV1(
+            ShaftDocCodec.ShaftDocV1(spec = spec(), undercutRecord = UndercutRecord(drawToSet = false)),
+        ).replace("\"draw_to_shaft_end\"", "\"drawToSet\"")
+        assertTrue(raw.contains("\"drawToSet\": false") || raw.contains("\"drawToSet\":false"))
+        assertTrue(ShaftDocCodec.decode(raw).undercutRecord.drawToSet)
     }
 
     @Test

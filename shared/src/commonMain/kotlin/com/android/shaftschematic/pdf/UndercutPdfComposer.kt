@@ -43,6 +43,7 @@ import com.android.shaftschematic.geom.blendedBodyTop
 import com.android.shaftschematic.geom.buildUndercutStrips
 import com.android.shaftschematic.geom.buriedUndercutLinerEdgesMm
 import com.android.shaftschematic.geom.undercutMachinedSpans
+import com.android.shaftschematic.geom.undercutSetReachAnchors
 import com.android.shaftschematic.geom.clampUndercutSpan
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
@@ -813,9 +814,12 @@ fun undercutSheetStrips(
     // on to the shaft's physical end. The S.E.T.s are the page's own (`computeSetPositionsInMeasureSpace`,
     // the source `undercutSetPositions` reads), so the chain ends on the datum the sheet titles from.
     val setReachMm = undercutSetReachMm(effectiveRecord.drawToSet)
+    // The reach is measured to the end tapers' inboard ends, the overlay's own anchors.
+    val (aftReachMm, fwdReachMm) = undercutSetReachAnchors(docSpec)
     val cutStrips = buildUndercutStrips(
         liveSpans, linerSpans, shaftExtentMm, segs = surfaceSegs,
         reachToSetMm = setReachMm, aftSetMm = aftSetMm, fwdSetMm = fwdSetMm,
+        aftReachFromMm = aftReachMm, fwdReachFromMm = fwdReachMm,
     )
     // Nothing recorded (blank template, or an export of an empty record): every drawable liner
     // gets a STARTED strip — drawn to scale, left empty for hand sketching. `linerStripFor`
@@ -827,6 +831,7 @@ fun undercutSheetStrips(
             linerStripFor(
                 it, emptyList(), shaftExtentMm, segs = surfaceSegs,
                 reachToSetMm = setReachMm, aftSetMm = aftSetMm, fwdSetMm = fwdSetMm,
+                aftReachFromMm = aftReachMm, fwdReachFromMm = fwdReachMm,
             )
         }
     val allStrips = cutStrips.ifEmpty { startedStrips }

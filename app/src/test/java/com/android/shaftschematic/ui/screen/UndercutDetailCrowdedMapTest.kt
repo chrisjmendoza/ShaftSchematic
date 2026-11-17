@@ -27,9 +27,10 @@ import org.robolectric.annotation.Config
 @Config(sdk = [34])
 class UndercutDetailCrowdedMapTest {
 
+    // Saved before "Draw to the shaft end" defaulted on; these checks are about a strip that stops short of the shaft end, so the job keeps it off.
     private val doc = ShaftDocCodec.decode(
         requireNotNull(javaClass.classLoader?.getResource("fixtures/undercut_crowded_royal_atlantic.shaft")).readText(),
-    )
+    ).let { it.copy(undercutRecord = it.undercutRecord.copy(drawToSet = false)) }
     private val spec = doc.spec
     private val strip = undercutSheetStrips(spec, resolveComponents(spec), doc.undercutRecord, blankValues = false)
         .strips.single()

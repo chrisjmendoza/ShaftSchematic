@@ -35,9 +35,10 @@ import org.robolectric.annotation.Config
 @Config(sdk = [34])
 class UndercutDetailSetLeadTest {
 
+    // Saved before "Draw to the shaft end" defaulted on; these checks are about a strip that stops short of the shaft end, so the job keeps it off.
     private val doc = ShaftDocCodec.decode(
         requireNotNull(javaClass.classLoader?.getResource("fixtures/undercut_polar_ranger_stbd.shaft")).readText(),
-    )
+    ).let { it.copy(undercutRecord = it.undercutRecord.copy(drawToSet = false)) }
     private val spec = doc.spec
 
     @Test
