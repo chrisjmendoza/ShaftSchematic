@@ -119,6 +119,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             sheetDateMode = _sheetDateMode.value,
             sheetDateText = _sheetDateText.value,
             sheetDateSheets = _sheetDateSheets.value,
+            sheetNotesSheets = _sheetNotesSheets.value,
             notes = _notes.value,
             runoutConfig = _runoutConfig.value,
             unitLocked = _unitLocked.value,
@@ -704,6 +705,13 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _notes = MutableStateFlow("")
     val notes: StateFlow<String> = _notes.asStateFlow()
 
+    /**
+     * The job's "Notes on this sheet" choices, keyed by [SheetDateSheet] name; a sheet with no entry
+     * prints no notes ([sheetPrintsNotes]).
+     */
+    internal val _sheetNotesSheets = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    val sheetNotesSheets: StateFlow<Map<String, Boolean>> = _sheetNotesSheets.asStateFlow()
+
     internal val _shaftPosition = MutableStateFlow(ShaftPosition.OTHER)
     val shaftPosition: StateFlow<ShaftPosition> = _shaftPosition.asStateFlow()
 
@@ -927,9 +935,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             runoutConfig, unitLocked, wearRecord, runoutReadings, undercutRecord,
             runoutStationPlacements, unitOverrides, dualUnits, item, finalSpec,
             sheetDateMode, sheetDateText,
-            sheetDateSheets,
+            sheetDateSheets, sheetNotesSheets,
         ) { values: Array<Any?> ->
-            check(values.size == 20) { "Autosave combine expected 20 values, got ${values.size}" }
+            check(values.size == 21) { "Autosave combine expected 21 values, got ${values.size}" }
 
             val s = values[0] as ShaftSpec
             val u = values[1] as UnitSystem
@@ -953,6 +961,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             val dateText = values[18] as String
             @Suppress("UNCHECKED_CAST")
             val dateSheets = values[19] as Map<String, Boolean>
+            @Suppress("UNCHECKED_CAST")
+            val notesSheets = values[20] as Map<String, Boolean>
 
             AutosaveManager.SessionSnapshot(
                 shaftSpec = s,
@@ -966,6 +976,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 sheetDateMode = dateMode,
                 sheetDateText = dateText,
                 sheetDateSheets = dateSheets,
+                sheetNotesSheets = notesSheets,
                 notes = n,
                 runoutConfig = runout,
                 unitLocked = locked,
@@ -1592,6 +1603,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _sheetDateMode.value = snapshot.sheetDateMode
         _sheetDateText.value = snapshot.sheetDateText
         _sheetDateSheets.value = snapshot.sheetDateSheets
+        _sheetNotesSheets.value = snapshot.sheetNotesSheets
         _notes.value = snapshot.notes
         _runoutConfig.value = snapshot.runoutConfig
         _wearRecord.value = snapshot.wearRecord
@@ -1672,6 +1684,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _sheetDateSheets.value = _sheetDateSheets.value + (sheet.name to on)
     }
     fun setNotes(value: String)    { _notes.value = value }
+    /** Whether [sheet] prints the job's notes ("Notes on this sheet"); stored per job. */
+    fun setSheetNotesOnSheet(sheet: SheetDateSheet, on: Boolean) {
+        _sheetNotesSheets.value = _sheetNotesSheets.value + (sheet.name to on)
+    }
     fun setShaftPosition(value: ShaftPosition) { _shaftPosition.value = value }
 
     // ────────────────────────────────────────────────────────────────────────────
@@ -1737,6 +1753,14 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun setShaftWideAutoBodyDiaMm(valueMm: Float, target: SpecTarget = SpecTarget.ORIGINAL) {
         updateSpec(target) { it.withShaftWideAutoBodyDia(valueMm) }
+    }
+
+    /**
+     * Replaces [end]'s draw-plate hole record ([ShaftEndHoles]) on [target], verbatim.
+     * A reference feature: nothing else in the spec moves.
+     */
+    fun setEndHoles(end: ShaftEnd, holes: ShaftEndHoles, target: SpecTarget = SpecTarget.ORIGINAL) {
+        updateSpec(target) { if (it.endHoles(end) == holes) it else it.withEndHoles(end, holes) }
     }
 
     // ────────────────────────────────────────────────────────────────────────────

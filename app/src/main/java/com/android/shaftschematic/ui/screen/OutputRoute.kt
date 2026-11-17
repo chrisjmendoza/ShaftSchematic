@@ -108,6 +108,8 @@ import com.android.shaftschematic.ui.viewmodel.updateWornSection
 import com.android.shaftschematic.ui.viewmodel.updateWornSectionReference
 import com.android.shaftschematic.ui.viewmodel.setDyePenResult
 import com.android.shaftschematic.ui.viewmodel.setShowDyePenTest
+import com.android.shaftschematic.ui.viewmodel.setShowSparkTest
+import com.android.shaftschematic.ui.viewmodel.setSparkTestResult
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
@@ -239,6 +241,8 @@ fun OutputRoute(
     val sheetDateMode      by vm.sheetDateMode.collectAsState()
     val sheetDateText      by vm.sheetDateText.collectAsState()
     val sheetDateSheets    by vm.sheetDateSheets.collectAsState()
+    val sheetNotesSheets   by vm.sheetNotesSheets.collectAsState()
+    val notes              by vm.notes.collectAsState()
     val shaftPosition      by vm.shaftPosition.collectAsState()
     val openAfterExport    by vm.openPdfAfterExport.collectAsState()
     val lineThicknessScale by vm.lineThicknessScale.collectAsState()
@@ -433,8 +437,8 @@ fun OutputRoute(
         val configSnapshot = runoutConfig
         val projectSnapshot = ProjectInfo(customer = customer, vessel = vessel,
             jobNumber = jobNumber, side = shaftPosition, item = item,
-            dateMode = sheetDateMode, dateText = sheetDateText)
-            .forSheet(SheetDateSheet.CONSOLIDATED, sheetDateSheets)
+            dateMode = sheetDateMode, dateText = sheetDateText, notes = notes)
+            .forSheet(SheetDateSheet.CONSOLIDATED, sheetDateSheets, sheetNotesSheets)
         val unitSnapshot = unit
         val prefsSnapshot = vm.currentPdfPrefs
         val resolvedSnapshot = resolvedComponents
@@ -465,8 +469,8 @@ fun OutputRoute(
                     page, variant, spec, runoutConfig,
                     ProjectInfo(customer = customer, vessel = vessel,
                         jobNumber = jobNumber, side = shaftPosition, item = item,
-                        dateMode = sheetDateMode, dateText = sheetDateText)
-            .forSheet(SheetDateSheet.CONSOLIDATED, sheetDateSheets),
+                        dateMode = sheetDateMode, dateText = sheetDateText, notes = notes)
+            .forSheet(SheetDateSheet.CONSOLIDATED, sheetDateSheets, sheetNotesSheets),
                     unit, vm.currentPdfPrefs, resolvedComponents,
                     lineThicknessScale, runoutReadings, stationPlacements, wearRecord, blankDraft,
                     vm.currentDisplayUnits(),
@@ -488,7 +492,7 @@ fun OutputRoute(
         if (treeUri != null) {
             val jobProject = ProjectInfo(customer = customer, vessel = vessel,
                 jobNumber = jobNumber, side = shaftPosition, item = item,
-                dateMode = sheetDateMode, dateText = sheetDateText)
+                dateMode = sheetDateMode, dateText = sheetDateText, notes = notes)
             val prefs = vm.currentPdfPrefs
             val displayUnits = vm.currentDisplayUnits()
             var attempted = 0
@@ -503,7 +507,7 @@ fun OutputRoute(
                 if (doc == OutputDoc.UNDERCUT && undercutSkipped) return@forEachIndexed
                 attempted++
                 // Each document prints the date by its OWN "Date on this sheet" switch.
-                val project = jobProject.forSheet(doc.dateSheet, sheetDateSheets)
+                val project = jobProject.forSheet(doc.dateSheet, sheetDateSheets, sheetNotesSheets)
                 val name = buildOutputFilename(customer, vessel, jobNumber, shaftPosition, doc, blankDraft, currentDocumentName)
                 // A null uri means the provider refused to create the file — counted as a
                 // failure, but there is no document to carry an error page.
@@ -591,8 +595,8 @@ fun OutputRoute(
                 config = tunedRunoutConfig(runoutConfig, tuning.heightScale, tuning.linerCompression),
                 project = ProjectInfo(customer = customer, vessel = vessel,
                     jobNumber = jobNumber, side = shaftPosition, item = item,
-                    dateMode = sheetDateMode, dateText = sheetDateText)
-            .forSheet(SheetDateSheet.CONSOLIDATED, sheetDateSheets),
+                    dateMode = sheetDateMode, dateText = sheetDateText, notes = notes)
+            .forSheet(SheetDateSheet.CONSOLIDATED, sheetDateSheets, sheetNotesSheets),
                 unit = unit,
                 resolved = resolvedComponents,
                 lineThicknessScale = tuning.lineThickness ?: lineThicknessScale,
@@ -801,6 +805,32 @@ fun OutputRoute(
                     result = wearRecord.dyePenResult,
                     onSelect = { vm.setDyePenResult(it) },
                     label = "Result:",
+                )
+            }
+            // The spark test row, printed after the dye pen boxes in the same lane.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(
+                    checked = runoutConfig.showSparkTest,
+                    onCheckedChange = { vm.setShowSparkTest(it) },
+                    modifier = Modifier.testTag("output_spark_test_switch"),
+                )
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text("Spark test", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Prints \"Spark test: PASS / FAIL\" boxes after the dye pen test. Leave both " +
+                            "blank to mark by hand, or pick one here. Saved with this job.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            if (runoutConfig.showSparkTest) {
+                DyePenResultChips(
+                    result = wearRecord.sparkTestResult,
+                    onSelect = { vm.setSparkTestResult(it) },
+                    label = "Result:",
+                    tagPrefix = "spark_test",
                 )
             }
             Text(
@@ -1065,6 +1095,8 @@ fun OutputRoute(
                     showDyePenRow = true,
                     dyePenOn = runoutConfig.showDyePenTest,
                     dyePenResult = wearRecord.dyePenResult,
+                    sparkTestOn = runoutConfig.showSparkTest,
+                    sparkTestResult = wearRecord.sparkTestResult,
                     showSBreak = true,
                     sBreakThresholdFrac = pdfSBreakThresholdFrac,
                     showDimensionArrows = true,

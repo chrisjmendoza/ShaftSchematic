@@ -126,8 +126,11 @@ import com.android.shaftschematic.ui.viewmodel.setRunoutHeightScale
 import com.android.shaftschematic.ui.viewmodel.setShowCouplingFace
 import com.android.shaftschematic.ui.viewmodel.setShowDyePenTest
 import com.android.shaftschematic.ui.viewmodel.setDyePenResult
+import com.android.shaftschematic.ui.viewmodel.setShowSparkTest
+import com.android.shaftschematic.ui.viewmodel.setSparkTestResult
 import com.android.shaftschematic.model.DyePenResult
 import com.android.shaftschematic.model.SheetDateSheet
+import com.android.shaftschematic.model.canPrintNotes
 import com.android.shaftschematic.ui.viewmodel.setUndercutPageOrientation
 import com.android.shaftschematic.ui.viewmodel.setWearCompactStrips
 import com.android.shaftschematic.ui.viewmodel.setWearShowShaftProfile
@@ -547,6 +550,10 @@ internal fun RunoutWearOptionsSheet(
     dyePenOn: Boolean = false,
     /** This job's `WearRecord.dyePenResult`; read only when [showDyePenRow]. */
     dyePenResult: DyePenResult? = null,
+    /** This job's `RunoutConfig.showSparkTest`; read only when [showDyePenRow] (same sheet). */
+    sparkTestOn: Boolean = false,
+    /** This job's `WearRecord.sparkTestResult`; read only when [showDyePenRow]. */
+    sparkTestResult: DyePenResult? = null,
     /**
      * Shows the shared "Body S-break" threshold slider. On for the runout and consolidated
      * sheets, which draw compression breaks; off for the wear and undercut documents, whose
@@ -772,6 +779,11 @@ internal fun RunoutWearOptionsSheet(
                         selected = dyePenOn,
                         onClick = { vm.setShowDyePenTest(!dyePenOn) },
                     )
+                    ContentChip(
+                        label = "Spark test",
+                        selected = sparkTestOn,
+                        onClick = { vm.setShowSparkTest(!sparkTestOn) },
+                    )
                 }
             }
             // The result the printed boxes mark — the Output tab's row, one construction.
@@ -781,6 +793,15 @@ internal fun RunoutWearOptionsSheet(
                     result = dyePenResult,
                     onSelect = { vm.setDyePenResult(it) },
                     label = "Dye pen result:",
+                )
+            }
+            if (showDyePenRow && sparkTestOn) {
+                Spacer(Modifier.height(8.dp))
+                DyePenResultChips(
+                    result = sparkTestResult,
+                    onSelect = { vm.setSparkTestResult(it) },
+                    label = "Spark test result:",
+                    tagPrefix = "spark_test",
                 )
             }
             // The undercut sheet's page shape — per job, beside the election that changes its
@@ -798,6 +819,11 @@ internal fun RunoutWearOptionsSheet(
             if (dateSheet != null) {
                 Spacer(Modifier.height(8.dp))
                 SheetDateOnSheetRow(vm = vm, sheet = dateSheet)
+                // Per job: whether THIS sheet prints the job's notes (footer sheets only).
+                if (dateSheet.canPrintNotes) {
+                    Spacer(Modifier.height(8.dp))
+                    SheetNotesOnSheetRow(vm = vm, sheet = dateSheet)
+                }
             }
             if (undercutPageOrientation != null) undercutContentRows?.invoke()
 

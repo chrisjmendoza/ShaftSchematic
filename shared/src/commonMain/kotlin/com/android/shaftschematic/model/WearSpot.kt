@@ -212,6 +212,10 @@ data class WearDiaReading(
  *   in the matching PASS/FAIL checkbox of the wear sheet's notes row; `null` keeps both
  *   boxes blank for hand-marking (see [DyePenResult]). Reference-only data — no geometry
  *   effect anywhere. Additive + defaulted, same no-version-bump rule as [pits].
+ * @property sparkTestResult The spark test's in-app selection, the [dyePenResult] posture: an
+ *   "X" in the matching PASS/FAIL box of the consolidated sheet's "Spark test:" row (elected per
+ *   job by `RunoutConfig.showSparkTest`); `null` leaves both boxes blank for hand-marking. Same
+ *   PASS/FAIL type as the dye pen. Reference-only; additive + defaulted.
  * @property traceDepthFrac This job's worn-profile trace exaggeration — how deep the record's
  *   deepest liner reading draws, as a fraction of the drawn radius
  *   (`geom/WearTraceMath.kt`). `null` = follow the Settings → Drawing default
@@ -261,4 +265,5 @@ data class WearRecord(
     val showShaftProfile: Boolean = true,
     val compactStrips: Boolean = false,
     val stripSizeFrac: Float = 1f,
+    val sparkTestResult: DyePenResult? = null,
 )

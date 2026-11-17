@@ -103,6 +103,9 @@ object AutosaveManager {
         // Added (date per sheet): the job's "Date on this sheet" choices, keyed by
         // SheetDateSheet name. Absent in older drafts; empty follows the shipped defaults.
         val sheetDateSheets: Map<String, Boolean> = emptyMap(),
+        // Added (notes on sheets): the job's "Notes on this sheet" choices, keyed by
+        // SheetDateSheet name. Absent in older drafts; empty prints notes on no sheet.
+        val sheetNotesSheets: Map<String, Boolean> = emptyMap(),
     )
 
     /**

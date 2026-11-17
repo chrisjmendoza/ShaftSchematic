@@ -23,6 +23,8 @@ import com.android.shaftschematic.model.SlotAuthoredReference
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.printedDateOrNull
+import com.android.shaftschematic.model.ShaftEndHoles
+import com.android.shaftschematic.model.ThreadSeries
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Taper
 import com.android.shaftschematic.model.Threads
@@ -220,6 +222,22 @@ fun buildFooterMidColumn(
 }
 
 /**
+ * The footer rows the job's notes print as, under the middle column's Side badge — empty when the
+ * sheet prints none ([ProjectInfo.notes] is blank, which [com.android.shaftschematic.model.forSheet]
+ * makes it on a sheet whose "Notes on this sheet" switch is off). The text is printed as typed: each
+ * typed line is its own row (wrapped to the column like every footer line), the first one led by
+ * `Notes:`; blank lines at either end are dropped, blank lines between are kept as gap rows.
+ */
+fun footerNoteLines(project: ProjectInfo): List<String> {
+    val typed = project.notes.lines().dropWhile { it.isBlank() }.dropLastWhile { it.isBlank() }
+    if (typed.isEmpty()) return emptyList()
+    return typed.mapIndexed { i, line -> if (i == 0) "$FOOTER_NOTES_LABEL $line" else line }
+}
+
+/** The label leading the first notes row. */
+const val FOOTER_NOTES_LABEL = "Notes:"
+
+/**
  * Everything [drawFooter] decides BEFORE it inks: the three columns' lines (already built for
  * the mode and units), where each column starts and how wide it may print, and how tall the
  * band has to be to print every wrapped row at the printed pitch. One plan, two consumers:
@@ -231,6 +249,8 @@ fun buildFooterMidColumn(
 class FooterPlan(
     val cols: FooterColumns,
     val midLines: List<String>,
+    /** The job's notes under the Side badge ([footerNoteLines]); empty on a blank draft. */
+    val noteLines: List<String>,
     val midLeadLines: Int,
     val leftX: Float,
     val midX: Float,
@@ -282,6 +302,7 @@ fun planFooter(
     val leftX  = rectLeft
     val colPad = 6f
     val midLines = buildFooterMidColumn(spec, project, cfg, date, blankValues)
+    val noteLines = if (blankValues) emptyList() else footerNoteLines(project)
 
     val (midX, rightX) = if (blankValues) {
         (rectLeft + width * midFrac) to (rectLeft + width * rightFrac)
@@ -319,12 +340,13 @@ fun planFooter(
     val wrappedMaxLines = maxOf(
         wrapCount(cols.aftLines, leftMaxW),
         wrapCount(cols.fwdLines, rightMaxW),
-        midLeadLines + wrapCount(midLines, midMaxW) + (if (blankValues) 0 else 1),  // +1: Side badge
+        midLeadLines + wrapCount(midLines, midMaxW) + (if (blankValues) 0 else 1) +  // +1: Side badge
+            wrapCount(noteLines, midMaxW),
         1,
     )
     val printedPitch = text.textSize * FOOTER_LINE_FACTOR
     return FooterPlan(
-        cols = cols, midLines = midLines, midLeadLines = midLeadLines,
+        cols = cols, midLines = midLines, noteLines = noteLines, midLeadLines = midLeadLines,
         leftX = leftX, midX = midX, rightX = rightX,
         leftMaxW = leftMaxW, midMaxW = midMaxW, rightMaxW = rightMaxW,
         wrappedMaxLines = wrappedMaxLines,
@@ -544,7 +566,11 @@ internal fun drawFooter(
             footerSideBadgeText(project)?.let { badgeText ->
                 y += lh * 0.35f
                 c.drawText(badgeText, midX, y, footerSideBadgePaint(text))
+                y += lh
             }
+            // The job's notes, under the badge (on-device request: the space under the job block
+            // is usually free). Counted in wrappedMaxLines, so the band already holds them.
+            plan.noteLines.forEach { line -> y = drawFooterLine(line, midX, y, midMaxW) }
         }
     }
 
@@ -581,6 +607,73 @@ data class FooterColumns(
     /** The FWD column opens with a taper block's heading line. */
     val fwdLeadsWithHeading: Boolean = false,
 )
+
+/**
+ * The draw-plate thread as it prints — the typed size plus its series (on-device request: the size
+ * is typed bare and the sheet reads `1 1/4" NC`). The stored text is never rewritten (golden rule);
+ * only the printed form gains:
+ * - an inch mark right after the number, when the document is in inches and the size is a bare
+ *   number — `1`, `3/4`, `1 1/4`, `1.25`, alone or before a series word (`1 1/4` → `1 1/4"`,
+ *   `1 1/4 unf` → `1 1/4" unf`). Anything else (`1 1/4-7 UNC`, `M30`, a typed `"`) is left as typed;
+ * - the [series] (` NC` / ` NF`), unless the typed text already names one (`UNC`, `UNF`, `NC`,
+ *   `NF` as a word — `1 1/4-7 UNC` prints as typed) or is a metric designation (`M30`,
+ *   `M20x2.5` — an inch series means nothing there).
+ * Blank prints nothing (null): a series alone says nothing without a size.
+ */
+fun drawPlateThreadText(size: String, series: ThreadSeries, unit: UnitSystem): String? {
+    val typed = size.trim()
+    if (typed.isEmpty()) return null
+    val named = TRAILING_THREAD_SERIES.find(typed)
+    val core = named?.groupValues?.get(1) ?: typed
+    val tail = typed.substring(core.length)
+    val markedCore = if (unit == UnitSystem.INCHES && BARE_INCH_NUMBER.matches(core)) "$core\"" else core
+    val printed = markedCore + tail
+    val keepAsTyped = named != null || NAMED_THREAD_SERIES.containsMatchIn(typed) ||
+        METRIC_THREAD_DESIGNATION.containsMatchIn(typed)
+    return if (keepAsTyped) printed else "$printed ${series.name}"
+}
+
+/** A thread series already written into a typed size: `NC`, `NF`, `UNC`, `UNF` as a whole word. */
+private val NAMED_THREAD_SERIES = Regex("""(?i)(?<![A-Za-z])U?N[CF](?![A-Za-z])""")
+
+/** A metric thread designation: `M` then a digit (`M30`, `M20x2.5`). */
+private val METRIC_THREAD_DESIGNATION = Regex("""(?i)^M\d""")
+
+/** A size ending in a series word: group 1 is everything before the space and the word. */
+private val TRAILING_THREAD_SERIES = Regex("""(?i)^(.*?)\s+U?N[CF]$""")
+
+/** A bare number: whole, fraction, mixed number or decimal (`1`, `3/4`, `1 1/4`, `1.25`). */
+private val BARE_INCH_NUMBER = Regex("""^\d+(\.\d+)?$|^(\d+\s+)?\d+/\d+$""")
+
+/** Label of an end face's draw-plate holes line. */
+const val FOOTER_DRAW_PLATE_LABEL = "Draw plate:"
+
+/**
+ * Footer lines for ONE end face's tapped holes ([ShaftEndHoles]) — the draw-plate line, only when
+ * something on it is given (on-device request: "4 holes 1 1/4 NC on 4 1/2 B.C." hand-written beside
+ * the FWD end), built from the parts that are set in the shop's order:
+ * `Draw plate: 4 holes 1 1/4" NC on 4 1/2" B.C.`. No puller hole line — puller holes are in the
+ * propeller, not the shaft (on-device ruling). The thread size prints verbatim; the bolt circle
+ * prints in the document unit (dual when the document is). [line] is the caller's label/value
+ * joiner, so a blank draft keeps the label and rules the value like every other spec line.
+ */
+internal fun endHoleFooterLines(
+    holes: ShaftEndHoles,
+    displayUnits: DisplayUnits,
+    line: (String, () -> String) -> String,
+): List<String> = buildList {
+    val unit = displayUnits.documentUnit
+    val dual = displayUnits.dual
+    if (holes.hasDrawPlate) add(line(FOOTER_DRAW_PLATE_LABEL) {
+        listOfNotNull(
+            holes.drawPlateCount.takeIf { it > 0 }?.let { if (it == 1) "1 hole" else "$it holes" },
+            drawPlateThreadText(holes.drawPlateSize, holes.drawPlateSeries, unit),
+            holes.drawPlateBoltCircleMm.takeIf { it > 0f }?.let {
+                "on ${formatLenWithUnitDual(it.toDouble(), unit, dual)} B.C."
+            },
+        ).joinToString(" ")
+    })
+}
 
 /** Clocking note under a cross-drilled hole's lines; null when the shaft has no keyway to clock against. */
 const val BOLT_HOLE_90_NOTE = "90° from keyway"
@@ -733,6 +826,8 @@ fun buildFooterEndColumns(
     if (cfg.showAftThread && ends.aftThread) {
         getAftEndThread(spec)?.let { th -> aft += threadLines(th) }
     }
+    // The end face's tapped holes belong to that end's column, under its taper and thread.
+    aft += endHoleFooterLines(spec.aftEndHoles, displayUnits, ::line)
 
     val fwd = mutableListOf<String>()
     var fwdTaperBlock = false
@@ -746,6 +841,7 @@ fun buildFooterEndColumns(
     if (cfg.showFwdThread && ends.fwdThread) {
         getFwdEndThread(spec)?.let { th -> fwd += threadLines(th) }
     }
+    fwd += endHoleFooterLines(spec.fwdEndHoles, displayUnits, ::line)
 
     // Cross-drilled coupler bolt holes — the plain coupling end's spec: hole Ø, the distance
     // from the authored face to the hole center, and its clocking against the keyway. Listed

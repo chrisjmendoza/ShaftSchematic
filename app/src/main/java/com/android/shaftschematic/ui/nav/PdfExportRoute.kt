@@ -119,6 +119,8 @@ fun PdfExportRoute(
     val sheetDateMode by vm.sheetDateMode.collectAsState()
     val sheetDateText by vm.sheetDateText.collectAsState()
     val sheetDateSheets by vm.sheetDateSheets.collectAsState()
+    val sheetNotesSheets by vm.sheetNotesSheets.collectAsState()
+    val notes by vm.notes.collectAsState()
     val shaftPosition by vm.shaftPosition.collectAsState()
     val currentDocumentName by vm.currentDocumentName.collectAsState()
 
@@ -145,9 +147,9 @@ fun PdfExportRoute(
                 jobNumber = jobNumber,
                 item = item,
                 dateMode = sheetDateMode,
-                dateText = sheetDateText,
+                dateText = sheetDateText, notes = notes,
                 drawingLabel = drawingLabel,
-            ).forSheet(dateSheet, sheetDateSheets)
+            ).forSheet(dateSheet, sheetDateSheets, sheetNotesSheets)
 
             VerboseLog.d(VerboseLog.Category.PDF, "PdfExport") {
                 "writing: page=${PDF_PAGE_WIDTH_PT}x${PDF_PAGE_HEIGHT_PT}pt filename=$filename"

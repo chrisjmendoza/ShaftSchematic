@@ -488,6 +488,9 @@ fun composeRunoutPdfOnCanvas(
     // The dye pen row shares the TIR line's lane (consolidated only, per-job election); the
     // boxes mark from the ONE WearRecord.dyePenResult the wear sheet prints, blank on a draft.
     val drawDyePen = consolidated && config.showDyePenTest
+    // The spark test row follows the dye pen row in the same lane, by its own per-job election.
+    val drawSpark = consolidated && config.showSparkTest
+    val drawTestRows = drawDyePen || drawSpark
 
     // Prelim bubble rows on the linear map — the BUDGET's term only (see the vertical solve).
     val prelimPlan     = planRunoutBubbles(
@@ -514,8 +517,26 @@ fun composeRunoutPdfOnCanvas(
             else -sheetTextPaint(TEXT_PT * footerScale).fontMetrics.ascent * (1f - 1f / footerScale)
         return TIR_LINE_HEIGHT_PT * footerScale + extraRise
     }
+    // The dye pen and spark test rows share the TIR line while they fit beside it (keeping an inch
+    // of TIR rule); when they do not — a large footer size, the coupling face taking the lane's
+    // right end — the spark test row drops to a line of its own under the dye pen row, and the lane
+    // grows by that line. Decided per footer size, so the budget and the draw agree.
+    val laneRightEdge =
+        if (drawFace) couplingCx - COUPLING_FACE_OUTER_R_PT - COUPLING_FACE_PAD_PT else contentRight
+    fun sparkWrapsAt(footerScale: Float): Boolean {
+        if (!(drawDyePen && drawSpark)) return false
+        val p = sheetTextPaint(TEXT_PT * footerScale)
+        val rowsW = dyePenRowWidth(p, "Dye pen test:", footerScale) + TEST_ROW_GAP_PT * footerScale +
+            dyePenRowWidth(p, SPARK_TEST_LABEL, footerScale)
+        val start = if (drawBubbles) {
+            contentLeft + p.measureText("TIR's taken looking:  ") + TIR_MIN_RULE_PT + DYE_PEN_GAP_PT
+        } else contentLeft
+        return start + rowsW > laneRightEdge
+    }
     fun bottomLaneHAt(footerScale: Float): Float = maxOf(
-        if (drawBubbles || drawDyePen) tirLaneHAt(footerScale) else 0f,
+        if (drawBubbles || drawTestRows) {
+            tirLaneHAt(footerScale) + (if (sparkWrapsAt(footerScale)) TIR_LINE_HEIGHT_PT * footerScale else 0f)
+        } else 0f,
         if (drawFace) COUPLING_FACE_BLOCK_PT else 0f,
     )
     fun footerCfgAt(footerScale: Float): FooterConfig =
@@ -757,8 +778,12 @@ fun composeRunoutPdfOnCanvas(
         ),
     )
     // No TIR line when bubbles are elected out — its lane returns to the shaft area, unless
-    // the dye pen row still needs it.
-    val tirY = footerTop - (if (drawBubbles || drawDyePen) tirLineH else 0f)
+    // the dye pen or spark test row still needs it.
+    val sparkWraps = sparkWrapsAt(footerScale)
+    // With the spark row on a line of its own, the TIR / dye pen line moves up one line over it.
+    val sparkY = footerTop - tirLineH
+    val tirY = footerTop - (if (drawBubbles || drawTestRows) tirLineH else 0f) -
+        (if (sparkWraps) tirLineH else 0f)
     val bottomLaneTopY = footerTop - bottomLaneH
     val railsBlockH = railsBlockHFor(dualStacked, railLiftReserve)
     val shaftTopBudgetY = margin + railsBlockH
@@ -968,29 +993,42 @@ fun composeRunoutPdfOnCanvas(
     // row too wide for that spot — a larger footer size — pulls left toward the TIR label and
     // shortens the rule to match, so the boxes never reach the face. At the shipped size the
     // preferred spot always fits and nothing moves.
-    val laneRight =
-        if (drawFace) couplingCx - COUPLING_FACE_OUTER_R_PT - COUPLING_FACE_PAD_PT
-        else contentRight
+    val laneRight = laneRightEdge
+    // The dye pen and spark test rows place as ONE block — dye pen first, the spark test after it
+    // — so a larger footer size pulls the pair left together and the TIR rule shortens for both.
     val dyePenLabel = "Dye pen test:"
-    val dyePenX = if (!drawDyePen) laneRight else if (drawBubbles) {
+    val sparkLabel = SPARK_TEST_LABEL
+    // A wrapped spark row is not on this line, so only the dye pen row counts toward its width.
+    val testRowsW = if (sparkWraps) dyePenRowWidth(footerText, dyePenLabel, footerScale) else
+        (if (drawDyePen) dyePenRowWidth(footerText, dyePenLabel, footerScale) else 0f) +
+            (if (drawDyePen && drawSpark) TEST_ROW_GAP_PT * footerScale else 0f) +
+            (if (drawSpark) dyePenRowWidth(footerText, sparkLabel, footerScale) else 0f)
+    val dyePenX = if (!drawTestRows) laneRight else if (drawBubbles) {
         val labelEnd = contentLeft + footerText.measureText("TIR's taken looking:  ")
         val preferred = labelEnd + TIR_FILL_RULE_PT + DYE_PEN_GAP_PT
-        min(preferred, laneRight - dyePenRowWidth(footerText, dyePenLabel, footerScale))
+        min(preferred, laneRight - testRowsW)
             .coerceAtLeast(labelEnd + DYE_PEN_GAP_PT)
     } else contentLeft
     // Runout content only — elected out with the bubbles on a Schematic + Wear sheet.
     if (drawBubbles) {
         val effectiveTir = if (blankValues) TirDirection.UNSET else config.tirDirection
-        val tirRight = if (drawDyePen) min(laneRight, dyePenX - DYE_PEN_GAP_PT) else laneRight
+        val tirRight = if (drawTestRows) min(laneRight, dyePenX - DYE_PEN_GAP_PT) else laneRight
         drawTirLine(c, footerText, contentLeft, tirRight, tirY, effectiveTir)
     }
     // ONE construction with the wear sheet's notes row (drawDyePenBoxes); a blank draft leaves
     // both boxes empty for hand-marking.
+    var testX = dyePenX
     if (drawDyePen) {
-        val x = dyePenX
-        drawDyePenBoxes(
-            c, footerText, x, tirY, dyePenLabel,
+        testX = drawDyePenBoxes(
+            c, footerText, testX, tirY, dyePenLabel,
             if (blankValues) null else wearRecord.dyePenResult,
+            scale = footerScale,
+        ) + TEST_ROW_GAP_PT * footerScale
+    }
+    if (drawSpark) {
+        drawDyePenBoxes(
+            c, footerText, if (sparkWraps) dyePenX else testX, if (sparkWraps) sparkY else tirY, sparkLabel,
+            if (blankValues) null else wearRecord.sparkTestResult,
             scale = footerScale,
         )
     }
@@ -2131,6 +2169,12 @@ private const val TEXT_PT    = 10f
 private const val PAGE_MARGIN_PT   = 36f    // 0.5 in margins
 private const val TIR_LINE_HEIGHT_PT = 20f  // Space for TIR direction line at bottom
 private const val TIR_FILL_RULE_PT   = 180f // Write-in rule after "TIR's taken looking:"
+/** The spark test row's label on the consolidated sheet. */
+const val SPARK_TEST_LABEL = "Spark test:"
+/** Air between the dye pen row and the spark test row after it — the wear sheet's notes-row gap. */
+private const val TEST_ROW_GAP_PT    = 24f
+/** The least TIR write-in rule the dye pen + spark test pair leaves before the spark row wraps. */
+private const val TIR_MIN_RULE_PT    = 72f
 private const val DYE_PEN_GAP_PT     = 36f  // Gap between the TIR rule and the dye pen boxes sharing its lane
 
 // Coupling end view — bottom-right of the band the TIR line shares. The block is the tallest

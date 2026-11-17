@@ -87,5 +87,6 @@ fun AutosaveManager.SessionSnapshot.isDefaultSession(): Boolean {
         sheetDateMode == com.android.shaftschematic.model.SheetDateMode.TODAY &&
         sheetDateText.isBlank() &&
         sheetDateSheets.isEmpty() &&
+        sheetNotesSheets.isEmpty() &&
         notes.isBlank()
 }

@@ -97,6 +97,14 @@ fun ShaftViewModel.setShowDyePenTest(show: Boolean) {
     _runoutConfig.update { it.copy(showDyePenTest = show) }
 }
 
+/**
+ * Elect the consolidated sheet's "Spark test: PASS / FAIL" row ([RunoutConfig.showSparkTest]),
+ * printed after the dye pen row; the marked box is `WearRecord.sparkTestResult`.
+ */
+fun ShaftViewModel.setShowSparkTest(show: Boolean) {
+    _runoutConfig.update { it.copy(showSparkTest = show) }
+}
+
 // ── Runout per-station readings (bubble value + high-spot marker) ─────────────
 
 /**

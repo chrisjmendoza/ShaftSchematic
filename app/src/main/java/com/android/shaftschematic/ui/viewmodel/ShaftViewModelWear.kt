@@ -307,6 +307,16 @@ fun ShaftViewModel.setDyePenResult(result: DyePenResult?) {
     }
 }
 
+/**
+ * Record the spark test's outcome ([WearRecord.sparkTestResult]) — an "X" in the matching box of
+ * the consolidated sheet's "Spark test:" row; `null` returns both boxes to blank.
+ */
+fun ShaftViewModel.setSparkTestResult(result: DyePenResult?) {
+    _wearRecord.update { rec ->
+        if (rec.sparkTestResult == result) rec else rec.copy(sparkTestResult = result)
+    }
+}
+
 // ── Worn sections (consolidated runout/wear sheet) ────────────────────────────
 // Reference-only, same posture as pits/diaReadings: plain _wearRecord updates, no
 // geometry side effects. Shaft-space canonical (no component key → no orphans).

@@ -447,9 +447,12 @@ internal val helpSections: List<HelpSection> = listOf(
                     "Shaft & job, which always stays the first card. Type the overall length " +
                     "(OAL) and the shaft diameter — the bare shaft between your components — and " +
                     "save each with the keyboard's Done key, by moving to the next field, or " +
-                    "with the green ✓ above the cards (the red ✗ puts the old value back). Under " +
+                    "with the green ✓ above the cards (the red ✗ puts the old value back). Shaft " +
+                    "ends holds each end face's draw plate holes, which print in that " +
+                    "end's footer column. Under " +
                     "them, fill in the job number, customer, vessel, item, shaft position and " +
-                    "notes. The toolbar's Project information button brings you back to this " +
+                    "notes; each sheet's PDF options choose whether it prints the notes. The " +
+                    "toolbar's Project information button brings you back to this " +
                     "card from anywhere.\n\n" +
                     "Then add " +
                     "tapers, threads, liners, and bodies with the + Add Component button; each " +

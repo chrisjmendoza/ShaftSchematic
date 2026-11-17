@@ -933,6 +933,18 @@ Same-day review feedback on step 4; supersedes step 4's picker placement:
   hand-marking; a blank draft always prints them blank. The Output tab's switch sits under
   "Coupling face" in Sheet content with the chips beneath it while on; the preview's options
   panel carries the same as a "Dye pen test" content chip plus the chips row.
+- **"Spark test" row** (on-device request: the result was hand-written beside the dye pen boxes during
+  the inspection): `RunoutConfig.showSparkTest` (additive, default OFF — byte-identical), prints
+  `Spark test: ☐ PASS ☐ FAIL` right after the dye pen row in the same lane, marked from
+  `WearRecord.sparkTestResult` (same PASS/FAIL type, none or one) through the same
+  `drawDyePenBoxes`; a blank draft prints both blank. The two rows place as ONE block (the TIR
+  rule shortens for both); when the pair cannot leave `TIR_MIN_RULE_PT` of rule — a large footer
+  size, the coupling face taking the lane's right end — the spark row drops to its own line under
+  the dye pen row, left-aligned with it, and the lane reserves that extra line (`sparkWrapsAt`,
+  decided per footer size so the vertical budget and the draw agree; `SparkTestRowTest`).
+  Consolidated sheet only — the wear sheet's notes row is unchanged. Output tab: a "Spark test"
+  switch under the dye pen's with its own Pass | Fail chips; the preview panel: a "Spark test"
+  content chip plus chips.
 - **"Export all"** (same tab): checkboxes for the five documents (consolidated [current
   variant], schematic, runout, wear, undercut — all on by default) + one folder pick
   (`OpenDocumentTree` + `createPdfInTree`); each file goes through the hardened write, so

@@ -18,7 +18,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.SheetDateMode
 import com.android.shaftschematic.model.SheetDateSheet
+import com.android.shaftschematic.model.canPrintNotes
 import com.android.shaftschematic.model.sheetPrintsDate
+import com.android.shaftschematic.model.sheetPrintsNotes
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 
 /**
@@ -114,3 +116,53 @@ internal fun sheetDateOnSheetTag(sheet: SheetDateSheet): String =
 
 /** The same switch on the Undercut tab's Drawing settings. */
 internal const val UNDERCUT_DATE_ON_SHEET_TAG = "undercut_date_on_sheet"
+
+/**
+ * The per-job "Notes on this sheet" switch — whether ONE sheet prints the job's notes (typed on the
+ * start card) under its footer's job block (on-device request: the foreman's hand notes belong on
+ * the printed sheet). Off by default on every sheet. Shown only on a sheet that carries the footer
+ * ([canPrintNotes]); greyed, value kept, while the job has no notes. Same row construction as
+ * [SheetDateOnSheetRow].
+ */
+@Composable
+internal fun SheetNotesOnSheetRow(
+    vm: ShaftViewModel,
+    sheet: SheetDateSheet,
+    modifier: Modifier = Modifier,
+) {
+    if (!sheet.canPrintNotes) return
+    val notes by vm.notes.collectAsState()
+    val overrides by vm.sheetNotesSheets.collectAsState()
+    val hasNotes = notes.isNotBlank()
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                SHEET_NOTES_ON_SHEET_LABEL,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (hasNotes) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                if (hasNotes) SHEET_NOTES_ON_SHEET_CAPTION else SHEET_NOTES_ON_SHEET_EMPTY_CAPTION,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Switch(
+            checked = sheetPrintsNotes(sheet, overrides),
+            onCheckedChange = { vm.setSheetNotesOnSheet(sheet, it) },
+            enabled = hasNotes,
+            modifier = Modifier.testTag(sheetNotesOnSheetTag(sheet)),
+        )
+    }
+}
+
+internal const val SHEET_NOTES_ON_SHEET_LABEL = "Notes on this sheet"
+internal const val SHEET_NOTES_ON_SHEET_CAPTION =
+    "Prints the job's notes under the footer's job block. Saved with this job."
+internal const val SHEET_NOTES_ON_SHEET_EMPTY_CAPTION =
+    "No notes yet — type them on the Shaft & job card."
+
+/** The options panels' switch tag: `sheet_notes_on_schematic` … `sheet_notes_on_final`. */
+internal fun sheetNotesOnSheetTag(sheet: SheetDateSheet): String =
+    "sheet_notes_on_${sheet.name.lowercase()}"

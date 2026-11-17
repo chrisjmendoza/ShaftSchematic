@@ -215,6 +215,21 @@ and both draw sites place every hole off the row's own mapped window through the
 the window reaches neither OAL, body resolution nor collision. The coupling end view counts
 bolts from the first SEAM row only. See `docs/contracts/CouplerBoltSlot.md`.
 
+### Shaft-end holes are reference features, printed as footer text
+`ShaftSpec.aftEndHoles`/`fwdEndHoles` (`ShaftEndHoles` — draw-plate count, thread size, bolt
+circle Ø; NO depth, on-device ruling: the shop never measures it; NO puller holes, on-device ruling:
+those are in the propeller, not the shaft) are the tapped holes in each END FACE (on-device request: the foreman hand-wrote "4 holes 1 1/4 NC on 4 1/2 B.C." beside the FWD end). They belong
+to the shaft end, not to a component, so they are entered on the start card's "Shaft ends" section
+(no carousel card, no Add dialog — outside the add-dialog-parity invariant) and written through
+`setEndHoles(end, holes, target)`. They **never** affect OAL, resolve, collision or the drawing;
+they print ONLY as lines in that end's footer column through ONE builder, `endHoleFooterLines`,
+built from the parts given (lengths in the document unit). The thread size is stored verbatim and
+PRINTED through ONE `drawPlateThreadText`: an inch mark after a bare number on an inch drawing and
+the `ShaftEndHoles.drawPlateSeries` (NC | NF, default NC — the toggle at the end of the box,
+on-device request: typed `1 1/4`, printed `1 1/4" NC`) after it, unless the text already names a
+series or is metric (`M30`). Nothing draws
+them on the shaft — do not add a drawn hole or end view without asking.
+
 ### Wear pits are reference features
 Wear pits (`WearRecord.pits` — a `WearPit` "X" marker per pit/dye-failure, small or large) are
 **reference-only**, the same posture as wear spots / coupler bolt slots / runout readings. They
@@ -560,6 +575,12 @@ height" slider, the per-job **"Dye pen test" row** (`RunoutConfig.showDyePenTest
 OFF — `Dye pen test: ☐ PASS ☐ FAIL` in the TIR line's lane, the boxes marked from the ONE
 `WearRecord.dyePenResult` the wear sheet prints through the ONE `drawDyePenBoxes`; none or one,
 never both — the shared `DyePenResultChips` clears on re-tap, a blank draft prints both blank),
+its twin the per-job **"Spark test" row** (`RunoutConfig.showSparkTest`, default OFF —
+`Spark test: ☐ PASS ☐ FAIL` right after the dye pen row, marked from `WearRecord.sparkTestResult`
+through the same `drawDyePenBoxes`; the pair places as ONE block, and when it cannot keep an inch
+of TIR rule beside it the spark row drops to its own line under the dye pen row and the lane grows
+by that line — `sparkWrapsAt`, one decision for the budget and the draw; consolidated sheet only,
+the wear sheet's form is unchanged),
 the app-wide **"Wear areas on the shaft drawing"** chips in its PDF options' Shading
 section (a remote control for `PdfPrefs.wearAreaStyle`, also in Settings → Drawing),
 and **Export all** (checked documents batch-written to a picked folder).
@@ -1820,6 +1841,16 @@ coverage end. Nothing backfills it — not a load, not the first component added
 first-OAL "Shaft diameter" prompt: the diameter field sits under the OAL on the start card, which is
 what the prompt existed to provide.
 See `docs/contracts/OverallLength.md`.
+
+**"Notes on this sheet"** (on-device request: the foreman's notes — "partially clad taper", where
+the fiberglass was — belong on the printed sheet) prints the start card's Notes under the footer
+job block's Side badge (`footerNoteLines`, first row led by `Notes:`). Per job, per sheet, OFF by
+default everywhere: `sheet_notes_sheets` (`SheetDateSheet` name → on), ONE resolver
+`sheetPrintsNotes`, only the footer sheets (`canPrintNotes`: SCHEMATIC, CONSOLIDATED, FINAL), applied
+by the same `ProjectInfo.forSheet(sheet, dateOverrides, notesOverrides)` that blanks
+`ProjectInfo.notes` when off — a footer-sheet site that does not pass the notes overrides prints
+none. Row `SheetNotesOnSheetRow` beside the date row; in the snapshot builder AND combine, not in
+`EditState`; a mate carries the choices, a template and New reset them. Blank drafts print none.
 
 **"Date on sheets"** (project information on the start card; on-device request — the work is not
 always done the day the sheet prints) is per document: `ProjectInfo.dateMode` (`SheetDateMode`

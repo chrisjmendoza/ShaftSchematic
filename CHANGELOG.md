@@ -6,6 +6,45 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-11-16
+
+### feat(shaft-ends): the draw-plate thread size carries an NC | NF toggle
+
+On-device request: the size is typed bare ("1 1/4") and the sheet should read `1 1/4" NC`. The
+Thread size box on the start card's Shaft ends section ends in an NC | NF selector — both options
+shown, the chosen one filled (default NC). The printed line adds the inch mark after a bare number on an inch drawing and the series
+after the size — `Draw plate: 4 holes 1 1/4" NC on 4 1/2" B.C.`. A size that already names its
+series (`1 1/4-7 UNC`) or a metric one (`M30`) prints as typed, and the typed text itself is never
+changed.
+
+### feat(consolidated): a spark test PASS / FAIL row beside the dye pen test
+
+On-device request: the spark test result had to be hand-written next to the dye pen boxes during
+the inspection ("Spark test: FAIL"). The consolidated sheet can now print `Spark test: ☐ PASS ☐ FAIL` right after the dye pen row, by its
+own per-job "Spark test" switch on the Output tab and the preview's options panel (off by default,
+so existing sheets print as before). Pass | Fail chips mark the box, a second tap clears it, and a
+blank draft prints both boxes empty. When both rows cannot fit beside "TIR's taken looking:" — a
+large footer text size, or the coupling face on — the spark test drops to its own line under the
+dye pen row instead of running into the coupling face. The wear sheet's own form is unchanged.
+
+### feat(sheets): project notes print on the sheet; shaft ends carry draw-plate holes
+
+On-device request, from a printed schematic the foreman marked up by hand ("Partially clad
+taper", where the fiberglass was, and "4 holes 1 1/4 NC on 4 1/2" beside the FWD end).
+
+- **Notes on this sheet.** The start card's Notes now print under the footer's job block (below
+  the Side badge) on the schematic, the consolidated sheet and the Final tab's sheets, each by its
+  own per-job switch on its PDF options. Off by default everywhere, so nothing prints until a
+  switch is turned on; greyed while the job has no notes. Stored as `sheet_notes_sheets`; a blank
+  draft prints none. The footer band grows to hold the note rows.
+- **Shaft ends.** A "Shaft ends" section on the start card holds each end face's draw-plate holes
+  (count, thread size, bolt circle Ø) behind a checkbox. They print as a line in that end's footer
+  column under its taper and thread — `Draw plate: 4 holes 1 1/4" NC on 4 1/2" B.C.` — built from
+  whatever is given. The thread size prints as typed; the bolt circle in the document unit. No
+  depth (the shop never measures it) and no puller holes (those are in the propeller). A
+  reference feature stored on the drawing (`ShaftSpec.aftEndHoles`/`fwdEndHoles`), so the Final
+  drawing, templates and mate duplicates carry it; nothing is drawn on the shaft.
+
 ## 2026-11-14
 
 ### ci: refactor branches get a test build
