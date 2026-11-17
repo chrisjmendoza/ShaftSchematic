@@ -113,6 +113,32 @@ internal fun buildOutputFilename(
     return exportPdfFilename(base, "_${doc.filenameSuffix}", blankDraft)
 }
 
+/**
+ * Export filename for one SECTION sheet: the document base of [buildOutputFilename], then
+ * `[_Final]_section_<name>` — the section's own name, sanitized like every other part, or
+ * `section` when it has none. A section of the final drawing carries `_Final` like every sheet
+ * the Final tab makes.
+ */
+internal fun buildSectionFilename(
+    customer: String,
+    vessel: String,
+    jobNumber: String,
+    shaftPosition: ShaftPosition,
+    sectionName: String,
+    final: Boolean,
+    blankDraft: Boolean = false,
+    documentName: String? = null,
+): String {
+    val base = DocumentNaming.suggestedBaseName(
+        jobNumber = jobNumber,
+        customer = customer,
+        vessel = vessel,
+        suffix = shaftPosition.printableLabelOrNull(),
+    ) ?: documentNameFilenameBase(documentName) ?: FALLBACK_FILENAME_BASE
+    val part = DocumentNaming.sanitizePart(sectionName).ifBlank { "section" }
+    return exportPdfFilename(base, (if (final) "_Final" else "") + "_section_$part", blankDraft)
+}
+
 /** A saved document's name as a filename base — sanitized, without `.shaft` — or null when blank. */
 internal fun documentNameFilenameBase(documentName: String?): String? =
     documentName

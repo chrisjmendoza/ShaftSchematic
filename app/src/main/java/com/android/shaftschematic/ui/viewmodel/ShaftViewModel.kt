@@ -120,6 +120,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             sheetDateText = _sheetDateText.value,
             sheetDateSheets = _sheetDateSheets.value,
             sheetNotesSheets = _sheetNotesSheets.value,
+            sheetSections = _sheetSections.value,
             notes = _notes.value,
             runoutConfig = _runoutConfig.value,
             unitLocked = _unitLocked.value,
@@ -710,6 +711,14 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
      * prints no notes ([sheetPrintsNotes]).
      */
     internal val _sheetNotesSheets = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+
+    /**
+     * The job's section sheets — stretches of the shaft printed alone, each of the original or
+     * of the final drawing ([SchematicSection.final]). Print metadata: in the autosave snapshot,
+     * not in the undo history, and never a reason to touch a component.
+     */
+    internal val _sheetSections = MutableStateFlow<List<SchematicSection>>(emptyList())
+    val sheetSections: StateFlow<List<SchematicSection>> = _sheetSections.asStateFlow()
     val sheetNotesSheets: StateFlow<Map<String, Boolean>> = _sheetNotesSheets.asStateFlow()
 
     internal val _shaftPosition = MutableStateFlow(ShaftPosition.OTHER)
@@ -936,8 +945,9 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             runoutStationPlacements, unitOverrides, dualUnits, item, finalSpec,
             sheetDateMode, sheetDateText,
             sheetDateSheets, sheetNotesSheets,
+            sheetSections,
         ) { values: Array<Any?> ->
-            check(values.size == 21) { "Autosave combine expected 21 values, got ${values.size}" }
+            check(values.size == 22) { "Autosave combine expected 22 values, got ${values.size}" }
 
             val s = values[0] as ShaftSpec
             val u = values[1] as UnitSystem
@@ -963,6 +973,8 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             val dateSheets = values[19] as Map<String, Boolean>
             @Suppress("UNCHECKED_CAST")
             val notesSheets = values[20] as Map<String, Boolean>
+            @Suppress("UNCHECKED_CAST")
+            val sections = values[21] as List<SchematicSection>
 
             AutosaveManager.SessionSnapshot(
                 shaftSpec = s,
@@ -977,6 +989,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 sheetDateText = dateText,
                 sheetDateSheets = dateSheets,
                 sheetNotesSheets = notesSheets,
+                sheetSections = sections,
                 notes = n,
                 runoutConfig = runout,
                 unitLocked = locked,
@@ -1604,6 +1617,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _sheetDateText.value = snapshot.sheetDateText
         _sheetDateSheets.value = snapshot.sheetDateSheets
         _sheetNotesSheets.value = snapshot.sheetNotesSheets
+        _sheetSections.value = snapshot.sheetSections
         _notes.value = snapshot.notes
         _runoutConfig.value = snapshot.runoutConfig
         _wearRecord.value = snapshot.wearRecord
@@ -1684,6 +1698,25 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _sheetDateSheets.value = _sheetDateSheets.value + (sheet.name to on)
     }
     fun setNotes(value: String)    { _notes.value = value }
+    /** Adds a section sheet of the [target] drawing and returns its id. */
+    fun addSheetSection(target: SpecTarget, name: String, firstId: String?, lastId: String?): String {
+        val id = newId()
+        _sheetSections.value = _sheetSections.value +
+            SchematicSection(id, name.trim(), firstId, lastId, final = target == SpecTarget.FINAL)
+        return id
+    }
+
+    /** Renames or re-points the section sheet [id]; a no-op when it is gone. */
+    fun updateSheetSection(id: String, name: String, firstId: String?, lastId: String?) {
+        _sheetSections.value = _sheetSections.value.map {
+            if (it.id == id) it.copy(name = name.trim(), firstId = firstId, lastId = lastId) else it
+        }
+    }
+
+    fun removeSheetSection(id: String) {
+        _sheetSections.value = _sheetSections.value.filterNot { it.id == id }
+    }
+
     /** Whether [sheet] prints the job's notes ("Notes on this sheet"); stored per job. */
     fun setSheetNotesOnSheet(sheet: SheetDateSheet, on: Boolean) {
         _sheetNotesSheets.value = _sheetNotesSheets.value + (sheet.name to on)

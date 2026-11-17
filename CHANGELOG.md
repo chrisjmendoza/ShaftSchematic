@@ -8,6 +8,52 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-16
 
+### feat(schematic): section sheets — one stretch of the shaft as its own document
+
+On-device request, from the shop's "FWD end finish" hand sketch: print a section of the finished
+schematic alone, so there is a document for each section that needs one. On the PDF preview
+(Schematic and Final), a row under the title bar picks the sheet: "Whole shaft" or one of the
+job's sections. "Sections…" adds one — a name, and the parts it runs from and to (or the AFT / FWD
+end). The sheet draws those parts larger, with an S-break where the shaft carries on, under the
+section's name. Its dimensions are the full sheet's own values; one measured from a S.E.T. the
+section does not show runs open to the break. Names, Ø values and footer lines are those of the
+section's parts. Print and Export follow the sheet on screen, and Export all writes the original
+drawing's sections beside the schematic. Sections are saved with the job. See
+`docs/contracts/SectionSheets.md`.
+
+### feat(undercut): the overall dimension ends at the liner or at the cuts
+
+On-device request: welding over the cuts, the shop needs to know where the liner ends so the seal
+area is not built up with wasted material. Under the "Overall dimension" switch, "Overall
+dimension to: End of liner | End of cuts" chooses where that dimension ends — the far end of the
+liner (the default, marked "S.E.T. to liner end") or the end of the last cut. A bare-shaft section
+has no liner and measures to the end of its cuts either way. On the Undercut tab's Drawing
+settings and the undercut PDF options; saved with the job.
+
+### feat(undercut): an overall dimension from the S.E.T. to the end of the cuts
+
+On-device ruling: the foreman's hand sketches carry one dimension over the cut lengths (54 1/2
+over 18 15/16, 10 9/16, 4 11/16, 20 5/16), running from the S.E.T. to the end of the cuts — where
+the weld ends. The undercut sheet and the Undercut tab's detail canvas print it on every section
+with cuts, as one more dimension above the chain. It takes the place of the removed "Total length
+of cuts", which measured only across the cuts. The switches return under the name "Overall
+dimension": on the tab's Drawing settings and the undercut PDF options (saved with the job), and
+the default every job follows under Settings → PDF Export, "Undercut drawing: overall dimension"
+(on as shipped). A choice a job or the device stored before the total was removed applies again.
+With "Liner ends from S.E.T." on, it stands in the same stack as those two. Not printed while
+Dimensions is From S.E.T.
+### fix(undercut): a cut typed past a liner's end onto smaller stock reads as the cut it is
+
+On-device report (Pacific Warrior STBD aft liner): the foreman's last cut, 8.920" × 20 5/16",
+ends 1/16" past the recorded end of the 8.999" liner, onto 8 1/2" bare shaft. Its card warned
+"Ø isn't smaller than the shaft here (Ø 8 1/2 in)" and disabled the Liner FWD datum ("Liner FWD
+edge is cut into the body"). Neither was true: the cut is 0.079" deep across the liner and, its
+floor standing above the bare shaft, removes nothing past the liner's end. The Ø check now reads
+the highest surface the cut spans (still warning when a cut removes nothing anywhere); a liner
+edge counts as cut into the body only where a cut actually removes metal past it; and such a cut
+now counts toward the sheet's deepest cut for the drawn-depth scale. The drawing was already
+right. Typed values are untouched.
+
 ### feat(shaft-ends): the draw-plate thread size carries an NC | NF toggle
 
 On-device request: the size is typed bare ("1 1/4") and the sheet should read `1 1/4" NC`. The

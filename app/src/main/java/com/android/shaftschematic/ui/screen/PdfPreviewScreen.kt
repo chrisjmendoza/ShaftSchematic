@@ -1,6 +1,11 @@
 // file: app/src/main/java/com/android/shaftschematic/ui/screen/PdfPreviewScreen.kt
 package com.android.shaftschematic.ui.screen
 
+import com.android.shaftschematic.pdf.SheetSection
+import com.android.shaftschematic.pdf.resolveSheetSection
+import com.android.shaftschematic.ui.nav.sectionSheetKind
+import com.android.shaftschematic.ui.nav.FINAL_FILENAME_SUFFIX
+import androidx.compose.runtime.saveable.rememberSaveable
 import android.app.Activity
 import android.content.Context
 import com.android.shaftschematic.ui.adaptive.currentWindowWidthClass
@@ -130,7 +135,11 @@ import kotlin.math.roundToInt
 fun PdfPreviewScreen(
     vm: ShaftViewModel,
     onBack: () -> Unit,
-    onExport: () -> Unit,
+    /**
+     * Hands the sheet on screen to the SAF export: the id of the section sheet being previewed,
+     * or null for the whole shaft — so the file written is the sheet that was judged.
+     */
+    onExport: (sectionId: String?) -> Unit,
     /**
      * Which of the document's two drawings is previewed. From the route argument, never a flag
      * on the ViewModel: the preview, its Print, and the export it hands off to must all be the
@@ -176,6 +185,20 @@ fun PdfPreviewScreen(
     val originalResolved by vm.resolvedComponents.collectAsState()
     val finalResolved by vm.finalResolvedComponents.collectAsState()
     val resolvedComponents = if (isFinal) finalResolved else originalResolved
+    // Section sheets: the job's sections of THIS drawing, and the one on screen (null = the
+    // whole shaft). The choice is this screen's own — Print and Export follow it.
+    val allSheetSections by vm.sheetSections.collectAsState()
+    val sheetSections = allSheetSections.filter { it.final == isFinal }
+    var sectionId by rememberSaveable { mutableStateOf<String?>(null) }
+    var showSections by remember { mutableStateOf(false) }
+    // A section deleted while selected falls back to the whole shaft.
+    LaunchedEffect(sheetSections, sectionId) {
+        if (sectionId != null && sheetSections.none { it.id == sectionId }) sectionId = null
+    }
+    // The window the selected section resolves to; null for the whole shaft.
+    fun currentSection(): SheetSection? =
+        allSheetSections.firstOrNull { it.id == sectionId && it.final == isFinal }
+            ?.let { resolveSheetSection(spec, resolvedComponents, it.firstId, it.lastId, it.name) }
     val pdfShowComponentTitles by vm.pdfShowComponentTitles.collectAsState()
     val pdfTieringMode by vm.pdfTieringMode.collectAsState()
     val pdfShadedBodies by vm.pdfShadedBodies.collectAsState()
@@ -263,7 +286,8 @@ fun PdfPreviewScreen(
         var previousWasDraft = false
         snapshotFlow {
             val config = tunedRunoutConfig(runoutConfig, tuning.heightScale, tuning.linerCompression)
-            val kind = finalSheetKind(target, finalRunoutBubbles, finalBeforeAfter)
+            val section = currentSection()
+            val kind = sectionSheetKind(section != null, target, finalRunoutBubbles, finalBeforeAfter)
             SchematicRenderInputs(
                 spec = spec,
                 unit = unit,
@@ -305,6 +329,7 @@ fun PdfPreviewScreen(
                 displayUnits = DisplayUnits(unit, unitOverrides, dualUnits),
                 target = target,
                 sheetKind = kind,
+                section = section,
                 originalSpec = originalSpec.takeIf { kind == FinalSheetKind.BEFORE_AFTER },
                 originalResolved = if (kind == FinalSheetKind.BEFORE_AFTER) originalResolved else emptyList(),
                 draft = tuning.active,
@@ -343,6 +368,7 @@ fun PdfPreviewScreen(
                         lineThicknessScale = inputs.lineThicknessScale,
                         runoutConfig = inputs.runoutConfig,
                         displayUnits = inputs.displayUnits,
+                        section = inputs.section,
                     )
                 }
                 raster to raster?.takeIf { !inputs.draft }?.inkBand()
@@ -460,12 +486,20 @@ fun PdfPreviewScreen(
                         ) ?: "Shaft Schematic"
                         // The print job carries the drawing's identity too — a job queue full
                         // of same-named sheets is how a final gets handed out as the original.
-                        val baseName =
-                            if (isFinal) suggested + finalDrawingSuffix(finalRunoutBubbles, finalBeforeAfter)
-                            else suggested
+                        // A section sheet's job is named for its section, so it never queues
+                        // under the whole drawing's name.
+                        val sectionSnapshot = currentSection()
+                        val baseName = when {
+                            sectionSnapshot != null ->
+                                suggested + (if (isFinal) FINAL_FILENAME_SUFFIX else "") +
+                                    " " + sectionSnapshot.title.ifBlank { "section" }
+                            isFinal -> suggested + finalDrawingSuffix(finalRunoutBubbles, finalBeforeAfter)
+                            else -> suggested
+                        }
                         val jobName = if (pdfBlankDraft) "$baseName (blank draft)" else baseName
                         // Snapshot state on the UI thread; onWrite runs on a binder thread.
-                        val kindSnapshot = finalSheetKind(target, finalRunoutBubbles, finalBeforeAfter)
+                        val kindSnapshot =
+                            sectionSheetKind(sectionSnapshot != null, target, finalRunoutBubbles, finalBeforeAfter)
                         val specSnapshot = spec
                         // The before/after sheet's top band — the ORIGINAL drawing, read only for it.
                         val beforeAfter = kindSnapshot == FinalSheetKind.BEFORE_AFTER
@@ -498,6 +532,7 @@ fun PdfPreviewScreen(
                                 lineThicknessScale = thicknessSnapshot,
                                 runoutConfig = configSnapshot,
                                 displayUnits = displayUnitsSnapshot,
+                                section = sectionSnapshot,
                             )
                         }
                     }) {
@@ -505,7 +540,7 @@ fun PdfPreviewScreen(
                         Spacer(Modifier.width(6.dp))
                         Text("Print")
                     }
-                    IconButton(onClick = onExport) {
+                    IconButton(onClick = { onExport(sectionId) }) {
                         Icon(
                             imageVector = Icons.Outlined.PictureAsPdf,
                             contentDescription = "Export PDF"
@@ -523,10 +558,20 @@ fun PdfPreviewScreen(
         // overlay clips for the same reason). `paddingValues` carries the Scaffold's default
         // content insets — the navigation bar included — so the options panel anchored to this
         // Box's bottom sits above the navigation bar without paying the inset itself.
+        Column(Modifier.fillMaxSize().padding(paddingValues)) {
+        // Which sheet is on screen: the whole shaft, or one of the job's sections.
+        SheetPickerRow(
+            sections = sheetSections,
+            selectedId = sectionId,
+            spec = spec,
+            resolved = resolvedComponents,
+            onSelect = { sectionId = it },
+            onEditSections = { showSections = true },
+        )
         BoxWithConstraints(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
+                .fillMaxWidth()
+                .weight(1f)
                 .clipToBounds(),
             contentAlignment = Alignment.Center
         ) {
@@ -712,7 +757,8 @@ fun PdfPreviewScreen(
                         pdfBlankDiaCallouts = pdfBlankDiaCallouts,
                         // A FINAL-drawing election only — the original schematic's stations
                         // are the Runout and Consolidated Output tabs' documents.
-                        showFinalRunoutBubbles = isFinal,
+                        // Whole-shaft elections: a section sheet is always the plain schematic.
+                        showFinalRunoutBubbles = isFinal && sectionId == null,
                         finalRunoutBubbles = finalRunoutBubbles,
                         finalBeforeAfter = finalBeforeAfter,
                         tuning = tuning,
@@ -720,6 +766,25 @@ fun PdfPreviewScreen(
                 }
             }
         }
+        }
+    }
+
+    if (showSections) {
+        SectionSheetsDialog(
+            sections = sheetSections,
+            spec = spec,
+            resolved = resolvedComponents,
+            onSave = { id, name, firstId, lastId ->
+                if (id == null) {
+                    // A new section goes straight on screen.
+                    sectionId = vm.addSheetSection(target, name, firstId, lastId)
+                } else {
+                    vm.updateSheetSection(id, name, firstId, lastId)
+                }
+            },
+            onDelete = { vm.removeSheetSection(it) },
+            onDismiss = { showSections = false },
+        )
     }
 }
 
@@ -801,6 +866,11 @@ private data class SchematicRenderInputs(
      * nothing else the loop already watches.
      */
     val sheetKind: FinalSheetKind,
+    /**
+     * The section sheet's window, or null for the whole shaft. A composer input AND a re-render
+     * key: picking another sheet, or editing the section on screen, changes nothing else here.
+     */
+    val section: SheetSection?,
     /**
      * The ORIGINAL drawing, set ONLY when [sheetKind] is the before/after sheet (`null` otherwise,
      * so the record stays a minimal re-render key). That sheet draws two geometries, the original

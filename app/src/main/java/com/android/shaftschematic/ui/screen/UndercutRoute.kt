@@ -92,6 +92,7 @@ import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.SurfaceSeg
+import com.android.shaftschematic.geom.undercutMachinedSpans
 import com.android.shaftschematic.geom.UNDERCUT_DEFAULT_LENGTH_MM
 import com.android.shaftschematic.geom.UNDERCUT_EXAGGERATION_MAX_FRAC
 import com.android.shaftschematic.geom.UNDERCUT_WINDOW_PAD_MM
@@ -157,9 +158,11 @@ import com.android.shaftschematic.ui.viewmodel.setPdfUndercutDepthShade
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutDiaInside
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutShadeLiners
 import com.android.shaftschematic.ui.viewmodel.setUndercutDrawToSet
+import com.android.shaftschematic.ui.viewmodel.setUndercutShowTotalRail
 import com.android.shaftschematic.ui.viewmodel.setUndercutPageOrientation
 import com.android.shaftschematic.ui.viewmodel.setUndercutSectionPrinted
 import com.android.shaftschematic.ui.viewmodel.setUndercutSetDatum
+import com.android.shaftschematic.ui.viewmodel.setUndercutOverallTo
 import com.android.shaftschematic.ui.viewmodel.setUndercutRailStyle
 import com.android.shaftschematic.ui.viewmodel.setUndercutLinerEndsFromSet
 import com.android.shaftschematic.ui.viewmodel.setUndercutLongCompress
@@ -282,7 +285,7 @@ fun UndercutRoute(
     // Chain-rail nodes at buried liner edges: a preview re-render key, an options-sheet control,
     // and read by the detail overlay's rail.
     val pdfUndercutSplitAtLinerEdge by vm.pdfUndercutSplitAtLinerEdge.collectAsState()
-    // The "Total length of cuts" default a job follows until it chooses: a preview re-render key,
+    // The "Overall dimension" default a job follows until it chooses: a preview re-render key,
     // and resolved with the record for the tab's switch and the detail overlay's rail.
     val pdfUndercutTotalRail by vm.pdfUndercutTotalRail.collectAsState()
     val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
@@ -446,6 +449,10 @@ fun UndercutRoute(
             val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
             UndercutSpanMm(u.id, c.startMm, c.endMm)
         }.filter { it.endMm > it.startMm }
+    }
+    // Where each cut removes material — what can bury a liner-edge reference.
+    val buryingSpans = remember(undercutRecord, segs, oalMm) {
+        undercutMachinedSpans(undercutRecord.undercuts, segs, oalMm)
     }
     // "Draw to the shaft end" (per-job): a liner strip near an S.E.T. chains out to it and draws
     // on to the shaft's physical end.
@@ -1029,6 +1036,7 @@ fun UndercutRoute(
                             oalMm = oalMm,
                             linerSpans = linerSpans,
                             sheetSpans = spans,
+                            buryingSpans = buryingSpans,
                             linerTitles = linerTitles,
                             aftSetXMm = setPositions.first,
                             fwdSetXMm = setPositions.second,
@@ -1126,6 +1134,23 @@ fun UndercutRoute(
                         checked = pdfUndercutSplitAtLinerEdge,
                         onCheckedChange = { vm.setPdfUndercutSplitAtLinerEdge(it) },
                         testTag = "undercut_split_at_liner_edge_switch",
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                    // Per-job: whether each section prints the total across its cuts — it helps on
+                    // some jobs and confuses on others (on-device request).
+                    UndercutTotalRailRow(
+                        checked = effectiveUndercutTotalRail(undercutRecord.showTotalRail, pdfUndercutTotalRail),
+                        followsDefault = undercutRecord.showTotalRail == null,
+                        onCheckedChange = { vm.setUndercutShowTotalRail(it) },
+                        testTag = "undercut_total_rail_switch",
+                        modifier = Modifier.padding(bottom = 8.dp),
+                        enabled = undercutRecord.railStyle == UndercutRailStyle.CHAIN,
+                    )
+                    UndercutOverallToRow(
+                        choice = undercutRecord.overallTo,
+                        onChoose = { vm.setUndercutOverallTo(it) },
+                        enabled = undercutRecord.railStyle == UndercutRailStyle.CHAIN &&
+                            effectiveUndercutTotalRail(undercutRecord.showTotalRail, pdfUndercutTotalRail),
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
                     // App-wide look: each section core shaded by its cut's depth. Here so the
@@ -1797,6 +1822,7 @@ internal fun UndercutOptionsSheet(
     val pdfUndercutDiaInside by vm.pdfUndercutDiaInside.collectAsState()
     val pdfUndercutShadeLiners by vm.pdfUndercutShadeLiners.collectAsState()
     val pdfUndercutSplitAtLinerEdge by vm.pdfUndercutSplitAtLinerEdge.collectAsState()
+    val pdfUndercutTotalRail by vm.pdfUndercutTotalRail.collectAsState()
     val pdfFractionStyle by vm.pdfFractionStyle.collectAsState()
     val pdfThreadSlant by vm.pdfThreadSlant.collectAsState()
     val pdfThreadDensity by vm.pdfThreadDensity.collectAsState()
@@ -1895,6 +1921,21 @@ internal fun UndercutOptionsSheet(
                 onCheckedChange = { vm.setPdfUndercutSplitAtLinerEdge(it) },
                 testTag = "pdf_undercut_split_at_liner_edge",
             )
+            Spacer(Modifier.height(12.dp))
+            UndercutTotalRailRow(
+                checked = effectiveUndercutTotalRail(undercutRecord.showTotalRail, pdfUndercutTotalRail),
+                followsDefault = undercutRecord.showTotalRail == null,
+                onCheckedChange = { vm.setUndercutShowTotalRail(it) },
+                testTag = "pdf_undercut_total_rail",
+                enabled = undercutRecord.railStyle == UndercutRailStyle.CHAIN,
+            )
+            Spacer(Modifier.height(12.dp))
+            UndercutOverallToRow(
+                choice = undercutRecord.overallTo,
+                onChoose = { vm.setUndercutOverallTo(it) },
+                enabled = undercutRecord.railStyle == UndercutRailStyle.CHAIN &&
+                    effectiveUndercutTotalRail(undercutRecord.showTotalRail, pdfUndercutTotalRail),
+            )
             if (printSections.size >= 2) {
                 Spacer(Modifier.height(12.dp))
                 UndercutPrintSectionsList(
@@ -1944,15 +1985,19 @@ private fun UndercutListRow(
     unit: UnitSystem,
     oalMm: Float,
     linerSpans: List<UndercutLinerSpan>,
-    /** Every cut on the sheet, render-clamped — what can bury a liner-edge reference. */
+    /** Every cut on the sheet, render-clamped — the parent-cut lookup. */
     sheetSpans: List<UndercutSpanMm>,
+    /** Where each cut on the sheet removes material (`undercutMachinedSpans`) — what can bury a liner edge. */
+    buryingSpans: List<UndercutSpanMm>,
     linerTitles: Map<String, String>,
     aftSetXMm: Float,
     fwdSetXMm: Float,
     onOpen: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    val reference = effectiveUndercutReference(undercut, linerSpans, sheetSpans, aftSetXMm, fwdSetXMm)
+    val reference = effectiveUndercutReference(
+        undercut, linerSpans, sheetSpans, aftSetXMm, fwdSetXMm, buryingSpans = buryingSpans,
+    )
     val refLiner = undercutReferenceLinerFor(undercut, linerSpans, stripLiner = null, oalMm = oalMm)
     val refParent = undercutReferenceParentSpan(undercut, sheetSpans)
     val distanceMm = undercutDisplayedDistanceMm(

@@ -31,6 +31,7 @@ import com.android.shaftschematic.geom.UndercutSpanMm
 import com.android.shaftschematic.geom.UndercutStrip
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.UNDERCUT_LONG_COMPRESS_MAX_FRAC
+import com.android.shaftschematic.model.UndercutOverallTo
 import com.android.shaftschematic.model.UndercutRailStyle
 import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.UndercutSetDatum
@@ -538,4 +539,119 @@ internal fun UndercutPrintSectionsList(
             modifier = Modifier.testTag("undercut_print_sections_caption"),
         )
     }
+}
+
+/**
+ * What the "Overall dimension" rail is, said once for the Undercut tab, the undercut options
+ * panel and Settings → PDF Export.
+ */
+internal const val UNDERCUT_TOTAL_RAIL_CAPTION =
+    "Each section prints one dimension from the S.E.T., above the cut lengths."
+
+/**
+ * The per-job "Overall dimension" switch (`UndercutRecord.showTotalRail`): whether each
+ * section's strip prints its total rail. [checked] is the job's RESOLVED value
+ * (`effectiveUndercutTotalRail`); [followsDefault] is true while the job has not chosen and is
+ * still following the Settings → PDF Export default, which the caption says so the source of the
+ * value is never a guess. ONE row behind the Undercut tab's Drawing settings and the undercut
+ * options panel, placed with the other dimensioning choices. [testTag] is the switch's tag.
+ */
+@Composable
+internal fun UndercutTotalRailRow(
+    checked: Boolean,
+    followsDefault: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    testTag: String,
+    modifier: Modifier = Modifier,
+    /**
+     * False while the job's "Dimensions" are From S.E.T. ([UndercutRailStyle.FROM_SET]), which prints
+     * no total: the switch greys out and the caption says why; the stored choice is left as it is.
+     */
+    enabled: Boolean = true,
+) {
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                "Overall dimension",
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (enabled) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                if (!enabled) UNDERCUT_TOTAL_RAIL_FROM_SET_CAPTION
+                else "$UNDERCUT_TOTAL_RAIL_CAPTION " + if (followsDefault) {
+                    "Following the Settings → PDF Export default until changed here. Saved with this job."
+                } else {
+                    "Saved with this job."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled,
+            modifier = Modifier.testTag(testTag),
+        )
+    }
+}
+
+/** The "Overall dimension" caption while the job's dimensions are From S.E.T. */
+internal const val UNDERCUT_TOTAL_RAIL_FROM_SET_CAPTION =
+    "Not printed while Dimensions is From S.E.T. — the longest rail already runs to the end of the cuts."
+
+/**
+ * The per-job "Overall dimension to" control — End of liner | End of cuts, writing
+ * [UndercutRecord.overallTo]. ONE composable behind the tab's Drawing settings and the undercut
+ * options panel, directly under the "Overall dimension" switch ([UndercutTotalRailRow]); greyed,
+ * its value kept, while that switch is off or the job's Dimensions are From S.E.T.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun UndercutOverallToRow(
+    choice: UndercutOverallTo,
+    onChoose: (UndercutOverallTo) -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            "Overall dimension to",
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (enabled) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            UndercutOverallTo.entries.forEach { to ->
+                WearChip(
+                    label = undercutOverallToLabel(to),
+                    selected = choice == to,
+                    enabled = enabled,
+                    modifier = Modifier.testTag(undercutOverallToTestTag(to)),
+                ) { onChoose(to) }
+            }
+        }
+        Text(
+            undercutOverallToCaption(choice),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** The chip label for [to]. */
+internal fun undercutOverallToLabel(to: UndercutOverallTo): String = when (to) {
+    UndercutOverallTo.LINER_END -> "End of liner"
+    UndercutOverallTo.CUTS_END -> "End of cuts"
+}
+
+/** The chip's test tag for [to]: `undercut_overall_to_LINER_END` / `undercut_overall_to_CUTS_END`. */
+internal fun undercutOverallToTestTag(to: UndercutOverallTo): String = "undercut_overall_to_" + to.name
+
+/** The caption under the "Overall dimension to" chips for the chosen [to]. */
+internal fun undercutOverallToCaption(to: UndercutOverallTo): String = when (to) {
+    UndercutOverallTo.LINER_END ->
+        "From the S.E.T. to the far end of the liner — where the liner stops, for welding. " +
+            "A bare-shaft section measures to the end of its cuts. Saved with this job."
+    UndercutOverallTo.CUTS_END -> "From the S.E.T. to the end of the last cut. Saved with this job."
 }

@@ -2,6 +2,7 @@ package com.android.shaftschematic.doc
 
 import com.android.shaftschematic.model.RunoutReadings
 import com.android.shaftschematic.model.RunoutStationPlacements
+import com.android.shaftschematic.model.SchematicSection
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.SheetDateMode
@@ -104,6 +105,13 @@ object ShaftDocCodec {
          */
         @SerialName("sheet_notes_sheets")
         val sheetNotesSheets: Map<String, Boolean> = emptyMap(),
+        /**
+         * The job's section sheets — stretches of the shaft printed alone (`SchematicSection`), of the
+         * original or of the final drawing. Print metadata keyed by stored component id; never pruned
+         * at decode. Absent in older files → none. Additive + defaulted: no version bump needed.
+         */
+        @SerialName("sheet_sections")
+        val sheetSections: List<SchematicSection> = emptyList(),
         @SerialName("shaft_position")
         val shaftPosition: ShaftPosition = ShaftPosition.OTHER,
         val notes: String = "",
@@ -199,6 +207,7 @@ object ShaftDocCodec {
         val sheetDateText: String,
         val sheetDateSheets: Map<String, Boolean>,
         val sheetNotesSheets: Map<String, Boolean>,
+        val sheetSections: List<SchematicSection> = emptyList(),
         val shaftPosition: ShaftPosition,
         val notes: String,
         val spec: ShaftSpec,
@@ -316,6 +325,7 @@ object ShaftDocCodec {
             sheetDateText = d.sheetDateText,
             sheetDateSheets = d.sheetDateSheets,
             sheetNotesSheets = d.sheetNotesSheets,
+            sheetSections = d.sheetSections,
             shaftPosition = d.shaftPosition,
             notes = d.notes,
             spec = d.spec,
@@ -351,6 +361,7 @@ object ShaftDocCodec {
                     sheetDateText = doc.sheetDateText,
                     sheetDateSheets = doc.sheetDateSheets,
                     sheetNotesSheets = doc.sheetNotesSheets,
+                    sheetSections = doc.sheetSections,
                     shaftPosition = doc.shaftPosition,
                     notes = doc.notes,
                     spec = normalizedSpec,

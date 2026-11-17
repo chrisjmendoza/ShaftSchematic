@@ -16,12 +16,13 @@
       <tr><td><span class="ui">Consolidated Output</span></td><td>Consolidated Sheet</td><td>One sheet that combines the schematic's dimensions with the runout bubbles, the wear information, or both. This tab also holds <span class="ui">Export all</span>. See <a href="#documents-consolidated">The Consolidated Output tab</a>.</td></tr>
     </tbody>
   </table>
+  <p>The schematic, and the Final schematic, can also print one stretch of the shaft as its own sheet — see <a href="#documents-sections">Section sheets</a>.</p>
   <p>The <span class="ui">Schematic</span> tab is always available. The other five tabs stay greyed out (with the hint <span class="ui">Add components first</span>) until the shaft is built: at least one component and an overall length.</p>
 
   <h3>Where the output buttons are</h3>
   <dl class="terms">
     <dt>Schematic and Final Schematic tabs</dt>
-    <dd>Tap the <span class="ui">PDF preview</span> icon in the editor's top bar. It opens the preview, and Print and Export both live there. On the Final tab the same icon opens the <span class="ui">Final PDF Preview</span>.</dd>
+    <dd>Tap the <span class="ui">PDF preview</span> icon in the editor's top bar. It opens the preview, and Print and Export both live there. On the Final tab the same icon opens the <span class="ui">Final PDF Preview</span>. A row under the preview's title bar picks <span class="ui">Whole shaft</span> or one of the job's section sheets; Print and Export follow it.</dd>
     <dt>Runout, Wear, Undercut and Consolidated Output tabs</dt>
     <dd>Each tab carries three full-width buttons, always in the same order: <span class="ui">Print &lt;document&gt;</span> (filled, the main action), <span class="ui">Preview &lt;document&gt;</span> and <span class="ui">Export &lt;document&gt; PDF</span>. For example, the Runout tab shows <span class="ui">Print Runout Sheet</span>, <span class="ui">Preview Runout Sheet</span> and <span class="ui">Export Runout Sheet PDF</span>. A <span class="ui">Blank draft (write-in)</span> switch sits directly above the buttons.</dd>
     <dt>Final runout sheet</dt>
@@ -98,6 +99,7 @@
       <tr><td><span class="ui">Page</span></td><td>Auto</td><td>Undercut only</td><td>Auto, Landscape or Portrait. Auto prints portrait when the sheet has three or more sections to print, landscape otherwise. Saved with this job. See <a href="#recording-page">Page</a>.</td></tr>
       <tr><td><span class="ui">Distance to S.E.T.</span></td><td>Nearest</td><td>Undercut only</td><td>Nearest, AFT S.E.T. or FWD S.E.T. Chooses the S.E.T. that each view's title and the short dimension at the view's edge measure to. Saved with this job. See <a href="#recording-set-datum">Distance to S.E.T.</a>.</td></tr>
       <tr><td><span class="ui">Split cuts at liner edges</span></td><td>Off</td><td>Undercut only</td><td>Off: every cut prints its full length as one dimension. On: a cut that runs past a liner edge is dimensioned as two spans meeting at the edge. It sits under <span class="ui">Distance to S.E.T.</span> because it decides how a cut is dimensioned. App-wide, the same switch as in Settings.</td></tr>
+      <tr><td><span class="ui">Overall dimension</span></td><td>On</td><td>Undercut only</td><td>On: each section prints one dimension from the S.E.T., above the cut lengths, to the end of the liner or the end of the cuts as <span class="ui">Overall dimension to</span> chooses. Off: only the cut lengths print. Some jobs read better without the overall figure. Saved with the job; a job that has never changed it follows the default in Settings.</td></tr>
       <tr><td><span class="ui">Sections to print</span></td><td>All ticked</td><td>Undercut only</td><td>One checkbox per section, shown when the sheet has two or more. Unticked sections are left off the printed sheet. Saved with this job. See <a href="#recording-sections">Sections to print</a>.</td></tr>
       <tr><td><span class="ui">Original + Final</span></td><td>On</td><td>Final only</td><td>Prints the original shaft above the final one on one sheet, each with its dimensions, under the final's footer. Off prints the final alone. Greyed out while Runout bubbles is on. See <a href="#documents-final">The Final Schematic tab</a>.</td></tr>
       <tr><td><span class="ui">Runout bubbles</span></td><td>Off</td><td>Final only</td><td>Turns the Final schematic into a Schematic + Runout sheet. See <a href="#documents-final">The Final Schematic tab</a>.</td></tr>
@@ -127,7 +129,7 @@
       <tr><td>Runout Sheet</td><td>Blank draft, Coupling face</td><td>Shaft (all four) · Runout bubbles · Thread · Lines &amp; text (Line thickness, Output font, Fractions) · Shade in Components · Units</td></tr>
       <tr><td>Consolidated Sheet</td><td>Blank draft, Coupling face</td><td>Every section except Wear. The fullest panel.</td></tr>
       <tr><td>Wear Document</td><td>Blank draft</td><td>Shaft (Shaft height only) · Wear · Thread · Lines &amp; text (Line thickness, Output font, Fractions) · Shade in Components (no Explicit bodies only) · Units</td></tr>
-      <tr><td>Undercut Drawing</td><td>Blank draft, Page, Distance to S.E.T., Split cuts at liner edges, Sections to print</td><td>Thread · Lines &amp; text (Line thickness, Output font, Fractions) · Shade in Components (its own Liners switch, with the line-art, Shade cuts by depth and Liner outline rows, no Explicit bodies only) · Units</td></tr>
+      <tr><td>Undercut Drawing</td><td>Blank draft, Page, Distance to S.E.T., Split cuts at liner edges, Overall dimension, Overall dimension to, Sections to print</td><td>Thread · Lines &amp; text (Line thickness, Output font, Fractions) · Shade in Components (its own Liners switch, with the line-art, Shade cuts by depth and Liner outline rows, no Explicit bodies only) · Units</td></tr>
     </tbody>
   </table>
 
@@ -307,6 +309,7 @@
       <tr><td>Final schematic (Original + Final turned off)</td><td>…PORT_Final.pdf</td></tr>
       <tr><td>Final schematic with Runout bubbles</td><td>…PORT_Final_Runout.pdf</td></tr>
       <tr><td>Final runout sheet (Final banner)</td><td>…PORT_Final_RunoutSheet.pdf</td></tr>
+      <tr><td>Section sheet named FWD END FINISH</td><td>…PORT_section_FWD END FINISH.pdf (…PORT_Final_section_… for a section of the Final drawing; …_section_section.pdf when it has no name)</td></tr>
       <tr><td>Any blank draft</td><td>adds _BlankDraft at the end, for example …PORT_runout_BlankDraft.pdf</td></tr>
       <tr><td>No job information, saved job</td><td>the saved job's name instead, for example QA Titan_schematic.pdf</td></tr>
       <tr><td>No job information, never saved</td><td>Shaft_schematic.pdf, Shaft_runout.pdf and so on; the Final documents use Shaft_&lt;date&gt;_&lt;time&gt;_Final.pdf</td></tr>
@@ -359,7 +362,8 @@
     <li>The schematic in the batch follows Template mode and the <span class="ui">Ø callouts</span> choice.</li>
     <li>Files take the names in the table above. If a file of that name is already in the folder, the system may add a number such as “(1)” instead of replacing it.</li>
     <li>A document that fails still produces a file, with an error page inside. The result line says how many failed.</li>
-    <li>The Final schematic is not part of Export all. Produce it from the Final tab.</li>
+    <li>With <span class="ui">Schematic</span> ticked, the original drawing's section sheets are written beside it, one file each. A section naming a part no longer on the shaft is skipped.</li>
+    <li>The Final schematic, and its section sheets, are not part of Export all. Produce them from the Final tab.</li>
   </ul>
   <aside class="tip"><p>Print has no batch version: the Android print system runs one print job at a time. To print a whole package, export it to a folder, or print each tab in turn.</p></aside>
 
@@ -444,6 +448,42 @@
   <p>If the Final drawing has overlapping components, the final runout sheet is blocked with the dialog <span class="ui">Cannot print final runout sheet</span>. Fix the overlap on the Final tab.</p>
 
   <!-- ─────────────────────────────────────────────────────────── -->
+  <h2 id="documents-sections">Section sheets</h2>
+  <p>A <strong>section sheet</strong> prints one stretch of the shaft on its own page — the FWD end from the seal liner to the thread, say, for the man finishing that end. It is the schematic's own drawing of those parts, drawn larger, with a break where the shaft carries on. A job can keep as many as it needs, of the original drawing and of the Final drawing.</p>
+  <figure class="wide">
+    <img src="figures/schematic-section.png" alt="A section sheet titled FWD END FINISH: a short stub of bare shaft with an S-break at the left, the seal liner with its 16 inch length and Ø 5.500 inch callout, the bare shaft to the taper, and the keyed FWD taper at the shaft's end, with the seal liner's 24 inch dimension from the FWD S.E.T. and the taper's 14 inch length; the job block and the FWD taper's footer column below.">
+    <figcaption>A section sheet from the seal liner to the FWD end. The break at the left is where the shaft carries on; the dimensions are the schematic's own.</figcaption>
+  </figure>
+
+  <h3>Add a section</h3>
+  <ol class="steps">
+    <li>Open the <span class="ui">PDF preview</span> on the Schematic tab, or the <span class="ui">Final PDF Preview</span> on the Final tab for a section of the Final drawing.</li>
+    <li>In the row under the title bar, tap <span class="ui">Add section sheet</span> (or <span class="ui">Sections…</span> once the job has one), then <span class="ui">Add section</span>.</li>
+    <li>Type a <span class="ui">Name</span>, such as FWD END FINISH. It prints at the top of the sheet and names its file.</li>
+    <li>Under <span class="ui">From</span>, pick the first part — or <span class="ui">AFT end</span> to start at the shaft's end. Under <span class="ui">To</span>, pick the last part — or <span class="ui">FWD end</span>. The parts are listed by their card names, AFT to FWD; the two may be picked in either order.</li>
+    <li>Tap <span class="ui">Save</span>. The new section comes up on the preview.</li>
+  </ol>
+  <p>Tapers, threads, liners and explicit bodies can be picked. Bare shaft cannot, because its stretch moves whenever a neighbor is edited: reach it with <span class="ui">AFT end</span> or <span class="ui">FWD end</span>, or through the stub of stock the sheet draws past the last part. A section follows its parts through every later edit, since it remembers the parts, not distances.</p>
+
+  <h3>What a section sheet shows</h3>
+  <ul>
+    <li><strong>The parts you picked, larger.</strong> A short stretch is drawn up to the tallest shaft the page allows (1 1/2″), never smaller than on the full schematic; the <span class="ui">Shaft height</span> slider still raises it.</li>
+    <li><strong>A break where the shaft carries on.</strong> Where the section stops short of a shaft end it shows a short stub of the next stock — about three-quarters of its diameter, more if the body face there has a seal area or blend — ending in an S-break. At a shaft end the drawing simply ends. A taper, thread or liner that shows only in that stub is drawn but gets no name, Ø, dimension or footer lines.</li>
+    <li><strong>The schematic's dimensions, as printed on the full sheet.</strong> Nothing is re-measured. A dimension taken from a S.E.T. the section does not show runs to the break and stops there, open — no arrowhead and no extension line at that end — and keeps its full value. A dimension to a part the section does not show is left off. The overall length prints only when the section reaches both ends of the shaft.</li>
+    <li><strong>The names, Ø callouts and footer of the section's own parts.</strong> The job block is the full schematic's. A footer column for a taper or thread prints only when that part is on the sheet, and an end's draw-plate holes only when the section reaches that end.</li>
+    <li><strong>The section's name</strong> in bold at the top left. A section of the Final drawing is marked Final like every other Final sheet.</li>
+  </ul>
+  <p>A section sheet is always the plain schematic: the Final preview's <span class="ui">Runout bubbles</span> and <span class="ui">Original + Final</span> choices are whole-shaft sheets and are hidden while a section is on screen.</p>
+
+  <h3>Print, export and keep them</h3>
+  <ul>
+    <li><strong>Print and Export follow the chip on screen.</strong> <span class="ui">Whole shaft</span> prints the schematic; a section's chip prints that section. The file and print job are named for the section (see File names above).</li>
+    <li><strong>Export all</strong> on the Consolidated Output tab writes every section of the original drawing beside the schematic when <span class="ui">Schematic</span> is ticked, each as its own file. Sections of the Final drawing are produced from the Final tab.</li>
+    <li><strong>Sections are saved with the job.</strong> <span class="ui">Sections…</span> renames, re-points (the pencil) or deletes them; deleting takes effect at once and cannot be undone. A section that names a part no longer on the shaft is kept, greyed out, with <span class="ui">A part it names is no longer on the shaft — edit it to pick again.</span></li>
+    <li>A new job and a template start with none; <span class="ui">Duplicate for mate</span> keeps the original drawing's sections, since the copied parts are the same.</li>
+  </ul>
+
+  <!-- ─────────────────────────────────────────────────────────── -->
   <h2 id="documents-profiles">Drawing profiles</h2>
   <p>A drawing profile saves the whole drawing look under a name, so you can switch the whole shop's sheets between, say, a “Customer” look and a “Floor copy” look in one tap. Profiles live in <span class="path">Settings → Drawing → Profiles</span>.</p>
 
@@ -469,7 +509,7 @@
     <tbody>
       <tr>
         <td>
-          Line thickness · Body S-break · Default drawing size · Dimension arrows · Footer and dimension text size · Fractions · Output font · Dual-unit layout · Units note on sheets · Thread slant and density · Bubble size and height · Shade in Components (Bodies, Explicit bodies only, Tapers, Liners) · Undercut drawing line art, liner outline, split cuts at liner edges and total length of cuts · Component names on drawing · Measurement reference · Wear trace depth default · Wear area shade · Taper–liner join · Wear areas on the shaft drawing
+          Line thickness · Body S-break · Default drawing size · Dimension arrows · Footer and dimension text size · Fractions · Output font · Dual-unit layout · Units note on sheets · Thread slant and density · Bubble size and height · Shade in Components (Bodies, Explicit bodies only, Tapers, Liners) · Undercut drawing line art, liner outline, split cuts at liner edges and overall length · Component names on drawing · Measurement reference · Wear trace depth default · Wear area shade · Taper–liner join · Wear areas on the shaft drawing
         </td>
         <td>
           Per-job settings (Shaft height, liner and taper compression, coupling face, wear strip choices, undercut page, S.E.T. distance and sections to print) · Dual units on a document and the <span class="ui">Dual-unit display</span> switch · Which controls exist (Per-component units, Liner shoulders, Unit converter in Add dialogs) · Template mode · Open PDF after export · Theme, preview colors and on-screen undercut styles

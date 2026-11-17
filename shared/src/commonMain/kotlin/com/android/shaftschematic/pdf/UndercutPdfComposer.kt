@@ -42,6 +42,7 @@ import com.android.shaftschematic.geom.BlendedBodyTop
 import com.android.shaftschematic.geom.blendedBodyTop
 import com.android.shaftschematic.geom.buildUndercutStrips
 import com.android.shaftschematic.geom.buriedUndercutLinerEdgesMm
+import com.android.shaftschematic.geom.undercutMachinedSpans
 import com.android.shaftschematic.geom.clampUndercutSpan
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
@@ -290,7 +291,7 @@ private fun drawUndercutSheet(
 
     val docSpec = spec.withResolvedBodies(resolvedComponents)
     val effectiveRecord = if (blankValues) UndercutRecord() else undercutRecord
-    // "Total length of cuts": the job's own choice, else the Settings → PDF Export default. Read off
+    // "Overall dimension": the job's own choice, else the Settings → PDF Export default. Read off
     // the CALLER's record, not effectiveRecord — a blank draft drops the cuts, not the job's
     // dimensioning choice (a started strip plans no total either way).
     val showTotalRail = effectiveUndercutTotalRail(undercutRecord.showTotalRail, pdfPrefs.undercutTotalRail)
@@ -299,6 +300,10 @@ private fun drawUndercutSheet(
     // "Liner ends from S.E.T.": each liner strip's own liner span; nothing on a bare-shaft strip.
     fun linerEndsOf(strip: UndercutStrip): UndercutLinerSpanMm? =
         (strip as? UndercutStrip.LinerStrip)?.takeIf { undercutRecord.linerEndsFromSet }
+            ?.let { UndercutLinerSpanMm(it.linerStartMm, it.linerEndMm) }
+    // The overall dimension's end: the liner's own span while the job measures to the liner end.
+    fun overallLinerOf(strip: UndercutStrip): UndercutLinerSpanMm? =
+        (strip as? UndercutStrip.LinerStrip)?.takeIf { undercutRecord.overallTo == UndercutOverallTo.LINER_END }
             ?.let { UndercutLinerSpanMm(it.linerStartMm, it.linerEndMm) }
     // Shared liner display titles — custom label wins, else positional AFT/MID/FWD defaults
     // (util/LinerTitles.kt). Same names the carousel cards, the wear sheet, and the runout
@@ -391,6 +396,8 @@ private fun drawUndercutSheet(
     val shaftExtentMm = sheet.shaftExtentMm
     val clampedById = sheet.clampedById
     val liveSpans = sheet.liveSpans
+    // Where each cut removes material — what buries a liner edge (`undercutMachinedSpans`).
+    val machinedSpans = undercutMachinedSpans(effectiveRecord.undercuts, surfaceSegs, shaftExtentMm)
     // Every notch on the sheet, from the ONE shared builder the canvas overlay runs
     // (`geom/UndercutOverlayMath.kt`): clamped spans, the containment forest, true floors, and
     // the per-sheet drawn-depth normalization — resolved once, so the printed sheet and the
@@ -423,7 +430,7 @@ private fun drawUndercutSheet(
     fun stripUnitOf(strip: UndercutStrip): UnitSystem = displayUnits.unitFor(stripLinerOf(strip)?.id)
     fun railSplitOf(strip: UndercutStrip): List<Float> = (strip as? UndercutStrip.LinerStrip)
         ?.takeIf { pdfPrefs.undercutSplitAtLinerEdge }
-        ?.let { buriedUndercutLinerEdgesMm(it.linerStartMm, it.linerEndMm, liveSpans) }
+        ?.let { buriedUndercutLinerEdgesMm(it.linerStartMm, it.linerEndMm, machinedSpans) }
         ?: emptyList()
     // The S.E.T. each strip measures to — its title anchor AND the lead continuing its chain —
     // from the ONE resolver (`undercutStripSetSide`), so the two never disagree.
@@ -483,9 +490,10 @@ private fun drawUndercutSheet(
             railSplitOf(strip), pdfPrefs.arrowSizePt,
             titleAirPt = UC_PORTRAIT_TITLE_AIR_PT,
             leadSide = stripSideOf(strip), aftSetMm = aftSetMm, fwdSetMm = fwdSetMm,
-            showTotal = showTotalRail,
+            showTotal = showTotalRail, overallFromSet = true,
             fromSet = railsFromSet,
             linerEnds = linerEndsOf(strip),
+            overallLiner = overallLinerOf(strip),
             longCompressFrac = undercutRecord.longCompressFrac,
             insideDiaFloorsMm = if (diaInside && !startedPage) {
                 undercutInsideDiaFloorsMm(sheetNotches, strip)
@@ -668,9 +676,10 @@ private fun drawUndercutSheet(
             railSplitAtMm = railSplitOf(strip),
             // The app-wide "Dimension arrows" head — the same pref the schematic's rails read.
             arrowSizePt = pdfPrefs.arrowSizePt,
-            showTotal = showTotalRail,
+            showTotal = showTotalRail, overallFromSet = true,
             fromSet = railsFromSet,
             linerEnds = linerEndsOf(strip),
+            overallLiner = overallLinerOf(strip),
             longCompressFrac = undercutRecord.longCompressFrac,
             onNotToScale = { notToScale = true },
             onShaftHeight = { h -> minShaftPt = minOf(minShaftPt, h) },
@@ -1529,7 +1538,7 @@ fun planUndercutDetailStrip(
     leadSide: UndercutAnchorSide? = null,
     aftSetMm: Float = 0f,
     fwdSetMm: Float = 0f,
-    /** The job's resolved "Total length of cuts" choice — [planUndercutStripRails]' `showTotal`. */
+    /** The job's resolved "Overall dimension" choice — [planUndercutStripRails]' `showTotal`. */
     showTotal: Boolean = true,
     /** The job's "Dimensions" are From S.E.T. — [planUndercutStripRails]' `fromSet`. */
     fromSet: Boolean = false,
@@ -1540,11 +1549,15 @@ fun planUndercutDetailStrip(
      * pieces on the one chain; true keeps the whole length over a nested row (kept, unprinted).
      */
     nestedRows: Boolean = false,
+    /** [planUndercutStripRails]' `overallFromSet` — the sheet's callers pass true. */
+    overallFromSet: Boolean = false,
     /**
      * The liner's own span when the job prints "Liner ends from S.E.T." on this LINER strip;
      * null otherwise — [planUndercutStripRails]' `linerEnds`.
      */
     linerEnds: UndercutLinerSpanMm? = null,
+    /** [planUndercutStripRails]' `overallLiner`. */
+    overallLiner: UndercutLinerSpanMm? = null,
     /**
      * Each cut's DRAWN floor Ø on this strip, keyed by cut id, when the sheet writes its Ø values
      * inside the shaft (`PdfPrefs.undercutDiaInside`); null — every other sheet —
@@ -1679,7 +1692,9 @@ fun planUndercutDetailStrip(
         showTotal = showTotal,
         fromSet = fromSet,
         linerEnds = linerEnds,
+        overallLiner = overallLiner,
         nestedRows = nestedRows,
+        overallFromSet = overallFromSet,
     )
     return UndercutStripPlan(
         drawStartMm, drawEndMm, hLayout, titleText, dimText, spans, diaPlan, diaBandPt, rails,
@@ -1899,12 +1914,16 @@ private fun drawUndercutDetailStrip(
      * the lead continuing the chain. Null keeps the bare-shaft proximity rule and draws no lead.
      */
     leadSide: UndercutAnchorSide? = null,
-    /** The job's resolved "Total length of cuts" choice — [planUndercutStripRails]' `showTotal`. */
+    /** The job's resolved "Overall dimension" choice — [planUndercutStripRails]' `showTotal`. */
     showTotal: Boolean = true,
+    /** [planUndercutStripRails]' `overallFromSet` — the sheet passes true. */
+    overallFromSet: Boolean = false,
     /** The job's "Dimensions" are From S.E.T. — [planUndercutStripRails]' `fromSet`. */
     fromSet: Boolean = false,
     /** "Liner ends from S.E.T." on this liner strip — [planUndercutStripRails]' `linerEnds`. */
     linerEnds: UndercutLinerSpanMm? = null,
+    /** [planUndercutStripRails]' `overallLiner`. */
+    overallLiner: UndercutLinerSpanMm? = null,
     /** `UndercutRecord.longCompressFrac`; [onNotToScale] fires when it changed this strip's map. */
     longCompressFrac: Float = 0f,
     onNotToScale: () -> Unit = {},
@@ -1925,8 +1944,10 @@ private fun drawUndercutDetailStrip(
         segs, strip, undercuts, clampedById, stripLeft, stripRight, unit, text, diaText,
         shaftExtentMm, startedStrip, dual, dualStacked, railSplitAtMm, arrowSizePt, titleAirPt,
         leadSide = leadSide, aftSetMm = aftSetMm, fwdSetMm = fwdSetMm, showTotal = showTotal,
+        overallFromSet = overallFromSet,
         fromSet = fromSet,
         linerEnds = linerEnds,
+        overallLiner = overallLiner,
         longCompressFrac = longCompressFrac,
         insideDiaFloorsMm = if (diaInside) notches.associate { it.id to it.floorDiaMm } else null,
     )?.resolveInsideDia(stripTop, stripBottom, dualStacked) ?: return

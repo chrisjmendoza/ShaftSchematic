@@ -1292,6 +1292,27 @@ never left behind; success-only follow-ups (auto-open, the first-PDF achievement
 its Boolean. The collision export gate (`exportPdfGate`) guards the schematic, runout,
 wear, undercut, and consolidated surfaces alike.
 
+With **Schematic** ticked, Export all also writes each section sheet of the ORIGINAL drawing
+(`sheet_sections` with `final = false`) beside it, one file each, named by
+`buildSectionFilename` (`…_section_<name>.pdf`); a section that no longer resolves is skipped.
+
+---
+
+# 5.6b Section sheets (one stretch of the schematic as its own page)
+
+`composeShaftPdf(section = …)` — `null` is the whole shaft, byte-identical. A `SheetSection`
+(`resolveSheetSection`, `pdf/SchematicSection.kt`) is a WINDOW on the same spec: the x map is
+solved over the window (`schematicProfileFit(section = …)`, drawn larger when the page has room,
+up to `PROFILE_MAX_SHAFT_HEIGHT_PT`), the draw passes are clipped to `breakWindowClipPath` so a
+cut end prints as an S-break, and the rails are the full sheet's own spans and values filtered by
+`SchematicRailSpans.inSection` — a span to a S.E.T. off the sheet prints open at the cut
+(`PdfDimensionRenderer(clipXMin, clipXMax)`: no extension line or arrowhead at that end), a span
+to a part off the sheet is dropped, and the OAL rail prints only when both its ends show. Names,
+Ø callouts and the footer read the section's own parts (`ShaftSpec.inSectionCore`). The
+section's name prints bold in the label row. Surfaces: the schematic / Final PDF preview's sheet
+picker (Print and Export follow it; export route `&section=<id>`) and Export all. Full contract:
+`docs/contracts/SectionSheets.md`.
+
 ---
 
 # 5.7 "Shaft height" slider (per-job profile exaggeration)

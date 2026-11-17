@@ -1739,10 +1739,11 @@ class UndercutMathTest {
     }
 
     @Test
-    fun `no undercut strip prints a total rail, whatever a job or the app default stored`() {
-        for (job in listOf(null, true, false)) for (app in listOf(true, false)) {
-            assertFalse(effectiveUndercutTotalRail(job, globalDefault = app))
-        }
+    fun `a job's total-rail choice wins over the app default, and an unset job follows it`() {
+        assertTrue(effectiveUndercutTotalRail(null, globalDefault = true))
+        assertFalse(effectiveUndercutTotalRail(null, globalDefault = false))
+        assertTrue(effectiveUndercutTotalRail(true, globalDefault = false))
+        assertFalse(effectiveUndercutTotalRail(false, globalDefault = true))
     }
 
     @Test

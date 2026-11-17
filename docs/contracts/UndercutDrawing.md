@@ -55,7 +55,7 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   undercuts" list, collapsed by default behind a header row with a chevron, `testTag
   "undercut_drawing_settings_toggle"` — usability review: nothing between Add and the list may
   read as a required step). It holds the rows below, in this order: Page, Dimensions, Liner ends
-  from S.E.T., Distance to S.E.T., Split cuts at liner edges, Total length of cuts, Drawn depth,
+  from S.E.T., Distance to S.E.T., Split cuts at liner edges, Overall dimension, Drawn depth,
   Draw to the shaft end. Tab block order
   (COMPACT/MEDIUM): intro, overview canvas, Preview | Options, Add undercut, Recorded undercuts,
   Drawing settings, then the print group — "Sections to print" (two or more sections; never
@@ -105,14 +105,14 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   constant): drives `UndercutRecord.drawToSet` through `ShaftViewModel.setUndercutDrawToSet`
   (the record-update path the exaggeration commit uses, so it rides the one undo history and
   the dirty mark). See "Draw to the shaft end" under the strip builders below.
-- **"Total length of cuts" switch** (under "Split cuts at liner edges"; testTag
+- **"Overall dimension" switch** (under "Split cuts at liner edges"; testTag
   `undercut_total_rail_switch`; the same shared `UndercutTotalRailRow` sits in the undercut options
   panel as `pdf_undercut_total_rail`): drives `UndercutRecord.showTotalRail` through
   `ShaftViewModel.setUndercutShowTotalRail` (same record path, same undo history). Shows the
   RESOLVED value; while the job has not chosen, the caption says it follows the Settings default.
   Greyed (`enabled = false`, caption "Not printed while Dimensions is From S.E.T. …") while the
   job's Dimensions are From S.E.T. — its stored value untouched.
-  See "Total length of cuts" under PDF layout below.
+  See "Overall dimension" under PDF layout below.
 - **"Dimensions" row** (above "Liner ends from S.E.T." and "Distance to S.E.T."; the shared `UndercutRailStyleRow`,
   also in the undercut options panel): Chain | From S.E.T., driving `UndercutRecord.railStyle`
   through `ShaftViewModel.setUndercutRailStyle` (same record path, same undo history). See
@@ -227,7 +227,7 @@ data class UndercutRecord(
   decode off): per-document because it is a FIT for this shaft's geometry (how close a liner sits
   to a shaft end), never a look pref — the `exaggerationFrac` posture, not `PdfPrefs`. Display and
   dimensioning only: no stored cut moves.
-- **`showTotalRail`** ("Total length of cuts", default `null`, additive + defaulted — older files
+- **`showTotalRail`** ("Overall dimension", default `null`, additive + defaulted — older files
   decode `null`): `null` follows the app default `PdfPrefs.undercutTotalRail` (Settings → PDF Export,
   shipped ON); `true`/`false` pins this job. Dimensioning only: no stored cut moves.
 - **`railStyle`** ("Dimensions", `UndercutRailStyle` CHAIN | FROM_SET, default CHAIN, additive +
@@ -283,7 +283,12 @@ data class UndercutRecord(
   the schematic's convention). Display-only, the deleted-liner fallback's posture: canonical
   never moves and the stored reference is never rewritten. A cut that merely ends at the edge, or
   trims the liner's end without crossing into the body, leaves a different Ø from the body next
-  to it — that edge is still a datum.
+  to it — that edge is still a datum. "Past" is measured in metal, not on paper: every burial test
+  reads `undercutMachinedSpans` — each measured cut trimmed to where its Ø is below the outer
+  surface (the notch regions), a measured cut that removes nothing dropped, an unmeasured one kept
+  whole — so a cut whose floor stands above the body beyond the edge ends at the edge however far
+  its typed length runs on (on-device report: an 8.920" cut typed 1/16" past an 8.999" liner's end
+  onto 8 1/2" bare shaft disabled the Liner FWD chip).
 - **Back-compat**: `LINER_AFT`/`LINER_FWD` and `PARENT_AFT`/`PARENT_FWD` are additive enum
   values — a document that uses one will not decode in an app build that predates them, the same
   rule every envelope enum carries. Files that stick to the older references are unaffected.
@@ -342,7 +347,9 @@ data class UndercutRecord(
   at liner edges" below). `effectiveUndercutReference(undercut, linerSpans, spans,
   aftSetXMm, fwdSetXMm)` (`geom/UndercutOverlayMath.kt`) applies them: a `LINER_*` reference to a
   buried edge resolves to `nearestSetReference` for the cut's own span; the default empty
-  `spans` skips the check, so the two-argument form is the deleted-liner fallback alone.
+  `spans` skips the check, so the two-argument form is the deleted-liner fallback alone. Its
+  `buryingSpans` (default `spans`) is what the burial test reads — every caller passes
+  `undercutMachinedSpans` there and keeps the typed spans for the parent-cut lookup.
 - **Blocking confirm validation (span)** `undercutSpanIssue(canonicalStartMm, lengthMm, oalMm)`:
   length must be `> ε`, and `[start, start+length]` must lie in `[0, oalMm]` (ε = `1e-3` mm,
   boundary-exact accepted). It is **never a field validator**: every undercut field commits the
@@ -1303,7 +1310,8 @@ Each card:
   `testTag "undercut_ref_liner_aft"` / `"undercut_ref_liner_fwd"`), with the caption `"Liner AFT
   edge is cut into the body — measure from a S.E.T."` (FWD mirror, both when both) under the row
   (`testTag "undercut_ref_liner_aft_buried"` / `"_fwd_buried"`). The pool is every stored cut
-  with this card's draft substituted, so the card's OWN typed Distance or Length crossing the
+  with this card's draft substituted, each trimmed to where it removes material
+  (`undercutMachinedSpans` — a cut typed past the edge onto stock below its floor ends at the edge), so the card's OWN typed Distance or Length crossing the
   edge counts the moment it lands — after the "Past the liner edge" question, whichever answer.
   The selected chip, the Distance label/value/entry conversion, and the Length edit's re-anchor
   all use the **effective** reference (`effectiveUndercutReference` over that pool), so the
@@ -1413,7 +1421,11 @@ Each card:
 
 - **Warnings** (non-blocking, both can show together): "Extends past shaft end — re-measure"
   (`isUndercutStaleOverrun`, unedited card only — see "Draft editing") and "Ø isn't smaller than the shaft here (Ø 7.874 in) — check the number" (`diaMm > 0` and `diaMm
-  >=` the local surface Ø; the figure is that surface Ø, `undercutDiaNotBelowSurfaceWarning`). For a
+  >=` the HIGHEST surface the cut spans, `UndercutFloors.highestSurfaceDiaMm` — a Ø at or above it
+  removes nothing anywhere; the figure is that surface Ø, `undercutDiaNotBelowSurfaceWarning`). Not
+  the lowest: a cut typed a little past a liner's end onto smaller stock is still a cut across the
+  liner (on-device report: 8.920" over an 8.999" liner, 1/16" onto 8 1/2" bare shaft, was flagged
+  against the 8.500"). `deepestUndercutDepthMm` counts a cut by the same rule. For a
   draft that is **nested** inside another cut, the comparison is
   against the **surrounding cut's floor** and the wording becomes "Ø isn't smaller than the
   surrounding cut's floor here (Ø … in) — check the number" — a nested cut removes material from its parent's floor, so the
@@ -2220,21 +2232,34 @@ Section-level pick-and-print — no multi-page output.
   and in the undercut options panel. Setter `setUndercutSectionPrinted` (undoable) touches only the
   ids the strip names.
 
-### Total length of cuts
+### Overall dimension
 
-> **REMOVED** (on-device ruling: no hand drawing carries it). `effectiveUndercutTotalRail`
-> returns false for every job, so neither the printed sheet nor the detail canvas draws a total,
-> and the "Total length of cuts" switches (tab, options panel, Settings → PDF Export) no longer
-> exist. `UndercutRecord.showTotalRail` and `PdfPrefs.undercutTotalRail` still decode and are
-> read by nothing. What follows describes the planner's `showTotal` path, which the app no
-> longer reaches; wherever this document says "the total", read "no total".
+One dimension over a section's chain. On-device ruling (the foreman's hand sketch: 54 1/2 over
+the cut lengths): it runs from the S.E.T. to the END OF THE CUTS — where the weld ends — not just
+across the cuts. It clarifies some jobs and confuses others, hence the switch.
 
-On-device request (shop coworkers): the total rail — one dimension across a section's top-level
-cuts, above the chain (`buildUndercutTotalSpan`) — clarifies some jobs and confuses others.
-
+- **What prints** — ONE uncaptioned baseline rail from the strip's S.E.T. (`undercutStripSetSide`)
+  to the top-level cuts' end farthest from it (`undercutOverallStationMm`), through the ONE station
+  rule `buildUndercutSetRailSpansAt`, on liner and bare-shaft strips alike. With "Liner ends from
+  S.E.T." on it joins that stack (a cut end on a liner end is one rail, keeping the liner caption).
+  The strip then plans no total across its cuts.
+- **Where it ends** — per-job `UndercutRecord.overallTo` (`UndercutOverallTo`, by name, unknown →
+  `LINER_END`; `setUndercutOverallTo`; ONE row `UndercutOverallToRow`, chips
+  `undercut_overall_to_LINER_END` / `undercut_overall_to_CUTS_END`, under the switch on the tab and
+  the options panel, greyed with its value kept while the switch is off or Dimensions is From
+  S.E.T.). `LINER_END` (default — on-device request: the welder must know where the liner stops so
+  the seal area is not built up with wasted material) hands the planner the liner's span as
+  `overallLiner`: the rail runs to the liner's end farthest from the S.E.T., captioned "S.E.T. to
+  liner end" — with "Liner ends from S.E.T." on it IS that stack's far-end rail. `CUTS_END` is the
+  uncaptioned rail above. A bare-shaft strip has no liner and measures to its cuts' end either way.
+- **Opt-in on the planner** — `planUndercutStripRails(overallFromSet = true)`, passed by the app's
+  three callers (printed strip, detail canvas, the canvas's axial map), the `nestedRows`
+  posture. Off — the planner's default — is the total across the cuts (`buildUndercutTotalSpan`)
+  with its band and lift rules, kept and tested but unreached by the app, except on a strip with
+  no S.E.T. to measure from, which still falls back to it.
 - **Two levels, the trace-depth posture** — the per-job `UndercutRecord.showTotalRail: Boolean?`
   over the app-wide default `PdfPrefs.undercutTotalRail` (default `true`; Settings → PDF Export
-  "Undercut drawing: total length of cuts"; captured by drawing profiles, so "Restore Drawing
+  "Undercut drawing: overall dimension"; captured by drawing profiles, so "Restore Drawing
   defaults" turns it back on). ONE resolver, `effectiveUndercutTotalRail(record, default)`
   (`geom/UndercutMath.kt`), read by the composer and by the detail canvas, so the sheet and the
   canvas cannot disagree. A job that never touched its switch tracks the default; a touched job

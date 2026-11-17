@@ -1,5 +1,6 @@
 package com.android.shaftschematic.ui.screen
 
+import com.android.shaftschematic.pdf.resolveSheetSection
 import android.graphics.pdf.PdfDocument
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -241,6 +242,7 @@ fun OutputRoute(
     val sheetDateMode      by vm.sheetDateMode.collectAsState()
     val sheetDateText      by vm.sheetDateText.collectAsState()
     val sheetDateSheets    by vm.sheetDateSheets.collectAsState()
+    val sheetSections      by vm.sheetSections.collectAsState()
     val sheetNotesSheets   by vm.sheetNotesSheets.collectAsState()
     val notes              by vm.notes.collectAsState()
     val shaftPosition      by vm.shaftPosition.collectAsState()
@@ -574,6 +576,39 @@ fun OutputRoute(
                     }
                 }
                 if (ok) wroteCount++
+                // The schematic's section sheets go with it, each its own file. A section naming
+                // a part that is gone has nothing to print and is skipped.
+                if (doc == OutputDoc.SCHEMATIC) {
+                    sheetSections.filter { !it.final }.forEach { def ->
+                        val section = resolveSheetSection(
+                            spec, resolvedComponents, def.firstId, def.lastId, def.name,
+                        ) ?: return@forEach
+                        attempted++
+                        val sectionName = buildSectionFilename(
+                            customer, vessel, jobNumber, shaftPosition, def.name,
+                            final = false, blankDraft = blankDraft, documentName = currentDocumentName,
+                        )
+                        val sectionUri = createPdfInTree(ctx, treeUri, sectionName) ?: return@forEach
+                        val wroteSection = writeShaftPdfToUri(ctx, sectionUri, PdfPageOrientation.LANDSCAPE) { page ->
+                            composeShaftPdf(
+                                page = page, spec = spec, unit = unit, project = project,
+                                appVersion = appVersion, filename = sectionName, pdfPrefs = prefs,
+                                options = PdfExportOptions(
+                                    mode = exportMode,
+                                    blankValues = blankDraft,
+                                    blankDiaCallouts = pdfBlankDiaCallouts,
+                                ),
+                                resolvedComponents = resolvedComponents,
+                                lineThicknessScale = lineThicknessScale,
+                                heightScale = runoutConfig.heightScale,
+                                linerMinFracOfTrue = runoutConfig.linerMinFracOfTrue,
+                                displayUnits = displayUnits,
+                                section = section,
+                            )
+                        }
+                        if (wroteSection) wroteCount++
+                    }
+                }
             }
             val undercutChecked = batchChecked.getOrElse(OutputDoc.UNDERCUT.ordinal) { true }
             batchResult = exportAllResultMessage(wroteCount, attempted, undercutSkipped && undercutChecked)

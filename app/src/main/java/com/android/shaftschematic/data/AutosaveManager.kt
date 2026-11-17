@@ -106,6 +106,8 @@ object AutosaveManager {
         // Added (notes on sheets): the job's "Notes on this sheet" choices, keyed by
         // SheetDateSheet name. Absent in older drafts; empty prints notes on no sheet.
         val sheetNotesSheets: Map<String, Boolean> = emptyMap(),
+        // Added (section sheets): the job's section sheets. Absent in older drafts; none.
+        val sheetSections: List<com.android.shaftschematic.model.SchematicSection> = emptyList(),
     )
 
     /**

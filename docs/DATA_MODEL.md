@@ -485,6 +485,8 @@ data class ShaftDocV1(
     val sheetDateMode: SheetDateMode = SheetDateMode.TODAY, // @SerialName("sheet_date_mode") — TODAY | CUSTOM | NONE, by name, unknown → TODAY
     val sheetDateText: String = "", // @SerialName("sheet_date_text") — the Custom date, printed verbatim; template → TODAY/blank, mate → TODAY/blank
     val sheetDateSheets: Map<String, Boolean> = emptyMap(), // @SerialName("sheet_date_sheets") — "Date on this sheet": SheetDateSheet name → prints the date; a sheet with no entry follows its default (SCHEMATIC/CONSOLIDATED/FINAL on, RUNOUT/WEAR/UNDERCUT off); unknown names kept, never read; template → empty, mate → carried
+    val sheetNotesSheets: Map<String, Boolean> = emptyMap(), // @SerialName("sheet_notes_sheets") — "Notes on this sheet": SheetDateSheet name → prints the notes; no entry = none (footer sheets only)
+    val sheetSections: List<SchematicSection> = emptyList(), // @SerialName("sheet_sections") — section sheets: name, first_id/last_id (stored component ids, null = AFT/FWD end), final; never pruned
     val spec: ShaftSpec,
     val finalSpec: ShaftSpec? = null,                    // @SerialName("final_spec") — the Final schematic; null = none yet
     val runoutConfig: RunoutConfig = RunoutConfig(),     // @SerialName("runout_config")
@@ -503,6 +505,13 @@ undercut work moved a liner — created as a structural copy of `spec` (componen
 and independent from then on. `null` until "Start from original schematic"; never in a
 template or a mate duplicate; the inspection records below stay keyed to the ORIGINAL. See
 `docs/contracts/FinalSchematic.md`.
+
+**Section sheets** (`sheet_sections`, `SchematicSection`) are print metadata: each names the
+STORED component ids a stretch of the shaft runs between (null = the AFT / FWD end), its title,
+and whether it is of the original or the Final drawing. The window is derived each time a sheet
+is made (`resolveSheetSection`), so nothing in `ShaftSpec` is touched; a section naming a gone
+part is kept and cannot print until edited. A mate duplicate keeps the original drawing's
+sections; New and a template reset them. See `docs/contracts/SectionSheets.md`.
 
 **Reference-only inspection records** live in the envelope, never in `ShaftSpec`, so they
 can never affect geometry resolution:

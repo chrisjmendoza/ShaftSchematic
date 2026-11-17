@@ -254,6 +254,8 @@ class UndercutRouteTest {
         rule.onNodeWithTag("undercut_rail_style_CHAIN").assertIsSelected()
         rule.onNodeWithTag("undercut_rail_style_FROM_SET").assertIsNotSelected()
         rule.onNodeWithText(undercutRailStyleCaption(UndercutRailStyle.CHAIN)).assertExists()
+        rule.onNodeWithTag("undercut_total_rail_switch").performScrollTo().assertIsEnabled()
+        val totalBefore = vm.undercutRecord.value.showTotalRail
 
         rule.onNodeWithTag("undercut_rail_style_FROM_SET").performScrollTo().performClick()
         rule.waitForIdle()
@@ -261,8 +263,9 @@ class UndercutRouteTest {
         rule.onNodeWithTag("undercut_rail_style_FROM_SET").assertIsSelected()
         rule.onNodeWithText(undercutRailStyleCaption(UndercutRailStyle.FROM_SET)).assertExists()
         assertTrue(undercutRailStyleCaption(UndercutRailStyle.FROM_SET).endsWith("Saved with this job."))
-        // The total rail and its switch are gone from every surface.
-        rule.onAllNodesWithTag("undercut_total_rail_switch").assertCountEquals(0)
+        rule.onNodeWithTag("undercut_total_rail_switch").performScrollTo().assertIsNotEnabled()
+        rule.onNodeWithText(UNDERCUT_TOTAL_RAIL_FROM_SET_CAPTION).assertExists()
+        assertEquals("the stored total choice is untouched", totalBefore, vm.undercutRecord.value.showTotalRail)
     }
 
     @Test
@@ -285,6 +288,26 @@ class UndercutRouteTest {
         rule.onNodeWithTag("undercut_liner_ends_from_set").performScrollTo().assertIsNotEnabled()
         rule.onNodeWithText(UNDERCUT_LINER_ENDS_FROM_SET_CAPTION).assertExists()
         assertTrue("the stored choice is untouched", vm.undercutRecord.value.linerEndsFromSet)
+    }
+
+    @Test
+    fun `the overall dimension ends at the liner by default and can be set to the end of the cuts`() {
+        val vm = vm().also { it.addUndercut(500f, 25.4f) }
+        host(vm)
+        rule.onNodeWithTag("undercut_drawing_settings_toggle").performScrollTo().performClick()
+        rule.waitForIdle()
+
+        rule.onNodeWithTag("undercut_overall_to_LINER_END").performScrollTo().assertIsSelected()
+        rule.onNodeWithTag("undercut_overall_to_CUTS_END").performScrollTo().performClick()
+        rule.waitForIdle()
+        assertEquals(com.android.shaftschematic.model.UndercutOverallTo.CUTS_END, vm.undercutRecord.value.overallTo)
+        rule.onNodeWithTag("undercut_overall_to_CUTS_END").assertIsSelected()
+
+        // Switching the overall dimension off greys the choice and keeps it.
+        rule.onNodeWithTag("undercut_total_rail_switch").performScrollTo().performClick()
+        rule.waitForIdle()
+        rule.onNodeWithTag("undercut_overall_to_LINER_END").performScrollTo().assertIsNotEnabled()
+        assertEquals(com.android.shaftschematic.model.UndercutOverallTo.CUTS_END, vm.undercutRecord.value.overallTo)
     }
 
     @Test

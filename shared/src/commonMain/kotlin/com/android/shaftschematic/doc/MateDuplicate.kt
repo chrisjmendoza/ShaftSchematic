@@ -34,6 +34,9 @@ import com.android.shaftschematic.model.WearRecord
  * **Dropped** — the final drawing. It records what was decided about THIS shaft after its wear
  * was mapped; the mate is its own job and its final is drawn from its own inspection.
  *
+ * **Section sheets** (`sheet_sections`) — the ORIGINAL drawing's are carried (the copied
+ * components keep their ids, so each still names its parts); the final drawing's go with it.
+ *
  * **Back to Today** — the sheet date (`sheet_date_mode` / `sheet_date_text`). A typed date is
  * when THIS shaft's work was done; the mate's work is its own, so its sheets print the day they
  * are made until a date is typed for it. Which sheets print the date (`sheet_date_sheets`) is
@@ -54,6 +57,7 @@ fun mateDuplicate(
     vessel = vessel,
     shaftPosition = position,
     finalSpec = null,
+    sheetSections = source.sheetSections.filterNot { it.final },
     sheetDateMode = SheetDateMode.TODAY,
     sheetDateText = "",
     wearRecord = WearRecord(),

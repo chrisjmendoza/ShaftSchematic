@@ -19,6 +19,11 @@ via SAF, delegating drawing to `composeShaftPdf`.
 - **Storage:** JSON stays internal; PDFs export via SAF to user-chosen locations.
 - Version string via `PackageManager` (no BuildConfig dependency).
 - IO guarded by `runCatching`; streams closed in `finally`.
+- **Section sheets:** the optional `section` route argument (`exportPdf?target=…&section=<id>`,
+  blank = the whole shaft) names the section sheet the preview was showing; it is resolved
+  against the drawing when the file is written, and a section that no longer resolves is
+  refused with the "Cannot export PDF" dialog rather than written as the whole shaft. The
+  suggested name is `buildSectionFilename`. See `docs/contracts/SectionSheets.md`.
 
 ### PdfPrefs — appearance knobs passed to every export
 
@@ -178,6 +183,13 @@ Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
 (`PdfDocument` + `PdfRenderer`, 2× raster), pinch-to-zoom 0.5×–8×, double-tap reset. The shared overlay (`PdfPreviewOverlay` — Runout, Wear,
 Undercut, Consolidated) resets on double-tap too, through the same `rememberPreviewDoubleTapReset`
 (`ui/screen/PreviewDoubleTapReset.kt`); there the reset is instant, a single tap does nothing.
+
+- **Sheet picker (schematic and Final previews):** `SheetPickerRow` under the app bar —
+  "Whole shaft", one chip per section sheet of this drawing (disabled while it names a part no
+  longer on the shaft), and "Add section sheet" / "Sections…" (`SectionSheetsDialog`). The chosen
+  sheet is screen state (`rememberSaveable`), rides the render inputs as `section`, and Print and
+  Export follow it. While a section is on screen the Final-only "Runout bubbles" / "Original +
+  Final" elections are hidden (`sectionSheetKind`). See `docs/contracts/SectionSheets.md`.
 
 - **Options panel (Tune icon, a toggle):** the options open in `PreviewOptionsPanel`
   (`ui/screen/PreviewOptionsPanel.kt`) — a NON-modal, in-layout `Surface` at the bottom of

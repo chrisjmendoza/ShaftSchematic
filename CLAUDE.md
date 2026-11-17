@@ -640,7 +640,11 @@ applied — <reason>") until the next edit of that field (a focus change alone d
 silent swap of a typed value is the violation
 (on-device report). **A liner edge a cut has crossed into the body is not a datum**
 (`undercutLinerEdgeBuried`: a cut strictly spanning the edge — one floor runs across it, so there
-is no step; a cut that ends AT the edge leaves the step and the edge stays): the card disables
+is no step; a cut that ends AT the edge leaves the step and the edge stays — "crossed" in METAL: every
+burial test reads `undercutMachinedSpans`, each measured cut trimmed to where its Ø is below the
+surface, so a cut typed past a liner end onto smaller stock its floor stands above does not bury
+the edge, and the card's "isn't smaller than the shaft" check reads the HIGHEST surface a cut
+spans (`UndercutFloors.highestSurfaceDiaMm`) — on-device report): the card disables
 that Liner chip, `effectiveUndercutReference` falls back DISPLAY-ONLY to the nearer S.E.T.
 (stored reference and canonical untouched, the missing-liner posture), a new cut seeds from the
 S.E.T., and the printed chain gets a node at the buried edge so the overhanging cut's shoulder is
@@ -660,13 +664,10 @@ also clears cut shoulders. `PdfPrefs.undercutLinerOutline` (app-wide look pref, 
 draws each liner's ERASED edges/OD as a dotted outline over the cuts from the ONE pure
 `geom/LinerOutlineMath.kt`, identically on canvas and PDF. **The chain rail prints each cut's FULL
 length** (the shop measures cut lengths — on-device ruling); a buried liner edge becomes a chain node
-only under `PdfPrefs.undercutSplitAtLinerEdge` (app-wide look pref, default OFF). **The TOTAL rail is
-REMOVED** (on-device ruling: no hand drawing carries a total length of cuts): `effectiveUndercutTotalRail`
-— still the ONE resolution both draw sites read — returns false, its three switches (tab, options
-panel, Settings → PDF Export) are gone, and `UndercutRecord.showTotalRail` / `PdfPrefs.undercutTotalRail`
-only decode. Every strip lays out as a no-total strip; `planUndercutStripRails(showTotal)` and the
-total-band layout this file describes elsewhere are unused by the app. Do not bring the total back
-without asking. `UndercutRecord.drawToSet`
+only under `PdfPrefs.undercutSplitAtLinerEdge` (app-wide look pref, default OFF). The TOTAL rail is
+optional: per-job `UndercutRecord.showTotalRail` (`null` = follow `PdfPrefs.undercutTotalRail`, default ON),
+resolved ONCE by `effectiveUndercutTotalRail` and applied ONLY through `planUndercutStripRails(showTotal)` —
+off, the strip lays out as a single-cut section. It was removed once and brought BACK as the **"Overall dimension"** (on-device ruling: the foreman's hand sketches carry one dimension over the chain, from the S.E.T. to the END OF THE CUTS — where the weld ends): the app's three planner callers pass `planUndercutStripRails(overallFromSet = true)`, under which it is NOT the run across the cuts but ONE uncaptioned baseline rail from the strip's S.E.T. (`undercutStripSetSide`) to the top-level cuts' far end (`undercutOverallStationMm`), through the ONE station rule `buildUndercutSetRailSpansAt` — joining the "Liner ends from S.E.T." stack when that is on — and the strip plans NO total across its cuts; only a strip with no S.E.T. to measure from keeps `buildUndercutTotalSpan`. WHERE it ends is the per-job `UndercutRecord.overallTo` (`UndercutOverallTo` LINER_END | CUTS_END, by name, unknown → LINER_END, the default — on-device request: the welder must know where the liner stops so the seal area is not built up; ONE row `UndercutOverallToRow` under the switch on the tab and the options panel, greyed while the switch is off or Dimensions is From S.E.T.): LINER_END hands the planner the liner's span as `overallLiner` and the rail runs to the liner's far end captioned "S.E.T. to liner end"; a bare-shaft strip has no liner and measures to its cuts' end either way. The total-band layout (and the tiers over it) is kept behind `overallFromSet = false`, unreached by the app, so it can return. Do not remove the overall dimension again, or put the cut total back, without asking. `UndercutRecord.drawToSet`
 (per-job — a fit for this shaft's geometry, not a look) extends a liner strip whose chain ends within
 `UNDERCUT_SET_REACH_MM` (24") of its S.E.T. out to the shaft end (chain to the S.E.T.) — flat physical end, no break — and the
 chain gains the span to it (the sketch's "12 3/4 to the S.E.T."); liner strips only, the total span
@@ -791,7 +792,7 @@ holds under Chain** (second report: "still grouping the small numbers together")
 callers pass `planUndercutStripRails(nestedRows = false)`, so NO sheet or canvas prints a parent's
 whole length over a nested row; that layout — and what this file says elsewhere about nested rail
 rows — is kept behind `nestedRows = true`, unreached, so it can return. Do not turn it back on
-without asking — DROPS the total and the S.E.T. lead ("Total length of cuts" greys out, its stored value
+without asking — DROPS the total and the S.E.T. lead ("Overall dimension" greys out, its stored value
 untouched), and ADDS one baseline rail per station from the strip's `undercutStripSetSide` S.E.T.
 (`buildUndercutSetRailSpans`: AFT — every cut's start at every level plus the FWD-most cut's end;
 FWD — the mirror; coinciding stations one rail; nearest lowest), each its own line with its value in
@@ -929,6 +930,31 @@ its own tab and from Export all, and a `/`, `:` or `*` in a customer name never 
 filename (two schemes had drifted apart and one of them did not sanitize — manual-figure
 report). `PdfPreviewScreen`/`PdfExportRoute` take the target from the NAV ROUTE ARGUMENT
 (`?target=final`), never from ViewModel state. See `docs/contracts/FinalSchematic.md`.
+
+### Section sheets are a window on the drawing, never a copy of it
+A section sheet (`SchematicSection`, envelope `sheet_sections` — a name, the STORED component ids
+it runs from and to, `null` = the AFT / FWD end, and which drawing it is of) prints one stretch of
+the shaft alone (on-device request: the shop's "FWD end finish" sketch). It is print metadata: it
+never affects OAL, resolution or collision, is never pruned (a section naming a part that is gone
+is kept and cannot print until edited), rides the autosave snapshot's builder AND combine, is not
+in `EditState`; New and a template reset it, a mate carries the original drawing's sections only.
+The window is derived each time by the ONE pure `resolveSheetSection` (`pdf/SchematicSection.kt`):
+the named parts' extent (the CORE) plus, at an end short of the shaft end, a stub of neighbouring
+stock (0.75 × Ø, never less than the blend or seal area on the face it butts). The composer draws
+the SAME spec through `composeShaftPdf(section = …)` (`null` = whole shaft, byte-identical) — do
+not build a cropped or re-based spec: the rails must stay the full sheet's own spans and VALUES
+(`SchematicRailSpans.inSection`: a span with an end on the core whose other end is on the sheet,
+or is a S.E.T. / shaft-end datum off it — that one prints open at the cut through
+`PdfDimensionRenderer(clipXMin, clipXMax)`, no extension line or arrowhead there; a span to a part
+the sheet does not show is dropped; the OAL rail only when both its ends show). Cut ends clip the
+draw passes to `breakWindowClipPath` so fills end ON the S-break; a taper, thread, liner or bolt
+row that only a stub clips is drawn but prints no name, Ø, rail or footer line (`inSectionCore`);
+a body's name and Ø print wherever it shows. A window with page room to spare draws larger, up to
+the paper band's ceiling, never smaller than the full sheet. Always the plain schematic of its
+drawing (`sectionSheetKind`). Surfaces: the PDF preview's sheet picker (`SheetPickerRow` +
+`SectionSheetsDialog`, both targets; Print and Export follow the chosen sheet, export route
+`&section=<id>`), and Export all, which writes the original's sections beside the schematic
+(`buildSectionFilename`). See `docs/contracts/SectionSheets.md`.
 
 ### Paper sheets are theme-independent
 The app theme (Settings → Appearance: System/Light/Dark + high contrast; default Light =

@@ -163,8 +163,9 @@ Route graph (AppNav.kt NavHost)
   entered from Start's "Start from Template". Browsing is unguarded; **choosing** a template
   is session-replacing, so `onUseTemplate` runs through the same `runGuarded` unsaved-changes
   gate as New / Open before `vm.applyTemplate` + navigate to `editor`.
-- `pdfPreview` → PdfPreviewScreen
-- `exportPdf` → PdfExportRoute (SAF export flow)
+- `pdfPreview` → PdfPreviewScreen (optional `target`: original | final)
+- `exportPdf` → PdfExportRoute (SAF export flow; optional `target`, and optional `section` — the
+  section sheet the preview was showing, blank = the whole shaft)
 
 Responsibilities
 - **AppNav.kt:** Define NavHost, start destination, and route graph.

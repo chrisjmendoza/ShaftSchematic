@@ -167,7 +167,7 @@ fun ShaftViewModel.setPdfUndercutSplitAtLinerEdge(v: Boolean, persist: Boolean =
 }
 
 /**
- * Wired to the "Total length of cuts" row in Settings → PDF Export: the DEFAULT for whether the
+ * Wired to the "Overall dimension" row in Settings → PDF Export: the DEFAULT for whether the
  * undercut strips print their total rail. A job that set its own switch on the Undercut tab
  * (`UndercutRecord.showTotalRail`) keeps that choice.
  */

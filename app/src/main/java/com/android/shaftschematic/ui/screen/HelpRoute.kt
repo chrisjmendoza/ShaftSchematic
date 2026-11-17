@@ -742,7 +742,7 @@ internal val helpSections: List<HelpSection> = listOf(
                     "\"Dimensions\" (Chain | From S.E.T., right after \"Page\") chooses how " +
                     "each section locates its cuts: chained from the liner's edges, or each " +
                     "cut's start measured from the S.E.T. on a stack of dimensions with the cut " +
-                    "lengths on the line under them (the total length of cuts is then not " +
+                    "lengths on the line under them (the overall dimension is then not " +
                     "printed). \"Liner ends from S.E.T.\", under it, adds two dimensions to " +
                     "each liner section with Chain dimensions: from the S.E.T. to each end of " +
                     "the liner, so the liner can be found where cuts have run over its edges.\n\n" +
@@ -938,6 +938,17 @@ internal val helpSections: List<HelpSection> = listOf(
                     "Stations are per component, not per drawn run, so a body split by liners " +
                     "still numbers straight through AFT to FWD.",
                 manualAnchor = "recording-stations",
+            ),
+            HelpTopic(
+                "Section sheets",
+                "One stretch of the shaft printed as its own sheet — the FWD end from the seal " +
+                    "liner to the thread, say. On the schematic or Final PDF preview, the row " +
+                    "under the title bar picks \"Whole shaft\" or a section; \"Sections…\" " +
+                    "adds one: a name and the parts it runs from and to. The parts draw larger, " +
+                    "with a break where the shaft carries on, and keep the schematic's own " +
+                    "dimensions — one from a S.E.T. off the sheet runs open into the break. " +
+                    "Print and Export follow the sheet on screen; sections are saved with the job.",
+                manualAnchor = "documents-sections",
             ),
             HelpTopic(
                 "Shade in Components",
@@ -1254,10 +1265,10 @@ internal val helpSections: List<HelpSection> = listOf(
                     "sheet's PDF options and the Undercut tab's \"Drawing settings\" it sits " +
                     "directly under \"Distance to S.E.T.\", with the other dimensioning " +
                     "choice — the same app-wide value as this Settings row.\n" +
-                    "• \"Undercut drawing: total length of cuts\" — default on. A section with " +
-                    "two or more cuts prints one dimension across all of them, above the cut " +
-                    "lengths. This is the DEFAULT each job follows until its own \"Total length " +
-                    "of cuts\" switch on the Undercut tab is used; turn it off here and every " +
+                    "• \"Undercut drawing: overall dimension\" — default on. Each section " +
+                    "prints one dimension from the S.E.T., above the cut lengths, to the end of " +
+                    "the liner or of the cuts as the job chooses. This is the DEFAULT each job follows until its own \"Overall " +
+                    "dimension\" switch on the Undercut tab is used; turn it off here and every " +
                     "job you have not set yourself prints without it.",
                 manualAnchor = "settings-pdf-export",
             ),
@@ -1367,9 +1378,11 @@ internal val helpSections: List<HelpSection> = listOf(
                     "settings\", beside the Drawn depth slider. A liner strip whose cuts end within 24 in of the S.E.T. draws " +
                     "out to the shaft end, and its dimension chain finishes with the run from the " +
                     "last cut to the S.E.T. Saved with this job.\n" +
-                    "• \"Total length of cuts\" — on the Undercut Drawing, under \"Drawing " +
-                    "settings\", and in its PDF options. Whether a section with two or more cuts " +
-                    "prints the overall run across them above the cut lengths. Saved with this " +
+                    "• \"Overall dimension\" — on the Undercut Drawing, under \"Drawing " +
+                    "settings\", and in its PDF options. Whether each section prints one " +
+                    "dimension from the S.E.T. above the cut lengths; \"Overall dimension to\" " +
+                    "under it ends it at the far end of the liner (the default, so the welder " +
+                    "knows where the liner stops) or at the end of the cuts. Saved with this " +
                     "job; until you change it, the job follows the Settings → PDF Export default.\n" +
                     "• Worn sections — on the Consolidated Output tab. (That tab's \"Sheet " +
                     "content\" choice is not saved: it starts at All three each session.)\n\n" +

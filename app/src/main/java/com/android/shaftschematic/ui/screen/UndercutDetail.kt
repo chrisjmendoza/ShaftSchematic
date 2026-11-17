@@ -142,6 +142,7 @@ import com.android.shaftschematic.geom.undercutButtedSeedStartForLength
 import com.android.shaftschematic.geom.undercutCanonicalForNewLength
 import com.android.shaftschematic.geom.undercutIsWholeLiner
 import com.android.shaftschematic.geom.undercutLinerEdgeBuried
+import com.android.shaftschematic.geom.undercutMachinedSpans
 import com.android.shaftschematic.geom.undercutLinerHasOtherCuts
 import com.android.shaftschematic.geom.undercutLinerExtensionsMm
 import com.android.shaftschematic.geom.undercutOverlapIssue
@@ -169,6 +170,7 @@ import com.android.shaftschematic.geom.threadHatchSpan
 import com.android.shaftschematic.geom.threadReliefSpan
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Undercut
+import com.android.shaftschematic.model.UndercutOverallTo
 import com.android.shaftschematic.model.UndercutRailStyle
 import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.UndercutReference
@@ -576,9 +578,11 @@ fun UndercutWindowDetailOverlay(
     // body — the previewed draft included — each become an extra node on the chain rail below,
     // the printed strip's rule (`buildUndercutRailSpans`' `splitAtMm`); off, none, so every cut
     // reads its full length.
-    val railSplitAtMm = remember(sheetSpans, stripLiner, splitAtLinerEdge) {
+    val railSplitAtMm = remember(sheetUndercuts, segs, oalMm, stripLiner, splitAtLinerEdge) {
         stripLiner?.takeIf { splitAtLinerEdge }
-            ?.let { l -> buriedUndercutLinerEdgesMm(l.startMm, l.endMm, sheetSpans) }
+            ?.let { l ->
+                buriedUndercutLinerEdgesMm(l.startMm, l.endMm, undercutMachinedSpans(sheetUndercuts, segs, oalMm))
+            }
             ?: emptyList()
     }
     // The window follows what is PREVIEWED, not just what is stored: a draft edited past the
@@ -1041,6 +1045,7 @@ fun UndercutWindowDetailOverlay(
             from = current,
             linerSpans = linerSpans,
             sheetSpans = pool,
+            buryingSpans = undercutMachinedSpans(applyUndercutDraft(undercutRecord.undercuts, current), segs, oalMm),
             aftSetXMm = aftSetXMm,
             fwdSetXMm = fwdSetXMm,
         )
@@ -1139,13 +1144,16 @@ fun UndercutWindowDetailOverlay(
         // body has no step left there to measure from, so the new cut authors
         // against the nearer S.E.T. instead (on-device request).
         val seedFromLiner = stripLiner != null &&
-            !undercutLinerEdgeBuried(stripLiner.startMm, occupied)
+            !undercutLinerEdgeBuried(
+                stripLiner.startMm, undercutMachinedSpans(undercutRecord.undercuts, segs, oalMm),
+            )
         val seed = if (butted != null && neighbour != null) undercutSeedInheriting(
             startMm = butted.startMm,
             lengthMm = butted.lengthMm,
             from = neighbour,
             linerSpans = linerSpans,
             sheetSpans = occupied,
+            buryingSpans = undercutMachinedSpans(undercutRecord.undercuts, segs, oalMm),
             aftSetXMm = aftSetXMm,
             fwdSetXMm = fwdSetXMm,
         ) else UndercutDraft(
@@ -1430,6 +1438,10 @@ fun UndercutWindowDetailOverlay(
                             arrowSizePt = arrowSizePt,
                             setLead = setLead,
                             showTotal = effectiveUndercutTotalRail(undercutRecord.showTotalRail, totalRailDefault),
+                            overallFromSet = true,
+                            overallLiner = (railStrip as? UndercutStrip.LinerStrip)
+                                ?.takeIf { undercutRecord.overallTo == UndercutOverallTo.LINER_END }
+                                ?.let { UndercutLinerSpanMm(it.linerStartMm, it.linerEndMm) },
                             fromSet = railsFromSet,
                             linerEnds = railLinerEnds,
                         )
@@ -2481,6 +2493,8 @@ internal fun undercutSeedInheriting(
     sheetSpans: List<UndercutSpanMm>,
     aftSetXMm: Float,
     fwdSetXMm: Float,
+    /** [undercutMachinedSpans] of the same cuts — what can bury a liner edge. */
+    buryingSpans: List<UndercutSpanMm> = sheetSpans,
 ): UndercutDraft {
     val probe = UndercutDraft(
         id = PENDING_UNDERCUT_ID,
@@ -2494,7 +2508,12 @@ internal fun undercutSeedInheriting(
     )
     val pool = sheetSpans.filter { it.id != PENDING_UNDERCUT_ID } +
         UndercutSpanMm(PENDING_UNDERCUT_ID, startMm, startMm + lengthMm)
-    val ref = effectiveUndercutReference(probe.toUndercut(), linerSpans, pool, aftSetXMm, fwdSetXMm)
+    // The new cut is unmeasured, so its whole span counts toward burying an edge.
+    val buryingPool = buryingSpans.filter { it.id != PENDING_UNDERCUT_ID } +
+        UndercutSpanMm(PENDING_UNDERCUT_ID, startMm, startMm + lengthMm)
+    val ref = effectiveUndercutReference(
+        probe.toUndercut(), linerSpans, pool, aftSetXMm, fwdSetXMm, buryingSpans = buryingPool,
+    )
     return probe.copy(
         reference = ref,
         referenceLinerId = if (ref == UndercutReference.LINER_AFT || ref == UndercutReference.LINER_FWD) {
@@ -2871,10 +2890,15 @@ private fun UndercutDraftCard(
             UndercutSpanMm(u.id, c.startMm, c.endMm)
         }.filter { it.endMm > it.startMm }
     }
-    val linerAftBuried = refLiner != null && undercutLinerEdgeBuried(refLiner.startMm, buriedPool)
-    val linerFwdBuried = refLiner != null && undercutLinerEdgeBuried(refLiner.endMm, buriedPool)
+    // Burial reads where each cut actually removes material: a cut whose floor stands above the
+    // stock past the edge ends at the edge in metal (on-device report).
+    val buryingPool = remember(sheetUndercuts, draft, oalMm, segs) {
+        undercutMachinedSpans(applyUndercutDraft(sheetUndercuts, draft), segs, oalMm)
+    }
+    val linerAftBuried = refLiner != null && undercutLinerEdgeBuried(refLiner.startMm, buryingPool)
+    val linerFwdBuried = refLiner != null && undercutLinerEdgeBuried(refLiner.endMm, buryingPool)
     val shownReference = effectiveUndercutReference(
-        previewUndercut, linerSpans, buriedPool, aftSetXMm, fwdSetXMm,
+        previewUndercut, linerSpans, buriedPool, aftSetXMm, fwdSetXMm, buryingSpans = buryingPool,
     )
     // The cut this draft sits fully inside on the sheet (the forest's smallest container) — the
     // Parent chips' datum, offered only while there is one (on-device request: a nested cut in a
@@ -2956,7 +2980,9 @@ private fun UndercutDraftCard(
             applyUndercutDraft(sheetUndercuts, draft), segs, oalMm, exaggerationFrac = 0f,
         ).firstOrNull { it.span.id == draft.id }
     }
-    val surfaceDiaMm = draftFloors?.surfaceDiaMm ?: 0f
+    // The highest surface the cut spans: a cut typed past a liner end onto smaller stock is still
+    // a cut wherever it sits on the liner (on-device report).
+    val surfaceDiaMm = draftFloors?.highestSurfaceDiaMm ?: 0f
     val draftIsNested = draftFloors?.nesting?.parentId != null
     val diaAtOrAboveSurface =
         draft.diaMm > 0f && surfaceDiaMm > 0f && draft.diaMm >= surfaceDiaMm
@@ -3870,7 +3896,7 @@ internal data class UndercutDetailRailInputs(
      * the printed strip's lead, through the same planner. Null draws none.
      */
     val setLead: UndercutSetLead? = null,
-    /** The job's resolved "Total length of cuts" choice — the printed strip's `showTotal`. */
+    /** The job's resolved "Overall dimension" choice — the printed strip's `showTotal`. */
     val showTotal: Boolean = true,
     /** The job's "Dimensions" are From S.E.T. — the printed strip's `fromSet`. */
     val fromSet: Boolean = false,
@@ -3878,6 +3904,10 @@ internal data class UndercutDetailRailInputs(
     val linerEnds: UndercutLinerSpanMm? = null,
     /** The printed strip's `nestedRows`: false on the canvas, as on every sheet. */
     val nestedRows: Boolean = false,
+    /** The printed strip's `overallFromSet`: the canvas passes true, as the sheet does. */
+    val overallFromSet: Boolean = false,
+    /** The printed strip's `overallLiner`: the liner span while the overall dimension ends at the liner. */
+    val overallLiner: UndercutLinerSpanMm? = null,
 )
 
 /**
@@ -4011,6 +4041,8 @@ internal fun planUndercutDetailXMap(
         fromSet = inputs.fromSet,
         linerEnds = inputs.linerEnds,
         nestedRows = inputs.nestedRows,
+        overallFromSet = inputs.overallFromSet,
+        overallLiner = inputs.overallLiner,
     )
 }
 
@@ -4033,6 +4065,8 @@ internal fun planUndercutDetailRails(
         fromSet = inputs.fromSet,
         linerEnds = inputs.linerEnds,
         nestedRows = inputs.nestedRows,
+        overallFromSet = inputs.overallFromSet,
+        overallLiner = inputs.overallLiner,
     ).withFallbacksLifted()
 }
 

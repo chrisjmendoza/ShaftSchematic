@@ -33,6 +33,8 @@ import com.android.shaftschematic.model.WearSpot
 import com.android.shaftschematic.model.WornSection
 import com.android.shaftschematic.pdf.PdfExportOptions
 import com.android.shaftschematic.pdf.composeRunoutPdfOnCanvas
+import com.android.shaftschematic.pdf.SheetSection
+import com.android.shaftschematic.pdf.resolveSheetSection
 import com.android.shaftschematic.pdf.composeShaftPdfOnCanvas
 import com.android.shaftschematic.pdf.composeUndercutPdf
 import com.android.shaftschematic.pdf.composeWearPdf
@@ -300,6 +302,7 @@ class ManualFiguresTest {
         project: ProjectInfo,
         options: PdfExportOptions = PdfExportOptions(),
         scale: Float = SCALE,
+        section: SheetSection? = null,
     ): Bitmap =
         sheet(scale) { c ->
             composeShaftPdfOnCanvas(
@@ -308,6 +311,7 @@ class ManualFiguresTest {
                 options = options,
                 resolvedComponents = resolveComponents(spec),
                 displayUnits = DisplayUnits.single(UnitSystem.INCHES),
+                section = section,
             )
         }
 
@@ -335,6 +339,11 @@ class ManualFiguresTest {
 
         save(schematic(mainSpec, mainProject, PdfExportOptions(blankValues = true)), "schematic-blank.png")
         save(schematic(finalSpec, mainProject.copy(drawingLabel = "Final")), "schematic-final.png")
+        // A section sheet: the seal liner to the FWD end, as the shop's "FWD end finish" sketch.
+        val fwdEnd = requireNotNull(
+            resolveSheetSection(mainSpec, resolveComponents(mainSpec), "L2", null, "FWD END FINISH"),
+        )
+        save(schematic(mainSpec, mainProject, section = fwdEnd), "schematic-section.png")
 
         val classic = runout(blank = false)
         save(classic, "runout-classic.png")
