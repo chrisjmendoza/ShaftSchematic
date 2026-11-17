@@ -8,6 +8,19 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-16
 
+### feat(undercut): an overall dimension from the S.E.T. to the end of the cuts
+
+On-device ruling: the foreman's hand sketches carry one dimension over the cut lengths (54 1/2
+over 18 15/16, 10 9/16, 4 11/16, 20 5/16), running from the S.E.T. to the end of the cuts — where
+the weld ends. The undercut sheet and the Undercut tab's detail canvas print it on every section
+with cuts, as one more dimension above the chain. It takes the place of the removed "Total length
+of cuts", which measured only across the cuts. The switches return under the name "Overall
+dimension": on the tab's Drawing settings and the undercut PDF options (saved with the job), and
+the default every job follows under Settings → PDF Export, "Undercut drawing: overall dimension"
+(on as shipped). A choice a job or the device stored before the total was removed applies again.
+With "Liner ends from S.E.T." on, it stands in the same stack as those two. Not printed while
+Dimensions is From S.E.T.
+
 ### feat(shaft-ends): the draw-plate thread size carries an NC | NF toggle
 
 On-device request: the size is typed bare ("1 1/4") and the sheet should read `1 1/4" NC`. The

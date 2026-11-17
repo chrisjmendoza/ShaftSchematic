@@ -290,7 +290,7 @@ private fun drawUndercutSheet(
 
     val docSpec = spec.withResolvedBodies(resolvedComponents)
     val effectiveRecord = if (blankValues) UndercutRecord() else undercutRecord
-    // "Total length of cuts": the job's own choice, else the Settings → PDF Export default. Read off
+    // "Overall dimension": the job's own choice, else the Settings → PDF Export default. Read off
     // the CALLER's record, not effectiveRecord — a blank draft drops the cuts, not the job's
     // dimensioning choice (a started strip plans no total either way).
     val showTotalRail = effectiveUndercutTotalRail(undercutRecord.showTotalRail, pdfPrefs.undercutTotalRail)
@@ -483,7 +483,7 @@ private fun drawUndercutSheet(
             railSplitOf(strip), pdfPrefs.arrowSizePt,
             titleAirPt = UC_PORTRAIT_TITLE_AIR_PT,
             leadSide = stripSideOf(strip), aftSetMm = aftSetMm, fwdSetMm = fwdSetMm,
-            showTotal = showTotalRail,
+            showTotal = showTotalRail, overallFromSet = true,
             fromSet = railsFromSet,
             linerEnds = linerEndsOf(strip),
             longCompressFrac = undercutRecord.longCompressFrac,
@@ -668,7 +668,7 @@ private fun drawUndercutSheet(
             railSplitAtMm = railSplitOf(strip),
             // The app-wide "Dimension arrows" head — the same pref the schematic's rails read.
             arrowSizePt = pdfPrefs.arrowSizePt,
-            showTotal = showTotalRail,
+            showTotal = showTotalRail, overallFromSet = true,
             fromSet = railsFromSet,
             linerEnds = linerEndsOf(strip),
             longCompressFrac = undercutRecord.longCompressFrac,
@@ -1529,7 +1529,7 @@ fun planUndercutDetailStrip(
     leadSide: UndercutAnchorSide? = null,
     aftSetMm: Float = 0f,
     fwdSetMm: Float = 0f,
-    /** The job's resolved "Total length of cuts" choice — [planUndercutStripRails]' `showTotal`. */
+    /** The job's resolved "Overall dimension" choice — [planUndercutStripRails]' `showTotal`. */
     showTotal: Boolean = true,
     /** The job's "Dimensions" are From S.E.T. — [planUndercutStripRails]' `fromSet`. */
     fromSet: Boolean = false,
@@ -1540,6 +1540,8 @@ fun planUndercutDetailStrip(
      * pieces on the one chain; true keeps the whole length over a nested row (kept, unprinted).
      */
     nestedRows: Boolean = false,
+    /** [planUndercutStripRails]' `overallFromSet` — the sheet's callers pass true. */
+    overallFromSet: Boolean = false,
     /**
      * The liner's own span when the job prints "Liner ends from S.E.T." on this LINER strip;
      * null otherwise — [planUndercutStripRails]' `linerEnds`.
@@ -1680,6 +1682,7 @@ fun planUndercutDetailStrip(
         fromSet = fromSet,
         linerEnds = linerEnds,
         nestedRows = nestedRows,
+        overallFromSet = overallFromSet,
     )
     return UndercutStripPlan(
         drawStartMm, drawEndMm, hLayout, titleText, dimText, spans, diaPlan, diaBandPt, rails,
@@ -1899,8 +1902,10 @@ private fun drawUndercutDetailStrip(
      * the lead continuing the chain. Null keeps the bare-shaft proximity rule and draws no lead.
      */
     leadSide: UndercutAnchorSide? = null,
-    /** The job's resolved "Total length of cuts" choice — [planUndercutStripRails]' `showTotal`. */
+    /** The job's resolved "Overall dimension" choice — [planUndercutStripRails]' `showTotal`. */
     showTotal: Boolean = true,
+    /** [planUndercutStripRails]' `overallFromSet` — the sheet passes true. */
+    overallFromSet: Boolean = false,
     /** The job's "Dimensions" are From S.E.T. — [planUndercutStripRails]' `fromSet`. */
     fromSet: Boolean = false,
     /** "Liner ends from S.E.T." on this liner strip — [planUndercutStripRails]' `linerEnds`. */
@@ -1925,6 +1930,7 @@ private fun drawUndercutDetailStrip(
         segs, strip, undercuts, clampedById, stripLeft, stripRight, unit, text, diaText,
         shaftExtentMm, startedStrip, dual, dualStacked, railSplitAtMm, arrowSizePt, titleAirPt,
         leadSide = leadSide, aftSetMm = aftSetMm, fwdSetMm = fwdSetMm, showTotal = showTotal,
+        overallFromSet = overallFromSet,
         fromSet = fromSet,
         linerEnds = linerEnds,
         longCompressFrac = longCompressFrac,

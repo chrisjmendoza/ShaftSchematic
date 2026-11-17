@@ -906,7 +906,7 @@ fun planUndercutStripRails(
     setLead: UndercutSetLead? = null,
     /**
      * Whether the strip prints its total rail ([buildUndercutTotalSpan]) — the job's resolved
-     * "Total length of cuts" choice (`effectiveUndercutTotalRail`). Off, the plan carries no total,
+     * "Overall dimension" choice (`effectiveUndercutTotalRail`). Off, the plan carries no total,
      * so the vertical split reserves no total band and the chain's fallbacks go above its line,
      * exactly as on a strip with a single cut.
      */
@@ -940,21 +940,40 @@ fun planUndercutStripRails(
      * together"). The nested-row layout is kept behind this flag so it can return.
      */
     nestedRows: Boolean = true,
+    /**
+     * The overall dimension ([showTotal]) is ONE baseline rail from [setLead]'s S.E.T. to the END
+     * OF THE CUTS ([undercutOverallStationMm]) rather than the total across the cuts — what the APP
+     * prints (its three callers pass true; on-device ruling: the shop's sketches carry the overall
+     * figure from the S.E.T., so it says where the weld ends). The rail joins the liner-end stack
+     * when [linerEnds] is on. A strip with no S.E.T. to measure from keeps the total across its
+     * cuts. Off (the default), the total-across-the-cuts layout, kept so it can return.
+     */
+    overallFromSet: Boolean = false,
 ): UndercutStripRails {
     val sorted = spans.sortedBy { it.startMm }
     val nestingById = undercutNestingForest(sorted).associateBy { it.id }
     val topSpans = sorted.filter { (nestingById[it.id]?.level ?: 0) == 0 }
     val wholeChain = if (startedStrip) emptyList()
     else buildUndercutRailSpans(chainStartMm, chainEndMm, topSpans, unit, dual, splitAtMm = splitAtMm)
+    // The overall dimension: S.E.T. → the end of the cuts, one more baseline rail on the stack.
+    val overallMm = if (overallFromSet && showTotal && !fromSet && setLead != null) undercutOverallStationMm(topSpans, setLead)
+    else null
     val setRailSpans = when {
         startedStrip || wholeChain.isEmpty() || setLead == null -> emptyList()
         fromSet -> buildUndercutSetRailSpans(sorted, setLead, unit, dual)
-        linerEnds != null -> buildUndercutLinerEndRailSpans(linerEnds, setLead, unit, dual)
+        linerEnds != null ->
+            buildUndercutLinerEndRailSpans(linerEnds, setLead, unit, dual, extraStationsMm = listOfNotNull(overallMm))
+        overallMm != null -> buildUndercutSetRailSpansAt(listOf(overallMm), setLead, unit, dual)
         else -> emptyList()
     }
     // From S.E.T. replaces the total and the lead; liner ends stand over a chained strip.
     val setMode = fromSet && setRailSpans.isNotEmpty()
-    val totalSpan = if (startedStrip || !showTotal || setMode) null else buildUndercutTotalSpan(topSpans, unit, dual)
+    // The overall dimension is the baseline rail to the end of the cuts; only a strip with no
+    // S.E.T. to measure from (or whose cuts end at or beyond it) falls back to the run across its cuts.
+    val overallIsRail = overallMm != null &&
+        setRailSpans.any { abs(it.stationMm - overallMm) <= UNDERCUT_TOUCH_EPS_MM }
+    val totalSpan = if (startedStrip || !showTotal || setMode || overallIsRail) null
+    else buildUndercutTotalSpan(topSpans, unit, dual)
     // Every floor piece stands on ONE chain ([nestedRows] off): a cut holding nested cuts is dimensioned as
     // the pieces its nested shoulders split it into, never as its own whole length over a row of
     // those same pieces (on-device report: a 1 1/8" over the two 9/16" it is made of — "we don't
@@ -1130,6 +1149,16 @@ fun buildUndercutSetRailSpans(
 data class UndercutLinerSpanMm(val startMm: Float, val endMm: Float)
 
 /**
+ * The strip's overall dimension (on-device ruling: the shop's sketches carry one dimension over
+ * the cut lengths, from the S.E.T. to the END OF THE CUTS — not just across them): the station a
+ * baseline rail from [lead]'s S.E.T. runs to, the top-level cuts' end farthest from that S.E.T.
+ * Null with no cuts.
+ */
+fun undercutOverallStationMm(topSpans: List<UndercutSpanMm>, lead: UndercutSetLead): Float? =
+    if (lead.side == UndercutAnchorSide.AFT_SET) topSpans.maxOfOrNull { it.endMm }
+    else topSpans.minOfOrNull { it.startMm }
+
+/**
  * The two baseline rails "Liner ends from S.E.T." stacks over a liner strip's chain (on-device
  * request: once cuts bury a liner edge the drawing no longer shows where the liner begins and ends,
  * and the welder needs both): from [lead]'s S.E.T. to the liner's near end — the figure the strip
@@ -1142,14 +1171,22 @@ fun buildUndercutLinerEndRailSpans(
     lead: UndercutSetLead,
     unit: UnitSystem,
     dual: Boolean = false,
+    /** Further stations on the same stack — the overall dimension's ([undercutOverallStationMm]); uncaptioned. */
+    extraStationsMm: List<Float> = emptyList(),
 ): List<UndercutSetRailSpan> =
     if (liner.endMm - liner.startMm <= UNDERCUT_RAIL_SPAN_EPS_MM) emptyList()
     else {
         // The liner end on the S.E.T.'s side is where the liner STARTS, read from that S.E.T.
         val nearMm = if (lead.side == UndercutAnchorSide.AFT_SET) liner.startMm else liner.endMm
-        buildUndercutSetRailSpansAt(listOf(liner.startMm, liner.endMm), lead, unit, dual).map { r ->
-            val near = kotlin.math.abs(r.stationMm - nearMm) <= UNDERCUT_TOUCH_EPS_MM
-            r.copy(caption = if (near) UNDERCUT_LINER_START_CAPTION else UNDERCUT_LINER_END_CAPTION)
+        val farMm = if (lead.side == UndercutAnchorSide.AFT_SET) liner.endMm else liner.startMm
+        buildUndercutSetRailSpansAt(listOf(liner.startMm, liner.endMm) + extraStationsMm, lead, unit, dual).map { r ->
+            r.copy(
+                caption = when {
+                    kotlin.math.abs(r.stationMm - nearMm) <= UNDERCUT_TOUCH_EPS_MM -> UNDERCUT_LINER_START_CAPTION
+                    kotlin.math.abs(r.stationMm - farMm) <= UNDERCUT_TOUCH_EPS_MM -> UNDERCUT_LINER_END_CAPTION
+                    else -> null
+                },
+            )
         }
     }
 
@@ -1160,7 +1197,8 @@ fun buildUndercutLinerEndRailSpans(
  */
 fun undercutLinerNearEndValueMm(liner: UndercutLinerSpanMm, side: UndercutAnchorSide, setMm: Float): Float? {
     val wide = UndercutSetLead(side, setMm, drawStartMm = -1e9f, drawEndMm = 1e9f)
-    return buildUndercutLinerEndRailSpans(liner, wide, UnitSystem.MILLIMETERS).firstOrNull()?.valueMm
+    return buildUndercutLinerEndRailSpans(liner, wide, UnitSystem.MILLIMETERS)
+        .firstOrNull { it.caption == UNDERCUT_LINER_START_CAPTION }?.valueMm
 }
 
 /**

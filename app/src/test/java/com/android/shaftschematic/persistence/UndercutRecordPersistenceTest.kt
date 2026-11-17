@@ -218,7 +218,7 @@ class UndercutRecordPersistenceTest {
         assertEquals(0.25f, decoded.undercutRecord.exaggerationFrac, 0f)
         // "Draw to the shaft end" postdates this payload too: it decodes off.
         assertFalse(decoded.undercutRecord.drawToSet)
-        // So does the "Total length of cuts" choice: the job follows the app default.
+        // So does the "Overall dimension" choice: the job follows the app default.
         assertNull(decoded.undercutRecord.showTotalRail)
     }
 

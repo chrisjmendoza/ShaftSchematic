@@ -55,7 +55,7 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   undercuts" list, collapsed by default behind a header row with a chevron, `testTag
   "undercut_drawing_settings_toggle"` — usability review: nothing between Add and the list may
   read as a required step). It holds the rows below, in this order: Page, Dimensions, Liner ends
-  from S.E.T., Distance to S.E.T., Split cuts at liner edges, Total length of cuts, Drawn depth,
+  from S.E.T., Distance to S.E.T., Split cuts at liner edges, Overall dimension, Drawn depth,
   Draw to the shaft end. Tab block order
   (COMPACT/MEDIUM): intro, overview canvas, Preview | Options, Add undercut, Recorded undercuts,
   Drawing settings, then the print group — "Sections to print" (two or more sections; never
@@ -105,14 +105,14 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   constant): drives `UndercutRecord.drawToSet` through `ShaftViewModel.setUndercutDrawToSet`
   (the record-update path the exaggeration commit uses, so it rides the one undo history and
   the dirty mark). See "Draw to the shaft end" under the strip builders below.
-- **"Total length of cuts" switch** (under "Split cuts at liner edges"; testTag
+- **"Overall dimension" switch** (under "Split cuts at liner edges"; testTag
   `undercut_total_rail_switch`; the same shared `UndercutTotalRailRow` sits in the undercut options
   panel as `pdf_undercut_total_rail`): drives `UndercutRecord.showTotalRail` through
   `ShaftViewModel.setUndercutShowTotalRail` (same record path, same undo history). Shows the
   RESOLVED value; while the job has not chosen, the caption says it follows the Settings default.
   Greyed (`enabled = false`, caption "Not printed while Dimensions is From S.E.T. …") while the
   job's Dimensions are From S.E.T. — its stored value untouched.
-  See "Total length of cuts" under PDF layout below.
+  See "Overall dimension" under PDF layout below.
 - **"Dimensions" row** (above "Liner ends from S.E.T." and "Distance to S.E.T."; the shared `UndercutRailStyleRow`,
   also in the undercut options panel): Chain | From S.E.T., driving `UndercutRecord.railStyle`
   through `ShaftViewModel.setUndercutRailStyle` (same record path, same undo history). See
@@ -227,7 +227,7 @@ data class UndercutRecord(
   decode off): per-document because it is a FIT for this shaft's geometry (how close a liner sits
   to a shaft end), never a look pref — the `exaggerationFrac` posture, not `PdfPrefs`. Display and
   dimensioning only: no stored cut moves.
-- **`showTotalRail`** ("Total length of cuts", default `null`, additive + defaulted — older files
+- **`showTotalRail`** ("Overall dimension", default `null`, additive + defaulted — older files
   decode `null`): `null` follows the app default `PdfPrefs.undercutTotalRail` (Settings → PDF Export,
   shipped ON); `true`/`false` pins this job. Dimensioning only: no stored cut moves.
 - **`railStyle`** ("Dimensions", `UndercutRailStyle` CHAIN | FROM_SET, default CHAIN, additive +
@@ -2220,21 +2220,25 @@ Section-level pick-and-print — no multi-page output.
   and in the undercut options panel. Setter `setUndercutSectionPrinted` (undoable) touches only the
   ids the strip names.
 
-### Total length of cuts
+### Overall dimension
 
-> **REMOVED** (on-device ruling: no hand drawing carries it). `effectiveUndercutTotalRail`
-> returns false for every job, so neither the printed sheet nor the detail canvas draws a total,
-> and the "Total length of cuts" switches (tab, options panel, Settings → PDF Export) no longer
-> exist. `UndercutRecord.showTotalRail` and `PdfPrefs.undercutTotalRail` still decode and are
-> read by nothing. What follows describes the planner's `showTotal` path, which the app no
-> longer reaches; wherever this document says "the total", read "no total".
+One dimension over a section's chain. On-device ruling (the foreman's hand sketch: 54 1/2 over
+the cut lengths): it runs from the S.E.T. to the END OF THE CUTS — where the weld ends — not just
+across the cuts. It clarifies some jobs and confuses others, hence the switch.
 
-On-device request (shop coworkers): the total rail — one dimension across a section's top-level
-cuts, above the chain (`buildUndercutTotalSpan`) — clarifies some jobs and confuses others.
-
+- **What prints** — ONE uncaptioned baseline rail from the strip's S.E.T. (`undercutStripSetSide`)
+  to the top-level cuts' end farthest from it (`undercutOverallStationMm`), through the ONE station
+  rule `buildUndercutSetRailSpansAt`, on liner and bare-shaft strips alike. With "Liner ends from
+  S.E.T." on it joins that stack (a cut end on a liner end is one rail, keeping the liner caption).
+  The strip then plans no total across its cuts.
+- **Opt-in on the planner** — `planUndercutStripRails(overallFromSet = true)`, passed by the app's
+  three callers (printed strip, detail canvas, the canvas's axial map), the `nestedRows`
+  posture. Off — the planner's default — is the total across the cuts (`buildUndercutTotalSpan`)
+  with its band and lift rules, kept and tested but unreached by the app, except on a strip with
+  no S.E.T. to measure from, which still falls back to it.
 - **Two levels, the trace-depth posture** — the per-job `UndercutRecord.showTotalRail: Boolean?`
   over the app-wide default `PdfPrefs.undercutTotalRail` (default `true`; Settings → PDF Export
-  "Undercut drawing: total length of cuts"; captured by drawing profiles, so "Restore Drawing
+  "Undercut drawing: overall dimension"; captured by drawing profiles, so "Restore Drawing
   defaults" turns it back on). ONE resolver, `effectiveUndercutTotalRail(record, default)`
   (`geom/UndercutMath.kt`), read by the composer and by the detail canvas, so the sheet and the
   canvas cannot disagree. A job that never touched its switch tracks the default; a touched job

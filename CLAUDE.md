@@ -660,13 +660,10 @@ also clears cut shoulders. `PdfPrefs.undercutLinerOutline` (app-wide look pref, 
 draws each liner's ERASED edges/OD as a dotted outline over the cuts from the ONE pure
 `geom/LinerOutlineMath.kt`, identically on canvas and PDF. **The chain rail prints each cut's FULL
 length** (the shop measures cut lengths — on-device ruling); a buried liner edge becomes a chain node
-only under `PdfPrefs.undercutSplitAtLinerEdge` (app-wide look pref, default OFF). **The TOTAL rail is
-REMOVED** (on-device ruling: no hand drawing carries a total length of cuts): `effectiveUndercutTotalRail`
-— still the ONE resolution both draw sites read — returns false, its three switches (tab, options
-panel, Settings → PDF Export) are gone, and `UndercutRecord.showTotalRail` / `PdfPrefs.undercutTotalRail`
-only decode. Every strip lays out as a no-total strip; `planUndercutStripRails(showTotal)` and the
-total-band layout this file describes elsewhere are unused by the app. Do not bring the total back
-without asking. `UndercutRecord.drawToSet`
+only under `PdfPrefs.undercutSplitAtLinerEdge` (app-wide look pref, default OFF). The TOTAL rail is
+optional: per-job `UndercutRecord.showTotalRail` (`null` = follow `PdfPrefs.undercutTotalRail`, default ON),
+resolved ONCE by `effectiveUndercutTotalRail` and applied ONLY through `planUndercutStripRails(showTotal)` —
+off, the strip lays out as a single-cut section. It was removed once and brought BACK as the **"Overall dimension"** (on-device ruling: the foreman's hand sketches carry one dimension over the chain, from the S.E.T. to the END OF THE CUTS — where the weld ends): the app's three planner callers pass `planUndercutStripRails(overallFromSet = true)`, under which it is NOT the run across the cuts but ONE uncaptioned baseline rail from the strip's S.E.T. (`undercutStripSetSide`) to the top-level cuts' far end (`undercutOverallStationMm`), through the ONE station rule `buildUndercutSetRailSpansAt` — joining the "Liner ends from S.E.T." stack when that is on — and the strip plans NO total across its cuts; only a strip with no S.E.T. to measure from keeps `buildUndercutTotalSpan`. The total-band layout (and the tiers over it) is kept behind `overallFromSet = false`, unreached by the app, so it can return. Do not remove the overall dimension again, or put the cut total back, without asking. `UndercutRecord.drawToSet`
 (per-job — a fit for this shaft's geometry, not a look) extends a liner strip whose chain ends within
 `UNDERCUT_SET_REACH_MM` (24") of its S.E.T. out to the shaft end (chain to the S.E.T.) — flat physical end, no break — and the
 chain gains the span to it (the sketch's "12 3/4 to the S.E.T."); liner strips only, the total span
@@ -791,7 +788,7 @@ holds under Chain** (second report: "still grouping the small numbers together")
 callers pass `planUndercutStripRails(nestedRows = false)`, so NO sheet or canvas prints a parent's
 whole length over a nested row; that layout — and what this file says elsewhere about nested rail
 rows — is kept behind `nestedRows = true`, unreached, so it can return. Do not turn it back on
-without asking — DROPS the total and the S.E.T. lead ("Total length of cuts" greys out, its stored value
+without asking — DROPS the total and the S.E.T. lead ("Overall dimension" greys out, its stored value
 untouched), and ADDS one baseline rail per station from the strip's `undercutStripSetSide` S.E.T.
 (`buildUndercutSetRailSpans`: AFT — every cut's start at every level plus the FWD-most cut's end;
 FWD — the mirror; coinciding stations one rail; nearest lowest), each its own line with its value in

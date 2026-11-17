@@ -161,7 +161,7 @@ fun ShaftViewModel.setUndercutDrawToSet(v: Boolean) {
 }
 
 /**
- * Pin this sheet's "Total length of cuts" choice ([UndercutRecord.showTotalRail]): whether each
+ * Pin this sheet's "Overall dimension" choice ([UndercutRecord.showTotalRail]): whether each
  * section's strip prints the total rail across its top-level cuts. Writing a value pins THIS job
  * against the Settings → PDF Export default (`PdfPrefs.undercutTotalRail`); `null` returns it to
  * following that default. Dimensioning only — no stored cut moves. A no-op when unchanged.

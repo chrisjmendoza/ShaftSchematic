@@ -1430,6 +1430,7 @@ fun UndercutWindowDetailOverlay(
                             arrowSizePt = arrowSizePt,
                             setLead = setLead,
                             showTotal = effectiveUndercutTotalRail(undercutRecord.showTotalRail, totalRailDefault),
+                            overallFromSet = true,
                             fromSet = railsFromSet,
                             linerEnds = railLinerEnds,
                         )
@@ -3870,7 +3871,7 @@ internal data class UndercutDetailRailInputs(
      * the printed strip's lead, through the same planner. Null draws none.
      */
     val setLead: UndercutSetLead? = null,
-    /** The job's resolved "Total length of cuts" choice — the printed strip's `showTotal`. */
+    /** The job's resolved "Overall dimension" choice — the printed strip's `showTotal`. */
     val showTotal: Boolean = true,
     /** The job's "Dimensions" are From S.E.T. — the printed strip's `fromSet`. */
     val fromSet: Boolean = false,
@@ -3878,6 +3879,8 @@ internal data class UndercutDetailRailInputs(
     val linerEnds: UndercutLinerSpanMm? = null,
     /** The printed strip's `nestedRows`: false on the canvas, as on every sheet. */
     val nestedRows: Boolean = false,
+    /** The printed strip's `overallFromSet`: the canvas passes true, as the sheet does. */
+    val overallFromSet: Boolean = false,
 )
 
 /**
@@ -4011,6 +4014,7 @@ internal fun planUndercutDetailXMap(
         fromSet = inputs.fromSet,
         linerEnds = inputs.linerEnds,
         nestedRows = inputs.nestedRows,
+        overallFromSet = inputs.overallFromSet,
     )
 }
 
@@ -4033,6 +4037,7 @@ internal fun planUndercutDetailRails(
         fromSet = inputs.fromSet,
         linerEnds = inputs.linerEnds,
         nestedRows = inputs.nestedRows,
+        overallFromSet = inputs.overallFromSet,
     ).withFallbacksLifted()
 }
 

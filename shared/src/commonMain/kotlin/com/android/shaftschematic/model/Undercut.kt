@@ -132,7 +132,7 @@ data class Undercut(
  *   sketch's "to the S.E.T." figure). Display/dimensioning only — no stored value moves — but it
  *   is a FIT for this shaft's geometry, never a look pref, so it is per-document and lives
  *   here. Additive + defaulted; older files get `false`.
- * @property showTotalRail "Total length of cuts": whether each section's strip prints the total
+ * @property showTotalRail "Overall dimension": whether each section's strip prints the total
  *   rail across its top-level cuts above the chain. `null` = follow the Settings → PDF Export default
  *   (`PdfPrefs.undercutTotalRail`), so a job that never touched its switch tracks that default
  *   while a touched job stays pinned (the `WearRecord.traceDepthFrac` posture);

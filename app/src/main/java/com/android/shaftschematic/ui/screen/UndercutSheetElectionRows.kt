@@ -539,3 +539,63 @@ internal fun UndercutPrintSectionsList(
         )
     }
 }
+
+/**
+ * What the "Overall dimension" rail is, said once for the Undercut tab, the undercut options
+ * panel and Settings → PDF Export.
+ */
+internal const val UNDERCUT_TOTAL_RAIL_CAPTION =
+    "Each section prints one dimension from the S.E.T. to the end of its cuts, above the cut lengths."
+
+/**
+ * The per-job "Overall dimension" switch (`UndercutRecord.showTotalRail`): whether each
+ * section's strip prints its total rail. [checked] is the job's RESOLVED value
+ * (`effectiveUndercutTotalRail`); [followsDefault] is true while the job has not chosen and is
+ * still following the Settings → PDF Export default, which the caption says so the source of the
+ * value is never a guess. ONE row behind the Undercut tab's Drawing settings and the undercut
+ * options panel, placed with the other dimensioning choices. [testTag] is the switch's tag.
+ */
+@Composable
+internal fun UndercutTotalRailRow(
+    checked: Boolean,
+    followsDefault: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    testTag: String,
+    modifier: Modifier = Modifier,
+    /**
+     * False while the job's "Dimensions" are From S.E.T. ([UndercutRailStyle.FROM_SET]), which prints
+     * no total: the switch greys out and the caption says why; the stored choice is left as it is.
+     */
+    enabled: Boolean = true,
+) {
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                "Overall dimension",
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (enabled) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                if (!enabled) UNDERCUT_TOTAL_RAIL_FROM_SET_CAPTION
+                else "$UNDERCUT_TOTAL_RAIL_CAPTION " + if (followsDefault) {
+                    "Following the Settings → PDF Export default until changed here. Saved with this job."
+                } else {
+                    "Saved with this job."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled,
+            modifier = Modifier.testTag(testTag),
+        )
+    }
+}
+
+/** The "Overall dimension" caption while the job's dimensions are From S.E.T. */
+internal const val UNDERCUT_TOTAL_RAIL_FROM_SET_CAPTION =
+    "Not printed while Dimensions is From S.E.T. — the longest rail already runs to the end of the cuts."

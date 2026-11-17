@@ -157,6 +157,7 @@ import com.android.shaftschematic.ui.viewmodel.setPdfUndercutDepthShade
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutDiaInside
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutShadeLiners
 import com.android.shaftschematic.ui.viewmodel.setUndercutDrawToSet
+import com.android.shaftschematic.ui.viewmodel.setUndercutShowTotalRail
 import com.android.shaftschematic.ui.viewmodel.setUndercutPageOrientation
 import com.android.shaftschematic.ui.viewmodel.setUndercutSectionPrinted
 import com.android.shaftschematic.ui.viewmodel.setUndercutSetDatum
@@ -282,7 +283,7 @@ fun UndercutRoute(
     // Chain-rail nodes at buried liner edges: a preview re-render key, an options-sheet control,
     // and read by the detail overlay's rail.
     val pdfUndercutSplitAtLinerEdge by vm.pdfUndercutSplitAtLinerEdge.collectAsState()
-    // The "Total length of cuts" default a job follows until it chooses: a preview re-render key,
+    // The "Overall dimension" default a job follows until it chooses: a preview re-render key,
     // and resolved with the record for the tab's switch and the detail overlay's rail.
     val pdfUndercutTotalRail by vm.pdfUndercutTotalRail.collectAsState()
     val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
@@ -1128,6 +1129,16 @@ fun UndercutRoute(
                         testTag = "undercut_split_at_liner_edge_switch",
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
+                    // Per-job: whether each section prints the total across its cuts — it helps on
+                    // some jobs and confuses on others (on-device request).
+                    UndercutTotalRailRow(
+                        checked = effectiveUndercutTotalRail(undercutRecord.showTotalRail, pdfUndercutTotalRail),
+                        followsDefault = undercutRecord.showTotalRail == null,
+                        onCheckedChange = { vm.setUndercutShowTotalRail(it) },
+                        testTag = "undercut_total_rail_switch",
+                        modifier = Modifier.padding(bottom = 8.dp),
+                        enabled = undercutRecord.railStyle == UndercutRailStyle.CHAIN,
+                    )
                     // App-wide look: each section core shaded by its cut's depth. Here so the
                     // canvas above restyles as it is flipped.
                     UndercutDepthShadeRow(
@@ -1797,6 +1808,7 @@ internal fun UndercutOptionsSheet(
     val pdfUndercutDiaInside by vm.pdfUndercutDiaInside.collectAsState()
     val pdfUndercutShadeLiners by vm.pdfUndercutShadeLiners.collectAsState()
     val pdfUndercutSplitAtLinerEdge by vm.pdfUndercutSplitAtLinerEdge.collectAsState()
+    val pdfUndercutTotalRail by vm.pdfUndercutTotalRail.collectAsState()
     val pdfFractionStyle by vm.pdfFractionStyle.collectAsState()
     val pdfThreadSlant by vm.pdfThreadSlant.collectAsState()
     val pdfThreadDensity by vm.pdfThreadDensity.collectAsState()
@@ -1894,6 +1906,14 @@ internal fun UndercutOptionsSheet(
                 checked = pdfUndercutSplitAtLinerEdge,
                 onCheckedChange = { vm.setPdfUndercutSplitAtLinerEdge(it) },
                 testTag = "pdf_undercut_split_at_liner_edge",
+            )
+            Spacer(Modifier.height(12.dp))
+            UndercutTotalRailRow(
+                checked = effectiveUndercutTotalRail(undercutRecord.showTotalRail, pdfUndercutTotalRail),
+                followsDefault = undercutRecord.showTotalRail == null,
+                onCheckedChange = { vm.setUndercutShowTotalRail(it) },
+                testTag = "pdf_undercut_total_rail",
+                enabled = undercutRecord.railStyle == UndercutRailStyle.CHAIN,
             )
             if (printSections.size >= 2) {
                 Spacer(Modifier.height(12.dp))
