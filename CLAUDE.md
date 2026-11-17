@@ -217,8 +217,8 @@ bolts from the first SEAM row only. See `docs/contracts/CouplerBoltSlot.md`.
 
 ### Shaft-end holes are reference features, printed as footer text
 `ShaftSpec.aftEndHoles`/`fwdEndHoles` (`ShaftEndHoles` — draw-plate count, thread size, bolt
-circle Ø; puller-hole thread size — NO depth, on-device ruling: the shop never measures it) are the tapped holes in each END FACE (on-device
-request: the foreman hand-wrote "4 holes 1 1/4 NC on 4 1/2 B.C." beside the FWD end). They belong
+circle Ø; NO depth, on-device ruling: the shop never measures it; NO puller holes, on-device ruling:
+those are in the propeller, not the shaft) are the tapped holes in each END FACE (on-device request: the foreman hand-wrote "4 holes 1 1/4 NC on 4 1/2 B.C." beside the FWD end). They belong
 to the shaft end, not to a component, so they are entered on the start card's "Shaft ends" section
 (no carousel card, no Add dialog — outside the add-dialog-parity invariant) and written through
 `setEndHoles(end, holes, target)`. They **never** affect OAL, resolve, collision or the drawing;

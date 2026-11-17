@@ -1756,7 +1756,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Replaces [end]'s draw-plate / puller hole record ([ShaftEndHoles]) on [target], verbatim.
+     * Replaces [end]'s draw-plate hole record ([ShaftEndHoles]) on [target], verbatim.
      * A reference feature: nothing else in the spec moves.
      */
     fun setEndHoles(end: ShaftEnd, holes: ShaftEndHoles, target: SpecTarget = SpecTarget.ORIGINAL) {

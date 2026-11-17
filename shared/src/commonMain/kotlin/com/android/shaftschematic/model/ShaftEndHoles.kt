@@ -3,8 +3,7 @@ package com.android.shaftschematic.model
 import kotlinx.serialization.Serializable
 
 /**
- * The tapped holes in ONE end face of the shaft — the draw-plate bolt pattern and the puller's
- * center hole (on-device request: the foreman hand-wrote "4 holes 1 1/4 NC on 4 1/2 B.C." beside
+ * The tapped holes in ONE end face of the shaft — the draw-plate bolt pattern (on-device request: the foreman hand-wrote "4 holes 1 1/4 NC on 4 1/2 B.C." beside
  * the FWD end of a printed schematic, and the app had nowhere to put it).
  *
  * A **reference feature**, the coupler-bolt-slot posture: it never affects OAL, coverage, body
@@ -13,7 +12,9 @@ import kotlinx.serialization.Serializable
  * shaft END, not to whatever component sits there, so it is entered on the start card and survives
  * any edit of the end taper or body.
  *
- * Every field is typed and stored verbatim (golden rule). The thread sizes are free text printed
+ * Puller holes are NOT here: they are in the propeller, not the shaft (on-device ruling).
+ *
+ * Every field is typed and stored verbatim (golden rule). The thread size is free text printed
  * exactly as typed (`1 1/4" NC`, `1 1/4-7 UNC`, `M30`) — a thread callout converted to another
  * unit stops meaning anything, the metric-designation rule. The bolt circle is canonical mm and
  * prints in the document unit (dual when the document is dual). There is no depth: the shop
@@ -28,23 +29,14 @@ data class ShaftEndHoles(
     val drawPlateSize: String = "",
     /** Draw-plate bolt circle Ø (mm); 0 = not given. */
     val drawPlateBoltCircleMm: Float = 0f,
-    /** Puller (center) hole thread size, verbatim. */
-    val pullerSize: String = "",
 ) {
     /** True when any draw-plate value is given — the line prints, and the start card section opens. */
     val hasDrawPlate: Boolean
         get() = drawPlateCount > 0 || drawPlateSize.isNotBlank() || drawPlateBoltCircleMm > 0f
 
-    /** True when any puller-hole value is given. */
-    val hasPuller: Boolean
-        get() = pullerSize.isNotBlank()
-
-    /** The draw-plate values cleared, the puller hole kept. */
+    /** The draw-plate values cleared. */
     fun withoutDrawPlate(): ShaftEndHoles =
         copy(drawPlateCount = 0, drawPlateSize = "", drawPlateBoltCircleMm = 0f)
-
-    /** The puller-hole values cleared, the draw plate kept. */
-    fun withoutPuller(): ShaftEndHoles = copy(pullerSize = "")
 }
 
 /** Which end face of the shaft an [ShaftEndHoles] record belongs to. */

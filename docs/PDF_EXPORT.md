@@ -2,7 +2,7 @@
 Version: v0.5.x
 Last updated: 2026-11-16 — "Footer columns": the job's notes print under the job block on a
 sheet whose "Notes on this sheet" switch is on, and each end column carries that end face's
-draw-plate / puller hole lines (`ShaftSpec.aftEndHoles`/`fwdEndHoles`, on-device request).
+draw-plate hole line (`ShaftSpec.aftEndHoles`/`fwdEndHoles`, on-device request).
 2026-11-11 — §5.3: a liner and a shown body touching it at the same Ø print the
 value once with a leader to each (`joinSharedOdCallouts`, on-device request).
 2026-11-09 — §5.3: an Angle-mode body blend prints its STORED angle (`45°`) and
@@ -147,10 +147,10 @@ a column whose widest line would wrap takes room its neighbour is not using (`fo
 
 **End-face holes.** Each end column closes its end's taper and thread lines with that end face's
 tapped holes (`ShaftEndHoles`, entered on the start card's "Shaft ends"), through ONE builder,
-`endHoleFooterLines`: `Draw plate: 4 holes 1 1/4" NC on 4 1/2" B.C.` and
-`Puller hole: 1 1/2" NC` (no depth — the shop never measures it), each line built only from the parts that are given and printed
-only when one is. Thread sizes print verbatim; the bolt circle prints in the document unit, dual
-when the document is. A blank draft keeps the labels and rules the values. A reference
+`endHoleFooterLines`: `Draw plate: 4 holes 1 1/4" NC on 4 1/2" B.C.` (no depth — the shop never
+measures it; no puller holes — those are in the propeller), built only from the parts that are
+given and printed only when one is. The thread size prints verbatim; the bolt circle prints in the document unit, dual
+when the document is. A blank draft keeps the label and rules the value. A reference
 feature: nothing draws on the shaft and nothing reaches OAL, resolve or collision.
 
 **Notes.** The job's notes (start card) print under the middle column's Side badge — the first

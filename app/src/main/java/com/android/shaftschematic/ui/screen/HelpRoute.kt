@@ -448,7 +448,7 @@ internal val helpSections: List<HelpSection> = listOf(
                     "(OAL) and the shaft diameter — the bare shaft between your components — and " +
                     "save each with the keyboard's Done key, by moving to the next field, or " +
                     "with the green ✓ above the cards (the red ✗ puts the old value back). Shaft " +
-                    "ends holds each end face's draw plate and puller holes, which print in that " +
+                    "ends holds each end face's draw plate holes, which print in that " +
                     "end's footer column. Under " +
                     "them, fill in the job number, customer, vessel, item, shaft position and " +
                     "notes; each sheet's PDF options choose whether it prints the notes. The " +

@@ -31,13 +31,13 @@ import com.android.shaftschematic.util.toMmOrNull
 
 /**
  * The start card's "Shaft ends" section: the tapped holes in each end face — the draw-plate bolt
- * pattern and the puller's center hole ([ShaftEndHoles], on-device request). They belong to the
- * shaft END, not to the taper or body that sits there, which is why they live on the start card.
- * Each end has two checkboxes, "Draw plate holes" and "Puller hole", that open their fields; a
- * record holding values keeps its box ticked, and unticking clears that part (one undo step).
+ * pattern ([ShaftEndHoles], on-device request; puller holes are in the propeller, so there are
+ * none here). They belong to the shaft END, not to the taper or body that sits there, which is why
+ * they live on the start card. Each end has a "Draw plate holes" checkbox that opens its fields; a
+ * record holding values keeps its box ticked, and unticking clears them (one undo step).
  *
  * Every value commits on its own like the start card's other fields and is stored verbatim:
- * the thread sizes as typed text, the bolt circle in the document unit. No depth — the shop records
+ * the thread size as typed text, the bolt circle in the document unit. No depth — the shop records
  * a hole's size, count and bolt circle only. A blank field clears its value ("not given"). They
  * print only as lines in that end's footer column.
  */
@@ -105,21 +105,6 @@ private fun EndHolesBlock(
             onChange(holes.copy(drawPlateBoltCircleMm = it))
         }
     }
-
-    var pullerTick by remember(end) { mutableStateOf(false) }
-    val pullerOpen = pullerTick || holes.hasPuller
-    EndHoleGateRow(PULLER_GATE_LABEL, pullerOpen, "end_${tag}_puller") { on ->
-        pullerTick = on
-        if (!on && holes.hasPuller) onChange(holes.withoutPuller())
-    }
-    if (pullerOpen) {
-        CommitTextField(
-            label = "Thread size",
-            initialText = holes.pullerSize,
-            onCommit = { onChange(holes.copy(pullerSize = it)) },
-            modifier = Modifier.testTag("end_${tag}_puller_size"),
-        )
-    }
 }
 
 /** A length in the document unit; 0 shows an empty box, and a cleared box commits 0 ("not given"). */
@@ -165,4 +150,3 @@ internal const val SHAFT_ENDS_TITLE = "Shaft ends"
 internal const val SHAFT_ENDS_CAPTION =
     "Tapped holes in the end faces. They print in that end's footer column."
 internal const val DRAW_PLATE_GATE_LABEL = "Draw plate holes"
-internal const val PULLER_GATE_LABEL = "Puller hole"

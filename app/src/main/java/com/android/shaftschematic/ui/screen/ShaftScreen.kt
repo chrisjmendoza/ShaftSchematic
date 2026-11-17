@@ -255,7 +255,7 @@ fun ShaftScreen(
     onSetOverallLengthMm: (Float) -> Unit,
     /** The start card's shaft-wide bare-shaft Ø (mm, verbatim; ≤ 0 clears) — keeps section overrides. */
     onSetShaftDiaMm: (Float) -> Unit,
-    /** The start card's "Shaft ends" draw-plate / puller holes for one end, verbatim. */
+    /** The start card's "Shaft ends" draw-plate holes for one end, verbatim. */
     onSetEndHoles: (ShaftEnd, ShaftEndHoles) -> Unit,
     onSelectComponentById: (String?) -> Unit,
 

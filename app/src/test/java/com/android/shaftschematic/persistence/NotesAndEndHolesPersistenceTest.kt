@@ -29,7 +29,6 @@ class NotesAndEndHolesPersistenceTest {
     private val choices = mapOf("SCHEMATIC" to true)
     private val holes = ShaftEndHoles(
         drawPlateCount = 4, drawPlateSize = "1 1/4\" NC", drawPlateBoltCircleMm = 114.3f,
-        pullerSize = "1 1/2-6 UNC",
     )
     private val spec = ShaftSpec(overallLengthMm = 2000f).withEndHoles(ShaftEnd.FWD, holes)
 

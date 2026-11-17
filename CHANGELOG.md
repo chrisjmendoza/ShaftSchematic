@@ -18,7 +18,7 @@ blank draft prints both boxes empty. When both rows cannot fit beside "TIR's tak
 large footer text size, or the coupling face on — the spark test drops to its own line under the
 dye pen row instead of running into the coupling face. The wear sheet's own form is unchanged.
 
-### feat(sheets): project notes print on the sheet; shaft ends carry draw-plate and puller holes
+### feat(sheets): project notes print on the sheet; shaft ends carry draw-plate holes
 
 On-device request, from a printed schematic the foreman marked up by hand ("Partially clad
 taper", where the fiberglass was, and "4 holes 1 1/4 NC on 4 1/2" beside the FWD end).
@@ -29,10 +29,10 @@ taper", where the fiberglass was, and "4 holes 1 1/4 NC on 4 1/2" beside the FWD
   switch is turned on; greyed while the job has no notes. Stored as `sheet_notes_sheets`; a blank
   draft prints none. The footer band grows to hold the note rows.
 - **Shaft ends.** A "Shaft ends" section on the start card holds each end face's draw-plate holes
-  (count, thread size, bolt circle Ø) and puller hole (thread size), behind a
-  checkbox each. They print as lines in that end's footer column under its taper and thread —
-  `Draw plate: 4 holes 1 1/4" NC on 4 1/2" B.C.`, `Puller hole: 1 1/2" NC` —
-  built from whatever is given. Thread sizes print as typed; lengths in the document unit. A
+  (count, thread size, bolt circle Ø) behind a checkbox. They print as a line in that end's footer
+  column under its taper and thread — `Draw plate: 4 holes 1 1/4" NC on 4 1/2" B.C.` — built from
+  whatever is given. The thread size prints as typed; the bolt circle in the document unit. No
+  depth (the shop never measures it) and no puller holes (those are in the propeller). A
   reference feature stored on the drawing (`ShaftSpec.aftEndHoles`/`fwdEndHoles`), so the Final
   drawing, templates and mate duplicates carry it; nothing is drawn on the shaft.
 

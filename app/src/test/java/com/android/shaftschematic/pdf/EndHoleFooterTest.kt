@@ -12,7 +12,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The shaft ends' draw-plate and puller holes ([ShaftEndHoles]) print as lines in their end's
+ * The shaft ends' draw-plate holes ([ShaftEndHoles]) print as lines in their end's
  * footer column, built from the parts that are given, and print nothing when nothing is.
  */
 class EndHoleFooterTest {
@@ -28,7 +28,6 @@ class EndHoleFooterTest {
         drawPlateCount = 4,
         drawPlateSize = "1 1/4\" NC",
         drawPlateBoltCircleMm = 4.5f * inch,
-        pullerSize = "1 1/2\" NC",
     )
 
     private fun spec(aft: ShaftEndHoles = ShaftEndHoles(), fwd: ShaftEndHoles = ShaftEndHoles()) = ShaftSpec(
@@ -39,12 +38,11 @@ class EndHoleFooterTest {
     )
 
     @Test
-    fun `a full record prints both lines in its own end's column, verbatim sizes`() {
+    fun `a full record prints its line in its own end's column, verbatim size`() {
         val cols = buildFooterEndColumns(spec(fwd = fwdHoles), UnitSystem.INCHES, cfg)
 
         assertTrue(cols.fwdLines.toString(), "Draw plate: 4 holes 1 1/4\" NC on 4 1/2\" B.C." in cols.fwdLines)
-        assertTrue(cols.fwdLines.toString(), "Puller hole: 1 1/2\" NC" in cols.fwdLines)
-        assertFalse(cols.aftLines.any { it.startsWith(FOOTER_DRAW_PLATE_LABEL) || it.startsWith(FOOTER_PULLER_HOLE_LABEL) })
+        assertFalse(cols.aftLines.any { it.startsWith(FOOTER_DRAW_PLATE_LABEL) })
     }
 
     @Test
@@ -56,10 +54,10 @@ class EndHoleFooterTest {
 
     @Test
     fun `only the given parts print`() {
-        val partial = ShaftEndHoles(drawPlateCount = 1, drawPlateSize = "M30", pullerSize = "M20")
+        val partial = ShaftEndHoles(drawPlateCount = 1, drawPlateSize = "M30")
         val cols = buildFooterEndColumns(spec(aft = partial), UnitSystem.INCHES, cfg)
 
-        assertEquals(listOf("Draw plate: 1 hole M30", "Puller hole: M20"), cols.aftLines)
+        assertEquals(listOf("Draw plate: 1 hole M30"), cols.aftLines)
     }
 
     @Test
@@ -80,7 +78,6 @@ class EndHoleFooterTest {
     fun `a blank draft keeps the labels and rules the values`() {
         val cols = buildFooterEndColumns(spec(fwd = fwdHoles), UnitSystem.INCHES, cfg, blankValues = true)
         assertTrue(FOOTER_DRAW_PLATE_LABEL in cols.fwdLines)
-        assertTrue(FOOTER_PULLER_HOLE_LABEL in cols.fwdLines)
     }
 
     @Test

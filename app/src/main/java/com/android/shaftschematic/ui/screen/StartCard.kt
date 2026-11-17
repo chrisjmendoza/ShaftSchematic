@@ -70,7 +70,7 @@ import com.android.shaftschematic.util.toMmOrNull
  * exactly as typed — or None, which leaves the date off. The chips commit on tap. Whether a given
  * sheet prints that date is its own per-job switch on its PDF options ([SheetDateOnSheetRow]).
  *
- * **Shaft ends** holds each end face's draw-plate and puller holes ([ShaftEndsSection]), written
+ * **Shaft ends** holds each end face's draw-plate holes ([ShaftEndsSection]), written
  * through [onSetEndHoles] to the hosting editor's drawing like the two geometry fields above.
  *
  * The geometry is whichever drawing the hosting editor names; the caller binds [spec] and the two

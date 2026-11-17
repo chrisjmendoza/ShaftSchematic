@@ -609,17 +609,15 @@ data class FooterColumns(
 
 /** Label of an end face's draw-plate holes line. */
 const val FOOTER_DRAW_PLATE_LABEL = "Draw plate:"
-/** Label of an end face's puller hole line. */
-const val FOOTER_PULLER_HOLE_LABEL = "Puller hole:"
 
 /**
- * Footer lines for ONE end face's tapped holes ([ShaftEndHoles]) — a draw-plate line and a puller
- * hole line, each only when something on it is given (on-device request: "4 holes 1 1/4 NC on
- * 4 1/2 B.C." hand-written beside the FWD end). Each line is built from the parts that are set, in
- * the shop's order: `Draw plate: 4 holes 1 1/4" NC on 4 1/2" B.C.` and `Puller hole: 1 1/2" NC`.
- * The thread sizes print verbatim; the bolt circle prints in the document unit (dual when the
- * document is). [line] is the caller's label/value joiner,
- * so a blank draft keeps the label and rules the value like every other spec line.
+ * Footer lines for ONE end face's tapped holes ([ShaftEndHoles]) — the draw-plate line, only when
+ * something on it is given (on-device request: "4 holes 1 1/4 NC on 4 1/2 B.C." hand-written beside
+ * the FWD end), built from the parts that are set in the shop's order:
+ * `Draw plate: 4 holes 1 1/4" NC on 4 1/2" B.C.`. No puller hole line — puller holes are in the
+ * propeller, not the shaft (on-device ruling). The thread size prints verbatim; the bolt circle
+ * prints in the document unit (dual when the document is). [line] is the caller's label/value
+ * joiner, so a blank draft keeps the label and rules the value like every other spec line.
  */
 internal fun endHoleFooterLines(
     holes: ShaftEndHoles,
@@ -637,7 +635,6 @@ internal fun endHoleFooterLines(
             },
         ).joinToString(" ")
     })
-    if (holes.hasPuller) add(line(FOOTER_PULLER_HOLE_LABEL) { holes.pullerSize })
 }
 
 /** Clocking note under a cross-drilled hole's lines; null when the shaft has no keyway to clock against. */
