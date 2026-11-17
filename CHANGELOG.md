@@ -11,8 +11,8 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 ### feat(shaft-ends): the draw-plate thread size carries an NC | NF toggle
 
 On-device request: the size is typed bare ("1 1/4") and the sheet should read `1 1/4" NC`. The
-Thread size box on the start card's Shaft ends section ends in an NC | NF button (default NC, a tap
-flips it). The printed line adds the inch mark after a bare number on an inch drawing and the series
+Thread size box on the start card's Shaft ends section ends in an NC | NF selector — both options
+shown, the chosen one filled (default NC). The printed line adds the inch mark after a bare number on an inch drawing and the series
 after the size — `Draw plate: 4 holes 1 1/4" NC on 4 1/2" B.C.`. A size that already names its
 series (`1 1/4-7 UNC`) or a metric one (`M30`) prints as typed, and the typed text itself is never
 changed.

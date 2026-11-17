@@ -1,6 +1,14 @@
 package com.android.shaftschematic.ui.screen
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -9,7 +17,6 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -19,8 +26,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.ShaftEnd
 import com.android.shaftschematic.model.ShaftEndHoles
@@ -118,19 +123,43 @@ private fun EndHolesBlock(
 }
 
 /**
- * The NC | NF toggle at the end of the thread-size box: shows the current series and flips it on a
- * tap, committing at once (one undo step). The sheet prints the size with this series after it.
+ * The NC | NF selector at the end of the thread-size box: BOTH options side by side, the chosen one
+ * filled and the other outlined, so it reads as a choice (on-device report: a lone "NC" label did
+ * not look tappable). A tap on either selects it and commits at once (one undo step). The sheet
+ * prints the size with this series after it.
  */
 @Composable
 private fun ThreadSeriesToggle(series: ThreadSeries, tag: String, onChange: (ThreadSeries) -> Unit) {
-    val next = if (series == ThreadSeries.NC) ThreadSeries.NF else ThreadSeries.NC
-    TextButton(
-        onClick = { onChange(next) },
-        modifier = Modifier.testTag(tag).semantics {
-            contentDescription = "Thread series ${series.name}. Tap for ${next.name}."
-        },
+    val shape = RoundedCornerShape(8.dp)
+    Row(
+        modifier = Modifier
+            .padding(end = 8.dp)
+            .clip(shape)
+            .border(1.dp, MaterialTheme.colorScheme.outline, shape)
+            .testTag(tag),
     ) {
-        Text(series.name, style = MaterialTheme.typography.labelLarge)
+        ThreadSeries.values().forEach { option ->
+            val selected = option == series
+            Box(
+                modifier = Modifier
+                    .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
+                    .selectable(selected = selected, role = Role.RadioButton) {
+                        if (!selected) onChange(option)
+                    }
+                    .heightIn(min = 36.dp)
+                    .widthIn(min = 44.dp)
+                    .padding(horizontal = 10.dp)
+                    .testTag("${tag}_${option.name.lowercase()}"),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    option.name,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (selected) MaterialTheme.colorScheme.onPrimary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 
