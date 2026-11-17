@@ -940,6 +940,17 @@ internal val helpSections: List<HelpSection> = listOf(
                 manualAnchor = "recording-stations",
             ),
             HelpTopic(
+                "Section sheets",
+                "One stretch of the shaft printed as its own sheet — the FWD end from the seal " +
+                    "liner to the thread, say. On the schematic or Final PDF preview, the row " +
+                    "under the title bar picks \"Whole shaft\" or a section; \"Sections…\" " +
+                    "adds one: a name and the parts it runs from and to. The parts draw larger, " +
+                    "with a break where the shaft carries on, and keep the schematic's own " +
+                    "dimensions — one from a S.E.T. off the sheet runs open into the break. " +
+                    "Print and Export follow the sheet on screen; sections are saved with the job.",
+                manualAnchor = "documents-sections",
+            ),
+            HelpTopic(
                 "Shade in Components",
                 "The PDF option group that fills bodies, tapers, or liners with light grey " +
                     "instead of leaving them outlined. It is the default for each kind; a " +
