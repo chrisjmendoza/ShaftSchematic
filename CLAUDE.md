@@ -640,7 +640,11 @@ applied — <reason>") until the next edit of that field (a focus change alone d
 silent swap of a typed value is the violation
 (on-device report). **A liner edge a cut has crossed into the body is not a datum**
 (`undercutLinerEdgeBuried`: a cut strictly spanning the edge — one floor runs across it, so there
-is no step; a cut that ends AT the edge leaves the step and the edge stays): the card disables
+is no step; a cut that ends AT the edge leaves the step and the edge stays — "crossed" in METAL: every
+burial test reads `undercutMachinedSpans`, each measured cut trimmed to where its Ø is below the
+surface, so a cut typed past a liner end onto smaller stock its floor stands above does not bury
+the edge, and the card's "isn't smaller than the shaft" check reads the HIGHEST surface a cut
+spans (`UndercutFloors.highestSurfaceDiaMm`) — on-device report): the card disables
 that Liner chip, `effectiveUndercutReference` falls back DISPLAY-ONLY to the nearer S.E.T.
 (stored reference and canonical untouched, the missing-liner posture), a new cut seeds from the
 S.E.T., and the printed chain gets a node at the buried edge so the overhanging cut's shoulder is

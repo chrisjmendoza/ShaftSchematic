@@ -8,6 +8,18 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-16
 
+### fix(undercut): a cut typed past a liner's end onto smaller stock reads as the cut it is
+
+On-device report (Pacific Warrior STBD aft liner): the foreman's last cut, 8.920" × 20 5/16",
+ends 1/16" past the recorded end of the 8.999" liner, onto 8 1/2" bare shaft. Its card warned
+"Ø isn't smaller than the shaft here (Ø 8 1/2 in)" and disabled the Liner FWD datum ("Liner FWD
+edge is cut into the body"). Neither was true: the cut is 0.079" deep across the liner and, its
+floor standing above the bare shaft, removes nothing past the liner's end. The Ø check now reads
+the highest surface the cut spans (still warning when a cut removes nothing anywhere); a liner
+edge counts as cut into the body only where a cut actually removes metal past it; and such a cut
+now counts toward the sheet's deepest cut for the drawn-depth scale. The drawing was already
+right. Typed values are untouched.
+
 ### feat(shaft-ends): the draw-plate thread size carries an NC | NF toggle
 
 On-device request: the size is typed bare ("1 1/4") and the sheet should read `1 1/4" NC`. The

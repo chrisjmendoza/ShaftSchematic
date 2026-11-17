@@ -486,12 +486,39 @@ fun nearestSetReference(
  * step in the silhouette there — the trimmed liner is still a different Ø from the body beside it
  * — so that edge stays a datum and this returns false. [spans] is every cut on the sheet, the one
  * being edited included (its previewed span), since any of them can take the edge away.
+ *
+ * Callers pass [undercutMachinedSpans], not the typed spans: a cut whose floor stands above the
+ * body past the edge removes nothing there, so it ends at the edge in metal however far its typed
+ * length runs on, and the edge still stands.
  */
 fun undercutLinerEdgeBuried(
     edgeMm: Float,
     spans: List<UndercutSpanMm>,
     epsMm: Float = UNDERCUT_TOUCH_EPS_MM,
 ): Boolean = spans.any { it.startMm < edgeMm - epsMm && it.endMm > edgeMm + epsMm }
+
+/**
+ * Each cut's span where it actually REMOVES material — the stretch the liner-edge burial rule
+ * ([undercutLinerEdgeBuried]) must read. A measured cut is trimmed to the first and last place its
+ * Ø is below the outer surface [segs] ([notchProfiles]' regions, the very regions the notch draws);
+ * a measured cut that removes nothing anywhere is dropped. An unmeasured cut (Ø 0) keeps its whole
+ * span — nothing says where it stops cutting.
+ *
+ * On-device report: a 8.920" cut typed 1/16" past the FWD end of an 8.999" liner, onto 8 1/2" bare
+ * shaft, read as burying the liner's FWD edge; its floor stands above the bare shaft, so it cuts
+ * nothing past the edge and the step there is still the liner's end.
+ */
+fun undercutMachinedSpans(
+    undercuts: List<Undercut>,
+    segs: List<SurfaceSeg>,
+    oalMm: Float,
+): List<UndercutSpanMm> = undercuts.mapNotNull { u ->
+    val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
+    if (c.isEmpty) return@mapNotNull null
+    if (u.diaMm <= 0f || segs.isEmpty()) return@mapNotNull UndercutSpanMm(u.id, c.startMm, c.endMm)
+    val regions = notchProfiles(segs, c.startMm, c.endMm, u.diaMm)
+    if (regions.isEmpty()) null else UndercutSpanMm(u.id, regions.first().startMm, regions.last().endMm)
+}
 
 /**
  * The edges of the liner `[linerStartMm, linerEndMm]` that [spans] bury
@@ -1536,8 +1563,11 @@ fun deepestUndercutDepthMm(
         val c = clampedById[u.id]
         if (u.diaMm <= 0f || c == null || c.isEmpty || u.id !in topLevelIds) 0f
         else {
+            // A cut counts as long as it removes material SOMEWHERE — its Ø below the highest
+            // surface it spans. Gating on the lowest one zeroed a cut that runs off a liner end
+            // onto smaller stock, though it is cut just as deep across the liner.
             val local = minOuterDiaOver(segs, c.startMm, c.endMm)
-            if (u.diaMm >= local) 0f
+            if (u.diaMm >= maxOuterDiaOver(segs, c.startMm, c.endMm)) 0f
             else (max(sectionRefById[u.id] ?: local, local) - u.diaMm).coerceAtLeast(0f)
         }
     } ?: 0f

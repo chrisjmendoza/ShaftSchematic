@@ -60,6 +60,11 @@ fun effectiveUndercutReference(
     spans: List<UndercutSpanMm> = emptyList(),
     aftSetXMm: Float = 0f,
     fwdSetXMm: Float = 0f,
+    /**
+     * What can bury a liner edge — [undercutMachinedSpans] of the same cuts as [spans], which
+     * stays the typed spans for the parent-cut lookup. Defaults to [spans].
+     */
+    buryingSpans: List<UndercutSpanMm> = spans,
 ): UndercutReference {
     val ref = undercut.authoredReference
     if (isParentUndercutReference(ref)) {
@@ -74,7 +79,7 @@ fun effectiveUndercutReference(
     val liner = linerSpans.firstOrNull { it.id == undercut.referenceLinerId }
         ?: return UndercutReference.AFT_SET
     val edgeMm = if (ref == UndercutReference.LINER_AFT) liner.startMm else liner.endMm
-    return if (spans.isNotEmpty() && undercutLinerEdgeBuried(edgeMm, spans)) {
+    return if (buryingSpans.isNotEmpty() && undercutLinerEdgeBuried(edgeMm, buryingSpans)) {
         nearestSetReference(
             undercut.startFromAftMm, undercut.startFromAftMm + undercut.lengthMm,
             aftSetXMm, fwdSetXMm,
@@ -347,6 +352,15 @@ data class UndercutFloors(
     val fwdFaceAlways: Boolean = false,
     /** Whether the cut carries an entered Ø (a placeholder's floor is symbolic, not a depth). */
     val measured: Boolean = true,
+    /**
+     * The HIGHEST surface the cut is taken against: for a top-level cut the outer envelope's
+     * maximum over its span (a liner's OD where the cut sits on a liner), for a nested one its
+     * parent's true floor. A Ø at or above THIS removes nothing anywhere — what the card's
+     * "isn't smaller than the shaft" warning tests. [surfaceDiaMm] (the minimum) is the wrong
+     * figure there: a cut typed a little past a liner end onto smaller stock is still a cut
+     * (on-device report: 8.920" across an 8.999" liner, 1/16" onto 8 1/2" bare shaft).
+     */
+    val highestSurfaceDiaMm: Float = surfaceDiaMm,
 )
 
 /**
@@ -424,6 +438,7 @@ fun resolveUndercutFloors(
                 aftFaceTopDiaMm = minSurface,
                 fwdFaceTopDiaMm = minSurface,
                 measured = u.diaMm > 0f,
+                highestSurfaceDiaMm = maxOuterDiaOver(segs, span.startMm, span.endMm),
             )
         } else {
             // A face shared with the parent's own shoulder rises to whatever the parent's face

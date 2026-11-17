@@ -92,6 +92,7 @@ import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.SurfaceSeg
+import com.android.shaftschematic.geom.undercutMachinedSpans
 import com.android.shaftschematic.geom.UNDERCUT_DEFAULT_LENGTH_MM
 import com.android.shaftschematic.geom.UNDERCUT_EXAGGERATION_MAX_FRAC
 import com.android.shaftschematic.geom.UNDERCUT_WINDOW_PAD_MM
@@ -446,6 +447,10 @@ fun UndercutRoute(
             val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
             UndercutSpanMm(u.id, c.startMm, c.endMm)
         }.filter { it.endMm > it.startMm }
+    }
+    // Where each cut removes material — what can bury a liner-edge reference.
+    val buryingSpans = remember(undercutRecord, segs, oalMm) {
+        undercutMachinedSpans(undercutRecord.undercuts, segs, oalMm)
     }
     // "Draw to the shaft end" (per-job): a liner strip near an S.E.T. chains out to it and draws
     // on to the shaft's physical end.
@@ -1029,6 +1034,7 @@ fun UndercutRoute(
                             oalMm = oalMm,
                             linerSpans = linerSpans,
                             sheetSpans = spans,
+                            buryingSpans = buryingSpans,
                             linerTitles = linerTitles,
                             aftSetXMm = setPositions.first,
                             fwdSetXMm = setPositions.second,
@@ -1944,15 +1950,19 @@ private fun UndercutListRow(
     unit: UnitSystem,
     oalMm: Float,
     linerSpans: List<UndercutLinerSpan>,
-    /** Every cut on the sheet, render-clamped — what can bury a liner-edge reference. */
+    /** Every cut on the sheet, render-clamped — the parent-cut lookup. */
     sheetSpans: List<UndercutSpanMm>,
+    /** Where each cut on the sheet removes material (`undercutMachinedSpans`) — what can bury a liner edge. */
+    buryingSpans: List<UndercutSpanMm>,
     linerTitles: Map<String, String>,
     aftSetXMm: Float,
     fwdSetXMm: Float,
     onOpen: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    val reference = effectiveUndercutReference(undercut, linerSpans, sheetSpans, aftSetXMm, fwdSetXMm)
+    val reference = effectiveUndercutReference(
+        undercut, linerSpans, sheetSpans, aftSetXMm, fwdSetXMm, buryingSpans = buryingSpans,
+    )
     val refLiner = undercutReferenceLinerFor(undercut, linerSpans, stripLiner = null, oalMm = oalMm)
     val refParent = undercutReferenceParentSpan(undercut, sheetSpans)
     val distanceMm = undercutDisplayedDistanceMm(
