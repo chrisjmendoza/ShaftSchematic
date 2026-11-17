@@ -215,6 +215,17 @@ and both draw sites place every hole off the row's own mapped window through the
 the window reaches neither OAL, body resolution nor collision. The coupling end view counts
 bolts from the first SEAM row only. See `docs/contracts/CouplerBoltSlot.md`.
 
+### Shaft-end holes are reference features, printed as footer text
+`ShaftSpec.aftEndHoles`/`fwdEndHoles` (`ShaftEndHoles` — draw-plate count, thread size, bolt
+circle Ø; puller-hole thread size — NO depth, on-device ruling: the shop never measures it) are the tapped holes in each END FACE (on-device
+request: the foreman hand-wrote "4 holes 1 1/4 NC on 4 1/2 B.C." beside the FWD end). They belong
+to the shaft end, not to a component, so they are entered on the start card's "Shaft ends" section
+(no carousel card, no Add dialog — outside the add-dialog-parity invariant) and written through
+`setEndHoles(end, holes, target)`. They **never** affect OAL, resolve, collision or the drawing;
+they print ONLY as lines in that end's footer column through ONE builder, `endHoleFooterLines`,
+built from the parts given (thread sizes verbatim, lengths in the document unit). Nothing draws
+them on the shaft — do not add a drawn hole or end view without asking.
+
 ### Wear pits are reference features
 Wear pits (`WearRecord.pits` — a `WearPit` "X" marker per pit/dye-failure, small or large) are
 **reference-only**, the same posture as wear spots / coupler bolt slots / runout readings. They
@@ -1820,6 +1831,16 @@ coverage end. Nothing backfills it — not a load, not the first component added
 first-OAL "Shaft diameter" prompt: the diameter field sits under the OAL on the start card, which is
 what the prompt existed to provide.
 See `docs/contracts/OverallLength.md`.
+
+**"Notes on this sheet"** (on-device request: the foreman's notes — "partially clad taper", where
+the fiberglass was — belong on the printed sheet) prints the start card's Notes under the footer
+job block's Side badge (`footerNoteLines`, first row led by `Notes:`). Per job, per sheet, OFF by
+default everywhere: `sheet_notes_sheets` (`SheetDateSheet` name → on), ONE resolver
+`sheetPrintsNotes`, only the footer sheets (`canPrintNotes`: SCHEMATIC, CONSOLIDATED, FINAL), applied
+by the same `ProjectInfo.forSheet(sheet, dateOverrides, notesOverrides)` that blanks
+`ProjectInfo.notes` when off — a footer-sheet site that does not pass the notes overrides prints
+none. Row `SheetNotesOnSheetRow` beside the date row; in the snapshot builder AND combine, not in
+`EditState`; a mate carries the choices, a template and New reset them. Blank drafts print none.
 
 **"Date on sheets"** (project information on the start card; on-device request — the work is not
 always done the day the sheet prints) is per document: `ProjectInfo.dateMode` (`SheetDateMode`

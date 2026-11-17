@@ -23,6 +23,7 @@ import com.android.shaftschematic.model.SlotAuthoredReference
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.printedDateOrNull
+import com.android.shaftschematic.model.ShaftEndHoles
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.Taper
 import com.android.shaftschematic.model.Threads
@@ -220,6 +221,22 @@ fun buildFooterMidColumn(
 }
 
 /**
+ * The footer rows the job's notes print as, under the middle column's Side badge — empty when the
+ * sheet prints none ([ProjectInfo.notes] is blank, which [com.android.shaftschematic.model.forSheet]
+ * makes it on a sheet whose "Notes on this sheet" switch is off). The text is printed as typed: each
+ * typed line is its own row (wrapped to the column like every footer line), the first one led by
+ * `Notes:`; blank lines at either end are dropped, blank lines between are kept as gap rows.
+ */
+fun footerNoteLines(project: ProjectInfo): List<String> {
+    val typed = project.notes.lines().dropWhile { it.isBlank() }.dropLastWhile { it.isBlank() }
+    if (typed.isEmpty()) return emptyList()
+    return typed.mapIndexed { i, line -> if (i == 0) "$FOOTER_NOTES_LABEL $line" else line }
+}
+
+/** The label leading the first notes row. */
+const val FOOTER_NOTES_LABEL = "Notes:"
+
+/**
  * Everything [drawFooter] decides BEFORE it inks: the three columns' lines (already built for
  * the mode and units), where each column starts and how wide it may print, and how tall the
  * band has to be to print every wrapped row at the printed pitch. One plan, two consumers:
@@ -231,6 +248,8 @@ fun buildFooterMidColumn(
 class FooterPlan(
     val cols: FooterColumns,
     val midLines: List<String>,
+    /** The job's notes under the Side badge ([footerNoteLines]); empty on a blank draft. */
+    val noteLines: List<String>,
     val midLeadLines: Int,
     val leftX: Float,
     val midX: Float,
@@ -282,6 +301,7 @@ fun planFooter(
     val leftX  = rectLeft
     val colPad = 6f
     val midLines = buildFooterMidColumn(spec, project, cfg, date, blankValues)
+    val noteLines = if (blankValues) emptyList() else footerNoteLines(project)
 
     val (midX, rightX) = if (blankValues) {
         (rectLeft + width * midFrac) to (rectLeft + width * rightFrac)
@@ -319,12 +339,13 @@ fun planFooter(
     val wrappedMaxLines = maxOf(
         wrapCount(cols.aftLines, leftMaxW),
         wrapCount(cols.fwdLines, rightMaxW),
-        midLeadLines + wrapCount(midLines, midMaxW) + (if (blankValues) 0 else 1),  // +1: Side badge
+        midLeadLines + wrapCount(midLines, midMaxW) + (if (blankValues) 0 else 1) +  // +1: Side badge
+            wrapCount(noteLines, midMaxW),
         1,
     )
     val printedPitch = text.textSize * FOOTER_LINE_FACTOR
     return FooterPlan(
-        cols = cols, midLines = midLines, midLeadLines = midLeadLines,
+        cols = cols, midLines = midLines, noteLines = noteLines, midLeadLines = midLeadLines,
         leftX = leftX, midX = midX, rightX = rightX,
         leftMaxW = leftMaxW, midMaxW = midMaxW, rightMaxW = rightMaxW,
         wrappedMaxLines = wrappedMaxLines,
@@ -544,7 +565,11 @@ internal fun drawFooter(
             footerSideBadgeText(project)?.let { badgeText ->
                 y += lh * 0.35f
                 c.drawText(badgeText, midX, y, footerSideBadgePaint(text))
+                y += lh
             }
+            // The job's notes, under the badge (on-device request: the space under the job block
+            // is usually free). Counted in wrappedMaxLines, so the band already holds them.
+            plan.noteLines.forEach { line -> y = drawFooterLine(line, midX, y, midMaxW) }
         }
     }
 
@@ -581,6 +606,39 @@ data class FooterColumns(
     /** The FWD column opens with a taper block's heading line. */
     val fwdLeadsWithHeading: Boolean = false,
 )
+
+/** Label of an end face's draw-plate holes line. */
+const val FOOTER_DRAW_PLATE_LABEL = "Draw plate:"
+/** Label of an end face's puller hole line. */
+const val FOOTER_PULLER_HOLE_LABEL = "Puller hole:"
+
+/**
+ * Footer lines for ONE end face's tapped holes ([ShaftEndHoles]) — a draw-plate line and a puller
+ * hole line, each only when something on it is given (on-device request: "4 holes 1 1/4 NC on
+ * 4 1/2 B.C." hand-written beside the FWD end). Each line is built from the parts that are set, in
+ * the shop's order: `Draw plate: 4 holes 1 1/4" NC on 4 1/2" B.C.` and `Puller hole: 1 1/2" NC`.
+ * The thread sizes print verbatim; the bolt circle prints in the document unit (dual when the
+ * document is). [line] is the caller's label/value joiner,
+ * so a blank draft keeps the label and rules the value like every other spec line.
+ */
+internal fun endHoleFooterLines(
+    holes: ShaftEndHoles,
+    displayUnits: DisplayUnits,
+    line: (String, () -> String) -> String,
+): List<String> = buildList {
+    val unit = displayUnits.documentUnit
+    val dual = displayUnits.dual
+    if (holes.hasDrawPlate) add(line(FOOTER_DRAW_PLATE_LABEL) {
+        listOfNotNull(
+            holes.drawPlateCount.takeIf { it > 0 }?.let { if (it == 1) "1 hole" else "$it holes" },
+            holes.drawPlateSize.takeIf { it.isNotBlank() },
+            holes.drawPlateBoltCircleMm.takeIf { it > 0f }?.let {
+                "on ${formatLenWithUnitDual(it.toDouble(), unit, dual)} B.C."
+            },
+        ).joinToString(" ")
+    })
+    if (holes.hasPuller) add(line(FOOTER_PULLER_HOLE_LABEL) { holes.pullerSize })
+}
 
 /** Clocking note under a cross-drilled hole's lines; null when the shaft has no keyway to clock against. */
 const val BOLT_HOLE_90_NOTE = "90° from keyway"
@@ -733,6 +791,8 @@ fun buildFooterEndColumns(
     if (cfg.showAftThread && ends.aftThread) {
         getAftEndThread(spec)?.let { th -> aft += threadLines(th) }
     }
+    // The end face's tapped holes belong to that end's column, under its taper and thread.
+    aft += endHoleFooterLines(spec.aftEndHoles, displayUnits, ::line)
 
     val fwd = mutableListOf<String>()
     var fwdTaperBlock = false
@@ -746,6 +806,7 @@ fun buildFooterEndColumns(
     if (cfg.showFwdThread && ends.fwdThread) {
         getFwdEndThread(spec)?.let { th -> fwd += threadLines(th) }
     }
+    fwd += endHoleFooterLines(spec.fwdEndHoles, displayUnits, ::line)
 
     // Cross-drilled coupler bolt holes — the plain coupling end's spec: hole Ø, the distance
     // from the authored face to the hole center, and its clocking against the keyway. Listed

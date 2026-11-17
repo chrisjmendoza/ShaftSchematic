@@ -107,6 +107,8 @@ import com.android.shaftschematic.model.BoltHoleClocking
 import com.android.shaftschematic.model.BoltHoleStyle
 import com.android.shaftschematic.model.SlotAuthoredReference
 import com.android.shaftschematic.model.MM_PER_IN
+import com.android.shaftschematic.model.ShaftEnd
+import com.android.shaftschematic.model.ShaftEndHoles
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.SheetDateMode
@@ -253,6 +255,8 @@ fun ShaftScreen(
     onSetOverallLengthMm: (Float) -> Unit,
     /** The start card's shaft-wide bare-shaft Ø (mm, verbatim; ≤ 0 clears) — keeps section overrides. */
     onSetShaftDiaMm: (Float) -> Unit,
+    /** The start card's "Shaft ends" draw-plate / puller holes for one end, verbatim. */
+    onSetEndHoles: (ShaftEnd, ShaftEndHoles) -> Unit,
     onSelectComponentById: (String?) -> Unit,
 
     // Adds (all mm)
@@ -674,6 +678,7 @@ fun ShaftScreen(
                 onSetSheetDateText = onSetSheetDateText,
                 onSetShaftPosition = onSetShaftPosition,
                 onSetNotes = onSetNotes,
+                onSetEndHoles = onSetEndHoles,
                 showOalDebugLabel = showOalDebugLabel,
                 outerPaddingHorizontal = outerPaddingHorizontal,
             )

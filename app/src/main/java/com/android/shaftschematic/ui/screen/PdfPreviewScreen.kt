@@ -170,6 +170,8 @@ fun PdfPreviewScreen(
     val sheetDateMode by vm.sheetDateMode.collectAsState()
     val sheetDateText by vm.sheetDateText.collectAsState()
     val sheetDateSheets by vm.sheetDateSheets.collectAsState()
+    val sheetNotesSheets by vm.sheetNotesSheets.collectAsState()
+    val notes by vm.notes.collectAsState()
     val shaftPosition by vm.shaftPosition.collectAsState()
     val originalResolved by vm.resolvedComponents.collectAsState()
     val finalResolved by vm.finalResolvedComponents.collectAsState()
@@ -226,13 +228,13 @@ fun PdfPreviewScreen(
     val dateSheet = if (isFinal) SheetDateSheet.FINAL else SheetDateSheet.SCHEMATIC
     val project = remember(
         customer, vessel, shaftPosition, jobNumber, item, sheetDateMode, sheetDateText,
-        sheetDateSheets, drawingLabel,
+        sheetDateSheets, notes, sheetNotesSheets, drawingLabel,
     ) {
         ProjectInfo(
             customer = customer, vessel = vessel, side = shaftPosition,
             jobNumber = jobNumber, item = item,
-            dateMode = sheetDateMode, dateText = sheetDateText, drawingLabel = drawingLabel,
-        ).forSheet(dateSheet, sheetDateSheets)
+            dateMode = sheetDateMode, dateText = sheetDateText, notes = notes, drawingLabel = drawingLabel,
+        ).forSheet(dateSheet, sheetDateSheets, sheetNotesSheets)
     }
     val options = remember(pdfExportMode, pdfBlankDraft, pdfBlankDiaCallouts) {
         PdfExportOptions(
@@ -268,9 +270,9 @@ fun PdfPreviewScreen(
                 project = ProjectInfo(
                     customer = customer, vessel = vessel,
                     side = shaftPosition, jobNumber = jobNumber, item = item,
-                    dateMode = sheetDateMode, dateText = sheetDateText,
+                    dateMode = sheetDateMode, dateText = sheetDateText, notes = notes,
                     drawingLabel = drawingLabel,
-                ).forSheet(dateSheet, sheetDateSheets),
+                ).forSheet(dateSheet, sheetDateSheets, sheetNotesSheets),
                 options = PdfExportOptions(
                     mode = pdfExportMode,
                     blankValues = pdfBlankDraft,
@@ -965,6 +967,12 @@ internal fun PdfOptionsSheet(
         // follows the one Final switch.
         Spacer(Modifier.height(8.dp))
         SheetDateOnSheetRow(
+            vm = vm,
+            sheet = if (showFinalRunoutBubbles) SheetDateSheet.FINAL else SheetDateSheet.SCHEMATIC,
+        )
+        // Per job: whether this sheet prints the job's notes, under the footer's job block.
+        Spacer(Modifier.height(8.dp))
+        SheetNotesOnSheetRow(
             vm = vm,
             sheet = if (showFinalRunoutBubbles) SheetDateSheet.FINAL else SheetDateSheet.SCHEMATIC,
         )

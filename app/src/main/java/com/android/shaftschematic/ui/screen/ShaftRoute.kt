@@ -425,6 +425,7 @@ fun ShaftRoute(
         // The start card's shaft-wide Ø: keeps every section override (the auto-body card's
         // "All auto sections" below is the one that clears them).
         onSetShaftDiaMm = { d -> vm.setShaftWideAutoBodyDiaMm(d, target) },
+        onSetEndHoles = { end, holes -> vm.setEndHoles(end, holes, target) },
         onSelectComponentById = vm::selectComponentById,
 
         onAddBody   = { s, l, d, ref, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd, bAngles ->

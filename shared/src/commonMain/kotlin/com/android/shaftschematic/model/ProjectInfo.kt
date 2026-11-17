@@ -40,6 +40,12 @@ data class ProjectInfo(
     val dateMode: SheetDateMode = SheetDateMode.TODAY,
     /** The typed date under [SheetDateMode.CUSTOM], printed verbatim; the other modes ignore it. */
     val dateText: String = "",
+    /**
+     * The job's notes as THIS sheet prints them, verbatim (golden rule — line breaks kept), under
+     * the footer's job block. Blank prints nothing; [forSheet] blanks it on a sheet whose "Notes on
+     * this sheet" switch is off, so a composer never decides on its own whether notes print.
+     */
+    val notes: String = "",
 )
 
 /**
@@ -126,5 +132,29 @@ fun sheetPrintsDate(sheet: SheetDateSheet, overrides: Map<String, Boolean>): Boo
  * export site builds its composer's `ProjectInfo` through this. A blank draft rules its "Date:"
  * line either way.
  */
-fun ProjectInfo.forSheet(sheet: SheetDateSheet, overrides: Map<String, Boolean>): ProjectInfo =
-    if (sheetPrintsDate(sheet, overrides)) this else copy(dateMode = SheetDateMode.NONE)
+fun ProjectInfo.forSheet(
+    sheet: SheetDateSheet,
+    overrides: Map<String, Boolean>,
+    notesOverrides: Map<String, Boolean> = emptyMap(),
+): ProjectInfo {
+    val dated = if (sheetPrintsDate(sheet, overrides)) this else copy(dateMode = SheetDateMode.NONE)
+    return if (sheetPrintsNotes(sheet, notesOverrides) || dated.notes.isEmpty()) dated else dated.copy(notes = "")
+}
+
+/**
+ * The sheets that can print the job's notes: the ones that carry the three-column footer (the
+ * schematic, the consolidated sheet and the Final tab's schematic sheets), where the notes go under
+ * the job block (on-device request: the foreman's hand notes — "partially clad taper", where the
+ * fiberglass was — belong on the printed sheet). The runout, wear and undercut sheets have no such
+ * footer; the wear and undercut sheets keep their own hand-written Notes rule.
+ */
+val SheetDateSheet.canPrintNotes: Boolean
+    get() = this == SheetDateSheet.SCHEMATIC || this == SheetDateSheet.CONSOLIDATED || this == SheetDateSheet.FINAL
+
+/**
+ * Whether [sheet] prints the job's notes: the job's own "Notes on this sheet" choice in
+ * [overrides] (keyed by enum name), OFF when it has none — printed content is opt-in. A sheet that
+ * cannot print notes ([canPrintNotes]) never does. The ONE resolution behind [forSheet].
+ */
+fun sheetPrintsNotes(sheet: SheetDateSheet, overrides: Map<String, Boolean>): Boolean =
+    sheet.canPrintNotes && overrides[sheet.name] == true

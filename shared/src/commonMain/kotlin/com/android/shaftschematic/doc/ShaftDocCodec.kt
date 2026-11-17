@@ -97,6 +97,13 @@ object ShaftDocCodec {
          */
         @SerialName("sheet_date_sheets")
         val sheetDateSheets: Map<String, Boolean> = emptyMap(),
+        /**
+         * The job's "Notes on this sheet" choices — `SheetDateSheet` name → whether that sheet
+         * prints [notes] under its footer's job block. Absent in older files → empty, which prints
+         * notes on no sheet (`sheetPrintsNotes`). Additive + defaulted: no version bump needed.
+         */
+        @SerialName("sheet_notes_sheets")
+        val sheetNotesSheets: Map<String, Boolean> = emptyMap(),
         @SerialName("shaft_position")
         val shaftPosition: ShaftPosition = ShaftPosition.OTHER,
         val notes: String = "",
@@ -191,6 +198,7 @@ object ShaftDocCodec {
         val sheetDateMode: SheetDateMode,
         val sheetDateText: String,
         val sheetDateSheets: Map<String, Boolean>,
+        val sheetNotesSheets: Map<String, Boolean>,
         val shaftPosition: ShaftPosition,
         val notes: String,
         val spec: ShaftSpec,
@@ -307,6 +315,7 @@ object ShaftDocCodec {
             sheetDateMode = d.sheetDateMode,
             sheetDateText = d.sheetDateText,
             sheetDateSheets = d.sheetDateSheets,
+            sheetNotesSheets = d.sheetNotesSheets,
             shaftPosition = d.shaftPosition,
             notes = d.notes,
             spec = d.spec,
@@ -341,6 +350,7 @@ object ShaftDocCodec {
                     sheetDateMode = doc.sheetDateMode,
                     sheetDateText = doc.sheetDateText,
                     sheetDateSheets = doc.sheetDateSheets,
+                    sheetNotesSheets = doc.sheetNotesSheets,
                     shaftPosition = doc.shaftPosition,
                     notes = doc.notes,
                     spec = normalizedSpec,
@@ -394,6 +404,7 @@ object ShaftDocCodec {
             sheetDateMode = SheetDateMode.TODAY,
             sheetDateText = "",
             sheetDateSheets = emptyMap(),
+            sheetNotesSheets = emptyMap(),
             shaftPosition = ShaftPosition.OTHER,
             notes = "",
             spec = legacy,

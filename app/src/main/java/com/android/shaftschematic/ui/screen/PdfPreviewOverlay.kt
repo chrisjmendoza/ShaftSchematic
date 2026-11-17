@@ -128,6 +128,7 @@ import com.android.shaftschematic.ui.viewmodel.setShowDyePenTest
 import com.android.shaftschematic.ui.viewmodel.setDyePenResult
 import com.android.shaftschematic.model.DyePenResult
 import com.android.shaftschematic.model.SheetDateSheet
+import com.android.shaftschematic.model.canPrintNotes
 import com.android.shaftschematic.ui.viewmodel.setUndercutPageOrientation
 import com.android.shaftschematic.ui.viewmodel.setWearCompactStrips
 import com.android.shaftschematic.ui.viewmodel.setWearShowShaftProfile
@@ -798,6 +799,11 @@ internal fun RunoutWearOptionsSheet(
             if (dateSheet != null) {
                 Spacer(Modifier.height(8.dp))
                 SheetDateOnSheetRow(vm = vm, sheet = dateSheet)
+                // Per job: whether THIS sheet prints the job's notes (footer sheets only).
+                if (dateSheet.canPrintNotes) {
+                    Spacer(Modifier.height(8.dp))
+                    SheetNotesOnSheetRow(vm = vm, sheet = dateSheet)
+                }
             }
             if (undercutPageOrientation != null) undercutContentRows?.invoke()
 

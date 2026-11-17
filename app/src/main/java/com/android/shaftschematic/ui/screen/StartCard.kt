@@ -25,6 +25,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.computeOalWindow
+import com.android.shaftschematic.model.ShaftEnd
+import com.android.shaftschematic.model.ShaftEndHoles
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.SheetDateMode
@@ -68,6 +70,9 @@ import com.android.shaftschematic.util.toMmOrNull
  * exactly as typed — or None, which leaves the date off. The chips commit on tap. Whether a given
  * sheet prints that date is its own per-job switch on its PDF options ([SheetDateOnSheetRow]).
  *
+ * **Shaft ends** holds each end face's draw-plate and puller holes ([ShaftEndsSection]), written
+ * through [onSetEndHoles] to the hosting editor's drawing like the two geometry fields above.
+ *
  * The geometry is whichever drawing the hosting editor names; the caller binds [spec] and the two
  * geometry callbacks to that target, never to a "current target" flag.
  */
@@ -93,6 +98,7 @@ internal fun ShaftStartCard(
     onSetSheetDateText: (String) -> Unit,
     onSetShaftPosition: (ShaftPosition) -> Unit,
     onSetNotes: (String) -> Unit,
+    onSetEndHoles: (ShaftEnd, ShaftEndHoles) -> Unit,
     showOalDebugLabel: Boolean = false,
     outerPaddingHorizontal: Dp = 8.dp,
 ) {
@@ -160,6 +166,8 @@ internal fun ShaftStartCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.testTag(START_CARD_DIA_NOTE_TAG),
             )
+
+            ShaftEndsSection(spec = spec, unit = unit, onSetEndHoles = onSetEndHoles)
 
             HorizontalDivider(Modifier.padding(vertical = 4.dp))
             Text("Project information", style = MaterialTheme.typography.titleSmall)

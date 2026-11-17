@@ -6,6 +6,26 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-11-16
+
+### feat(sheets): project notes print on the sheet; shaft ends carry draw-plate and puller holes
+
+On-device request, from a printed schematic the foreman marked up by hand ("Partially clad
+taper", where the fiberglass was, and "4 holes 1 1/4 NC on 4 1/2" beside the FWD end).
+
+- **Notes on this sheet.** The start card's Notes now print under the footer's job block (below
+  the Side badge) on the schematic, the consolidated sheet and the Final tab's sheets, each by its
+  own per-job switch on its PDF options. Off by default everywhere, so nothing prints until a
+  switch is turned on; greyed while the job has no notes. Stored as `sheet_notes_sheets`; a blank
+  draft prints none. The footer band grows to hold the note rows.
+- **Shaft ends.** A "Shaft ends" section on the start card holds each end face's draw-plate holes
+  (count, thread size, bolt circle Ø) and puller hole (thread size), behind a
+  checkbox each. They print as lines in that end's footer column under its taper and thread —
+  `Draw plate: 4 holes 1 1/4" NC on 4 1/2" B.C.`, `Puller hole: 1 1/2" NC` —
+  built from whatever is given. Thread sizes print as typed; lengths in the document unit. A
+  reference feature stored on the drawing (`ShaftSpec.aftEndHoles`/`fwdEndHoles`), so the Final
+  drawing, templates and mate duplicates carry it; nothing is drawn on the shaft.
+
 ## 2026-11-14
 
 ### ci: refactor branches get a test build
