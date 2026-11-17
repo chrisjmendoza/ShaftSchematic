@@ -1375,9 +1375,10 @@ internal val helpSections: List<HelpSection> = listOf(
                     "• \"Drawn depth\" — on the Undercut Drawing, under \"Drawing settings\". Changes only how " +
                     "deep cuts look, never the printed numbers.\n" +
                     "• \"Draw to the shaft end\" — on the Undercut Drawing, under \"Drawing " +
-                    "settings\", beside the Drawn depth slider. A liner strip whose cuts end within 24 in of the S.E.T. draws " +
-                    "out to the shaft end, and its dimension chain finishes with the run from the " +
-                    "last cut to the S.E.T. Saved with this job.\n" +
+                    "settings\", beside the Drawn depth slider. On unless turned off: a liner strip whose cuts end " +
+                    "within 24 in of the end taper or its S.E.T. draws out to the shaft end, taper " +
+                    "whole, and its dimension chain finishes with the run from the last cut to the " +
+                    "S.E.T. Saved with this job.\n" +
                     "• \"Overall dimension\" — on the Undercut Drawing, under \"Drawing " +
                     "settings\", and in its PDF options. Whether each section prints one " +
                     "dimension from the S.E.T. above the cut lengths; \"Overall dimension to\" " +

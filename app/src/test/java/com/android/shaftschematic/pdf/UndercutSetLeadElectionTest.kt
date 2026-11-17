@@ -54,9 +54,10 @@ class UndercutSetLeadElectionTest {
     private val inch = 25.4f
     private val unit = UnitSystem.INCHES
 
+    // Saved before "Draw to the shaft end" defaulted on; these checks are about a strip that stops short of the shaft end, so the job keeps it off.
     private val doc = ShaftDocCodec.decode(
         requireNotNull(javaClass.classLoader?.getResource("fixtures/undercut_polar_ranger_stbd.shaft")).readText(),
-    )
+    ).let { it.copy(undercutRecord = it.undercutRecord.copy(drawToSet = false)) }
     private val spec = doc.spec
     private val resolved = resolveComponents(spec)
     private val docSpec = spec.withResolvedBodies(resolved)

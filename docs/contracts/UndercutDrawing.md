@@ -223,10 +223,13 @@ data class UndercutRecord(
 )
 ```
 
-- **`drawToSet`** ("Draw to the shaft end", default `false`, additive + defaulted — older files
-  decode off): per-document because it is a FIT for this shaft's geometry (how close a liner sits
-  to a shaft end), never a look pref — the `exaggerationFrac` posture, not `PdfPrefs`. Display and
-  dimensioning only: no stored cut moves.
+- **`drawToSet`** ("Draw to the shaft end", default **`true`**, serialized as
+  `draw_to_shaft_end`): per-document because it is a FIT for this shaft's geometry (how close a
+  liner sits to a shaft end), never a look pref — the `exaggerationFrac` posture, not `PdfPrefs`.
+  Display and dimensioning only: no stored cut moves. It first shipped as `drawToSet` defaulting
+  OFF, and every job saved since stored that `false`; the old key is IGNORED at decode
+  (`ignoreUnknownKeys`), so those jobs take the new default (on-device request: "just default to
+  draw to shaft end") — the retired-key posture of `showLabelOnDrawing`. Do not decode the old key.
 - **`showTotalRail`** ("Overall dimension", default `null`, additive + defaulted — older files
   decode `null`): `null` follows the app default `PdfPrefs.undercutTotalRail` (Settings → PDF Export,
   shipped ON); `true`/`false` pins this job. Dimensioning only: no stored cut moves.
@@ -873,14 +876,20 @@ data class UndercutRecord(
     liner's own span, padded). The padded draw range then gets break room against `segs`.
   - **Draw to the shaft end** (`reachToSetMm`, default `0` = off; on-device request: when a liner
     sits close to a shaft end the shop sketch dimensions the run from the last cut to the S.E.T.,
-    "12 3/4 to the S.E.T."). Every caller passes `undercutSetReachMm(record.drawToSet)` —
+    "12 3/4 to the S.E.T."). The reach is measured to `aftReachFromMm`/`fwdReachFromMm` — the
+    inboard end of the taper each S.E.T. sits on (`undercutSetReachAnchors`, from
+    `endTaperInboardPositionsInMeasureSpace`; the S.E.T. itself where an end has no taper) — so a
+    liner butted against a taper longer than the reach still draws through it to the shaft end
+    instead of printing its window-end break across the taper (on-device report: "the taper is
+    right there but it's cutting it in half"). Every caller passes both anchors; the defaults (the
+    S.E.T.s) exist only for callers with no spec. Every caller passes `undercutSetReachMm(record.drawToSet)` —
     `UNDERCUT_SET_REACH_MM` (609.6 mm = 24 in, the knob) or `0` — and the shaft's S.E.T.
     positions in physical mm (`aftSetMm`/`fwdSetMm`, defaults `0`/`oalMm`: the route passes
     `undercutSetPositions(spec)`, the PDF composer its own `computeSetPositionsInMeasureSpace`
     values, which are the same computation). **The chain ends at the S.E.T.; the draw range runs
     to the physical end.** After the chain range is taken from the liner span + overhang, a chain
     END at or inboard of the FWD S.E.T. and within the reach of it (`chainEnd ≤ fwdSet` and
-    `fwdSet − chainEnd ≤ reach`) moves onto it (`chainEnd = fwdSet`) and the draw end is forced
+    `min(fwdSet, fwdReachFrom) − chainEnd ≤ reach`) moves onto it (`chainEnd = fwdSet`) and the draw end is forced
     to the OAL; the AFT end mirrors it (`chainStart ≥ aftSet`, `chainStart − aftSet ≤ reach` →
     `chainStart = aftSet`, draw start forced to `0`). A FWD thread counted in the OAL therefore
     draws beyond the S.E.T., undimensioned, and the chain's last span is cut-to-S.E.T. A chain

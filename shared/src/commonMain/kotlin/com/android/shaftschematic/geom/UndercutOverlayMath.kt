@@ -683,6 +683,13 @@ private fun nestedSurfacePoints(p: NotchProfile, f: UndercutFloors): List<Surfac
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** AFT/FWD S.E.T. x positions in physical shaft space (mm from the AFT face). */
+fun undercutSetReachAnchors(spec: ShaftSpec): Pair<Float, Float> {
+    val win = computeOalWindow(spec)
+    val at = endTaperInboardPositionsInMeasureSpace(win, spec)
+    return at.aftSETxMm.toFloat() to at.fwdSETxMm.toFloat()
+}
+
+/** The AFT / FWD S.E.T. stations, physical mm — the undercut sheet's datums. */
 fun undercutSetPositions(spec: ShaftSpec): Pair<Float, Float> {
     val win = computeOalWindow(spec)
     val set = computeSetPositionsInMeasureSpace(win, spec)

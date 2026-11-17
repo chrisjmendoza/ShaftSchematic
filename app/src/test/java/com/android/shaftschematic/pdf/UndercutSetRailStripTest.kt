@@ -29,9 +29,10 @@ class UndercutSetRailStripTest {
     private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 10f }
     private val diaText = Paint(text).apply { textSize = 8f }
 
+    // Saved before "Draw to the shaft end" defaulted on; these checks are about a strip that stops short of the shaft end, so the job keeps it off.
     private fun fixture(name: String) = ShaftDocCodec.decode(
         requireNotNull(javaClass.classLoader?.getResource("fixtures/$name")).readText(),
-    )
+    ).let { it.copy(undercutRecord = it.undercutRecord.copy(drawToSet = false)) }
 
     private fun planOf(
         spec: ShaftSpec, record: UndercutRecord, side: UndercutAnchorSide, fromSet: Boolean,

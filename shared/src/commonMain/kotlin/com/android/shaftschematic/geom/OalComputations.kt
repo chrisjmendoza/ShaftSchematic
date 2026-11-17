@@ -85,6 +85,19 @@ private fun findFwdEndTaperForSET(spec: ShaftSpec): Taper? {
 }
 
 /**
+ * The inboard end of the taper each end's S.E.T. sits on, in measurement space — the end of the
+ * taper facing the middle of the shaft — or that end's S.E.T. where it has no end taper. The
+ * undercut sheet's "Draw to the shaft end" reach measures to these, so a strip close to an end
+ * taper draws through it to the shaft end whatever the taper's length.
+ */
+fun endTaperInboardPositionsInMeasureSpace(win: OalWindow, spec: ShaftSpec): SetPositions {
+    val sets = computeSetPositionsInMeasureSpace(win, spec)
+    val aft = findAftEndTaperForSET(spec)?.let { win.toMeasureX((it.startFromAftMm + it.lengthMm).toDouble()) }
+    val fwd = findFwdEndTaperForSET(spec)?.let { win.toMeasureX(it.startFromAftMm.toDouble()) }
+    return SetPositions(aftSETxMm = aft ?: sets.aftSETxMm, fwdSETxMm = fwd ?: sets.fwdSETxMm)
+}
+
+/**
  * Computes AFT/FWD SET positions in measurement space from actual taper geometry.
  *
  * Measurements on the PDF drawing always originate from the SET (small end of taper),

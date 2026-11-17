@@ -150,6 +150,7 @@ import com.android.shaftschematic.geom.undercutPartialOverlapsMm
 import com.android.shaftschematic.geom.undercutPreviewChainMm
 import com.android.shaftschematic.geom.undercutPreviewDrawRange
 import com.android.shaftschematic.geom.undercutSetReachMm
+import com.android.shaftschematic.geom.undercutSetReachAnchors
 import com.android.shaftschematic.geom.withChainMm
 import com.android.shaftschematic.geom.undercutReferenceLabel
 import com.android.shaftschematic.geom.undercutReferenceLinerFor
@@ -621,6 +622,8 @@ fun UndercutWindowDetailOverlay(
     // SET positions for the cards' "Measure From" re-projection. Physical shaft space already
     // (computeOalWindow's measureStartMm is always 0), so no further offset is applied.
     val setPositions = remember(spec) { undercutSetPositions(spec) }
+    // Where "Draw to the shaft end" measures its reach to: the end tapers' inboard ends.
+    val reachAnchors = remember(spec) { undercutSetReachAnchors(spec) }
     val aftSetXMm = setPositions.first
     val fwdSetXMm = setPositions.second
 
@@ -628,7 +631,7 @@ fun UndercutWindowDetailOverlay(
     // one confirming the draft would rebuild ([undercutPreviewChainMm], the strip builder's datums
     // over the previewed spans) — the stored chain would keep a datum the draft has moved off.
     // Idle, the stored strip itself.
-    val railStrip = remember(strip, activeDraft, spans, oalMm, undercutRecord.drawToSet, aftSetXMm, fwdSetXMm) {
+    val railStrip = remember(strip, activeDraft, spans, oalMm, undercutRecord.drawToSet, aftSetXMm, fwdSetXMm, reachAnchors) {
         if (activeDraft == null) {
             strip
         } else {
@@ -637,6 +640,8 @@ fun UndercutWindowDetailOverlay(
                 reachToSetMm = undercutSetReachMm(undercutRecord.drawToSet),
                 aftSetMm = aftSetXMm,
                 fwdSetMm = fwdSetXMm,
+                aftReachFromMm = reachAnchors.first,
+                fwdReachFromMm = reachAnchors.second,
             )
             strip.withChainMm(chainStartMm, chainEndMm)
         }

@@ -111,7 +111,10 @@ class UndercutLandscapeStackPdfTest {
         orientation: UndercutPageOrientation,
         railStyle: UndercutRailStyle = UndercutRailStyle.CHAIN,
     ): List<Title> {
-        val record = UndercutRecord(undercuts = cuts, pageOrientation = orientation, railStyle = railStyle)
+        // Measured with every strip stopping short of the shaft end — the layout this test pins.
+        val record = UndercutRecord(
+            undercuts = cuts, pageOrientation = orientation, railStyle = railStyle, drawToSet = false,
+        )
         val resolved = resolveComponents(spec)
         val page = undercutSheetOrientation(spec, resolved, record, blankValues = false)
         val w = page.widthPt

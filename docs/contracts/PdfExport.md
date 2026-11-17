@@ -183,6 +183,10 @@ Full-resolution preview through the shared `util/PdfRaster.renderPdfPageBitmap`
 (`PdfDocument` + `PdfRenderer`, 2× raster), pinch-to-zoom 0.5×–8×, double-tap reset. The shared overlay (`PdfPreviewOverlay` — Runout, Wear,
 Undercut, Consolidated) resets on double-tap too, through the same `rememberPreviewDoubleTapReset`
 (`ui/screen/PreviewDoubleTapReset.kt`); there the reset is instant, a single tap does nothing.
+On the overlay the pinch / pan / double-tap modifiers sit on the WHOLE page block, never on the
+page's own box: in the tuning strip the page box is only the strip, a zoomed page draws far past
+it, and a one-finger drag there reached nothing (on-device report: an undercut section could be
+zoomed but not moved). `PdfPreviewScreen` takes the same posture (its gestures span the box).
 
 - **Sheet picker (schematic and Final previews):** `SheetPickerRow` under the app bar —
   "Whole shaft", one chip per section sheet of this drawing (disabled while it names a part no
