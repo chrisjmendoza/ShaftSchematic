@@ -1310,7 +1310,8 @@ Each card:
   `testTag "undercut_ref_liner_aft"` / `"undercut_ref_liner_fwd"`), with the caption `"Liner AFT
   edge is cut into the body — measure from a S.E.T."` (FWD mirror, both when both) under the row
   (`testTag "undercut_ref_liner_aft_buried"` / `"_fwd_buried"`). The pool is every stored cut
-  with this card's draft substituted, so the card's OWN typed Distance or Length crossing the
+  with this card's draft substituted, each trimmed to where it removes material
+  (`undercutMachinedSpans` — a cut typed past the edge onto stock below its floor ends at the edge), so the card's OWN typed Distance or Length crossing the
   edge counts the moment it lands — after the "Past the liner edge" question, whichever answer.
   The selected chip, the Distance label/value/entry conversion, and the Length edit's re-anchor
   all use the **effective** reference (`effectiveUndercutReference` over that pool), so the
