@@ -42,6 +42,7 @@ import com.android.shaftschematic.geom.BlendedBodyTop
 import com.android.shaftschematic.geom.blendedBodyTop
 import com.android.shaftschematic.geom.buildUndercutStrips
 import com.android.shaftschematic.geom.buriedUndercutLinerEdgesMm
+import com.android.shaftschematic.geom.undercutMachinedSpans
 import com.android.shaftschematic.geom.clampUndercutSpan
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
@@ -395,6 +396,8 @@ private fun drawUndercutSheet(
     val shaftExtentMm = sheet.shaftExtentMm
     val clampedById = sheet.clampedById
     val liveSpans = sheet.liveSpans
+    // Where each cut removes material — what buries a liner edge (`undercutMachinedSpans`).
+    val machinedSpans = undercutMachinedSpans(effectiveRecord.undercuts, surfaceSegs, shaftExtentMm)
     // Every notch on the sheet, from the ONE shared builder the canvas overlay runs
     // (`geom/UndercutOverlayMath.kt`): clamped spans, the containment forest, true floors, and
     // the per-sheet drawn-depth normalization — resolved once, so the printed sheet and the
@@ -427,7 +430,7 @@ private fun drawUndercutSheet(
     fun stripUnitOf(strip: UndercutStrip): UnitSystem = displayUnits.unitFor(stripLinerOf(strip)?.id)
     fun railSplitOf(strip: UndercutStrip): List<Float> = (strip as? UndercutStrip.LinerStrip)
         ?.takeIf { pdfPrefs.undercutSplitAtLinerEdge }
-        ?.let { buriedUndercutLinerEdgesMm(it.linerStartMm, it.linerEndMm, liveSpans) }
+        ?.let { buriedUndercutLinerEdgesMm(it.linerStartMm, it.linerEndMm, machinedSpans) }
         ?: emptyList()
     // The S.E.T. each strip measures to — its title anchor AND the lead continuing its chain —
     // from the ONE resolver (`undercutStripSetSide`), so the two never disagree.

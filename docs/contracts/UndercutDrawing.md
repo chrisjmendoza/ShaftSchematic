@@ -283,7 +283,12 @@ data class UndercutRecord(
   the schematic's convention). Display-only, the deleted-liner fallback's posture: canonical
   never moves and the stored reference is never rewritten. A cut that merely ends at the edge, or
   trims the liner's end without crossing into the body, leaves a different Ø from the body next
-  to it — that edge is still a datum.
+  to it — that edge is still a datum. "Past" is measured in metal, not on paper: every burial test
+  reads `undercutMachinedSpans` — each measured cut trimmed to where its Ø is below the outer
+  surface (the notch regions), a measured cut that removes nothing dropped, an unmeasured one kept
+  whole — so a cut whose floor stands above the body beyond the edge ends at the edge however far
+  its typed length runs on (on-device report: an 8.920" cut typed 1/16" past an 8.999" liner's end
+  onto 8 1/2" bare shaft disabled the Liner FWD chip).
 - **Back-compat**: `LINER_AFT`/`LINER_FWD` and `PARENT_AFT`/`PARENT_FWD` are additive enum
   values — a document that uses one will not decode in an app build that predates them, the same
   rule every envelope enum carries. Files that stick to the older references are unaffected.
@@ -342,7 +347,9 @@ data class UndercutRecord(
   at liner edges" below). `effectiveUndercutReference(undercut, linerSpans, spans,
   aftSetXMm, fwdSetXMm)` (`geom/UndercutOverlayMath.kt`) applies them: a `LINER_*` reference to a
   buried edge resolves to `nearestSetReference` for the cut's own span; the default empty
-  `spans` skips the check, so the two-argument form is the deleted-liner fallback alone.
+  `spans` skips the check, so the two-argument form is the deleted-liner fallback alone. Its
+  `buryingSpans` (default `spans`) is what the burial test reads — every caller passes
+  `undercutMachinedSpans` there and keeps the typed spans for the parent-cut lookup.
 - **Blocking confirm validation (span)** `undercutSpanIssue(canonicalStartMm, lengthMm, oalMm)`:
   length must be `> ε`, and `[start, start+length]` must lie in `[0, oalMm]` (ε = `1e-3` mm,
   boundary-exact accepted). It is **never a field validator**: every undercut field commits the
@@ -1303,7 +1310,8 @@ Each card:
   `testTag "undercut_ref_liner_aft"` / `"undercut_ref_liner_fwd"`), with the caption `"Liner AFT
   edge is cut into the body — measure from a S.E.T."` (FWD mirror, both when both) under the row
   (`testTag "undercut_ref_liner_aft_buried"` / `"_fwd_buried"`). The pool is every stored cut
-  with this card's draft substituted, so the card's OWN typed Distance or Length crossing the
+  with this card's draft substituted, each trimmed to where it removes material
+  (`undercutMachinedSpans` — a cut typed past the edge onto stock below its floor ends at the edge), so the card's OWN typed Distance or Length crossing the
   edge counts the moment it lands — after the "Past the liner edge" question, whichever answer.
   The selected chip, the Distance label/value/entry conversion, and the Length edit's re-anchor
   all use the **effective** reference (`effectiveUndercutReference` over that pool), so the
@@ -1413,7 +1421,11 @@ Each card:
 
 - **Warnings** (non-blocking, both can show together): "Extends past shaft end — re-measure"
   (`isUndercutStaleOverrun`, unedited card only — see "Draft editing") and "Ø isn't smaller than the shaft here (Ø 7.874 in) — check the number" (`diaMm > 0` and `diaMm
-  >=` the local surface Ø; the figure is that surface Ø, `undercutDiaNotBelowSurfaceWarning`). For a
+  >=` the HIGHEST surface the cut spans, `UndercutFloors.highestSurfaceDiaMm` — a Ø at or above it
+  removes nothing anywhere; the figure is that surface Ø, `undercutDiaNotBelowSurfaceWarning`). Not
+  the lowest: a cut typed a little past a liner's end onto smaller stock is still a cut across the
+  liner (on-device report: 8.920" over an 8.999" liner, 1/16" onto 8 1/2" bare shaft, was flagged
+  against the 8.500"). `deepestUndercutDepthMm` counts a cut by the same rule. For a
   draft that is **nested** inside another cut, the comparison is
   against the **surrounding cut's floor** and the wording becomes "Ø isn't smaller than the
   surrounding cut's floor here (Ø … in) — check the number" — a nested cut removes material from its parent's floor, so the
