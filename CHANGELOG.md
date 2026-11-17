@@ -10,8 +10,8 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ### feat(consolidated): a spark test PASS / FAIL row beside the dye pen test
 
-On-device request: the foreman hand-wrote "Spark test: FAIL" next to the dye pen boxes. The
-consolidated sheet can now print `Spark test: ☐ PASS ☐ FAIL` right after the dye pen row, by its
+On-device request: the spark test result had to be hand-written next to the dye pen boxes during
+the inspection ("Spark test: FAIL"). The consolidated sheet can now print `Spark test: ☐ PASS ☐ FAIL` right after the dye pen row, by its
 own per-job "Spark test" switch on the Output tab and the preview's options panel (off by default,
 so existing sheets print as before). Pass | Fail chips mark the box, a second tap clears it, and a
 blank draft prints both boxes empty. When both rows cannot fit beside "TIR's taken looking:" — a

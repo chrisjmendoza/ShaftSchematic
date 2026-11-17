@@ -933,8 +933,8 @@ Same-day review feedback on step 4; supersedes step 4's picker placement:
   hand-marking; a blank draft always prints them blank. The Output tab's switch sits under
   "Coupling face" in Sheet content with the chips beneath it while on; the preview's options
   panel carries the same as a "Dye pen test" content chip plus the chips row.
-- **"Spark test" row** (on-device request: the foreman hand-wrote "Spark test: FAIL" beside the dye
-  pen boxes): `RunoutConfig.showSparkTest` (additive, default OFF — byte-identical), prints
+- **"Spark test" row** (on-device request: the result was hand-written beside the dye pen boxes during
+  the inspection): `RunoutConfig.showSparkTest` (additive, default OFF — byte-identical), prints
   `Spark test: ☐ PASS ☐ FAIL` right after the dye pen row in the same lane, marked from
   `WearRecord.sparkTestResult` (same PASS/FAIL type, none or one) through the same
   `drawDyePenBoxes`; a blank draft prints both blank. The two rows place as ONE block (the TIR
