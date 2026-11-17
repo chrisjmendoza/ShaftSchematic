@@ -384,14 +384,21 @@ internal fun PdfPreviewOverlay(
                 // The page block: the whole box, or — docked — the width left of the panel at
                 // full height. ONE block in either layout; only its box changes.
                 Box(
-                    modifier = if (docked) {
+                    modifier = (if (docked) {
                         Modifier
                             .align(Alignment.CenterStart)
                             .fillMaxHeight()
                             .width(dockedPageWidthDp(maxWidth.value).dp)
                     } else {
                         Modifier.fillMaxSize()
-                    },
+                    })
+                        // Pinch, pan and double-tap over the WHOLE page block, not just the
+                        // page's own box: in the tuning strip a zoomed page draws far past the
+                        // strip, and a one-finger drag on that part reached nothing — it could
+                        // be zoomed but not moved (on-device report). The schematic preview's
+                        // posture; the options panel, composed after, still takes its own touches.
+                        .transformable(state = transformState)
+                        .then(doubleTapReset),
                     contentAlignment = Alignment.Center,
                 ) {
                     // The full spinner stands in for the page only until a FIRST page exists; a
@@ -412,8 +419,6 @@ internal fun PdfPreviewOverlay(
                                         .align(Alignment.TopCenter)
                                         .fillMaxWidth()
                                         .height(stripHeight)
-                                        .transformable(state = transformState)
-                                        .then(doubleTapReset)
                                         .graphicsLayer(
                                             scaleX = scale,
                                             scaleY = scale,
@@ -434,8 +439,6 @@ internal fun PdfPreviewOverlay(
                                     contentScale = ContentScale.Fit,
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .transformable(state = transformState)
-                                        .then(doubleTapReset)
                                         .graphicsLayer(
                                             scaleX = scale,
                                             scaleY = scale,
