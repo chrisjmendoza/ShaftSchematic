@@ -53,6 +53,8 @@ fun composeShaftPdf(
     heightScale: Float = 1.0f,
     linerMinFracOfTrue: Float = 0f,
     displayUnits: DisplayUnits = DisplayUnits.single(unit),
+    /** A section sheet's window; `null` = the whole shaft. */
+    section: SheetSection? = null,
 ) = composeShaftPdfOnCanvas(
     c = page.canvas,
     pageW = page.info.pageWidth.toFloat(),
@@ -61,6 +63,7 @@ fun composeShaftPdf(
     pdfPrefs = pdfPrefs, options = options, resolvedComponents = resolvedComponents,
     lineThicknessScale = lineThicknessScale, heightScale = heightScale,
     linerMinFracOfTrue = linerMinFracOfTrue, displayUnits = displayUnits,
+    section = section,
 )
 
 /**

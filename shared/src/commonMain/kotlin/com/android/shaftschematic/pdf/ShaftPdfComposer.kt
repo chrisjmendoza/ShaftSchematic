@@ -45,6 +45,7 @@ import com.android.shaftschematic.geom.defaultVisualScale
 import com.android.shaftschematic.geom.buildCompressedProfileXMap
 import com.android.shaftschematic.geom.CompressedProfileXMap
 import com.android.shaftschematic.geom.exaggeratedProfileScale
+import com.android.shaftschematic.geom.PROFILE_HEIGHT_SCALE_MAX
 import com.android.shaftschematic.geom.solveMaxProfileScale
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.OalWindow
@@ -137,13 +138,26 @@ fun composeShaftPdfOnCanvas(
      * final — and only the band that hosts the footer reserves and draws it.
      */
     band: SheetBand? = null,
+    /**
+     * The stretch of shaft this sheet draws alone ([resolveSheetSection]); `null` = the whole
+     * shaft, drawn exactly as before. A section is a window on [spec], never a cropped copy: the
+     * x map covers the window only, a cut end draws as an S-break, and the rails keep the values
+     * the full sheet prints — one whose other end the window does not show prints open at the cut.
+     */
+    section: SheetSection? = null,
 ) {
     val effectiveOptions = effectiveSchematicOptions(options)
+    // What the section shows of the spec — the draw passes and the footer read this; with no
+    // section it IS the spec.
+    val viewSpec = section?.let { spec.inSection(it) } ?: spec
+    // What its text is about: a taper, thread or liner that only a cut end's stub clips is drawn
+    // but prints no footer lines and no Ø.
+    val infoSpec = section?.let { spec.inSectionCore(it) } ?: spec
     // The full page fits its footer size to the room the drawing leaves (`schematicFittedPrefs`);
     // a band's sheet sizes its footer itself (`beforeAfterPrefs`).
     @Suppress("NAME_SHADOWING")
     val pdfPrefs = if (band == null) {
-        schematicFittedPrefs(pageW, pageH, spec, unit, project, pdfPrefs, options, displayUnits, heightScale, linerMinFracOfTrue)
+        schematicFittedPrefs(pageW, pageH, spec, unit, project, pdfPrefs, options, displayUnits, heightScale, linerMinFracOfTrue, section)
     } else pdfPrefs
 
     // The band this drawing owns. With no band it is the page inside its margins, so every
@@ -163,18 +177,20 @@ fun composeShaftPdfOnCanvas(
     val blank = effectiveOptions.blankValues
 
     // The band's label, in its own row above the drawing — the footer Side badge's construction.
-    band?.badge?.let { badge ->
+    // A section sheet prints its title in the same row.
+    val badgeText = band?.badge ?: section?.title?.takeIf { it.isNotBlank() }
+    badgeText?.let { badge ->
         c.drawText(badge, PAGE_MARGIN_PT, bandTop + TEXT_PT, sheetTextPaint(TEXT_PT).apply { isFakeBoldText = true })
     }
 
     // The footer band is reserved at the height the footer will actually PRINT — see
     // [schematicFooterBlockPt]. A band that does not host the footer reserves nothing: its
     // drawing runs down to the band's own bottom edge.
-    val footerCfg = if (effectiveOptions.showFooter && hostsFooter) sheetFooterConfig(spec, pdfPrefs) else null
+    val footerCfg = if (effectiveOptions.showFooter && hostsFooter) sheetFooterConfig(infoSpec, pdfPrefs) else null
     val footerBlockPt = if (band != null && !hostsFooter) {
         0f
     } else {
-        schematicFooterBlockPt(pageW, spec, unit, project, pdfPrefs, options, displayUnits)
+        schematicFooterBlockPt(pageW, infoSpec, unit, project, pdfPrefs, options, displayUnits)
     }
 
     VerboseLog.d(VerboseLog.Category.PDF, "ShaftPdf") {
@@ -185,7 +201,7 @@ fun composeShaftPdfOnCanvas(
 
     val geomRect = RectF(
         PAGE_MARGIN_PT,
-        bandTop + (if (band?.badge != null) BAND_BADGE_ROW_PT else TOP_TEXT_PAD_PT),
+        bandTop + (if (badgeText != null) BAND_BADGE_ROW_PT else TOP_TEXT_PAD_PT),
         pageW - PAGE_MARGIN_PT,
         bandBottom - footerBlockPt
     )
@@ -194,10 +210,13 @@ fun composeShaftPdfOnCanvas(
         ?.filterIsInstance<ResolvedBody>()
         ?.map { b -> spec.bodyForPdf(b) }
 
-    val bodiesForPdf = resolvedBodies ?: spec.bodies
+    val allBodiesForPdf = resolvedBodies ?: spec.bodies
     // Blends need the resolved neighbours to know what diameter each face steps to; without
     // a resolve pass there is nothing to blend against, so the faces simply stay square.
-    val blendsForPdf = resolvedComponents?.let { bodyBlends(spec, it) } ?: emptyList()
+    val allBlendsForPdf = resolvedComponents?.let { bodyBlends(spec, it) } ?: emptyList()
+    val blendsForPdf = section?.let { blendsInSection(allBlendsForPdf, it) } ?: allBlendsForPdf
+    val cutAft = section?.cutsAft(spec) == true
+    val cutFwd = section?.cutsFwd(spec) == true
 
     val scale = lineThicknessScale.coerceIn(0.5f, 2.0f)
     val outline = Paint(ANTI_ALIAS_FLAG).apply {
@@ -224,7 +243,12 @@ fun composeShaftPdfOnCanvas(
     // per-kind minimum drawn width and foreshortens above it in proportion to true length
     // (geom/ProfileCompression.kt); plain body runs absorb the squeeze with center-breaks.
     // Shafts that fit at the visual scale keep a plain linear map.
-    val maxDiaMm = spec.maxOuterDiaMm().coerceAtLeast(1f)
+    // A section sizes its height off what it shows: its runs cut back to the window (no reach
+    // yet — the reach is in points and the scale is what this decides).
+    val maxDiaMm = (
+        section?.let { sectionMaxDiaMm(viewSpec, bodiesInSection(allBodiesForPdf, it, 0f, 0f)) }
+            ?: spec.maxOuterDiaMm()
+        ).coerceAtLeast(1f)
     // A band solves its x map at its budget share's height ([BAND_SHAFT_BUDGET_FRAC]) and then
     // draws the shaft at a scale no larger than the room its rails leave (see
     // [schematicBandLayout]) — the map stays the one the rails were measured on, so a short band
@@ -235,9 +259,11 @@ fun composeShaftPdfOnCanvas(
         schematicBandLayout(pageW, spec, unit, pdfPrefs, options, displayUnits, b, footerBlockPt, heightScale, linerMinFracOfTrue)
     }
     val profile = schematicProfileFit(
-        spec, pdfPrefs, heightScale, linerMinFracOfTrue,
+        viewSpec, pdfPrefs, heightScale, linerMinFracOfTrue,
         contentLeft = geomRect.left, contentRight = geomRect.right,
         budgetCapPt = if (band == null) geomRect.height() else geomRect.height() * BAND_SHAFT_BUDGET_FRAC,
+        drawnMaxDiaMm = if (section != null) maxDiaMm else 0f,
+        section = section,
     )
     val diaPtPerMm = if (band != null && bandLayout != null) {
         bandLayout.diaPtPerMm.let { own -> band.diaPtPerMmCap?.let { min(it, own) } ?: own }
@@ -245,6 +271,16 @@ fun composeShaftPdfOnCanvas(
         profile.diaPtPerMm
     }
     val xMap = profile.xMap
+    // The section's body runs, each running past a cut end by the S-break's reach so the clip
+    // that ends the drawing ON the curve has stock to cut.
+    val bodiesForPdf = section?.let { sec ->
+        fun reachMm(atMm: Float, cut: Boolean): Float {
+            if (!cut) return 0f
+            val ptPerMm = kotlin.math.abs(xMap.xAt(atMm + 1f) - xMap.xAt(atMm))
+            return if (ptPerMm > 0f) (SECTION_BREAK_ROOM_PT + 4f) / ptPerMm else 0f
+        }
+        bodiesInSection(allBodiesForPdf, sec, reachMm(sec.startMm, cutAft), reachMm(sec.endMm, cutFwd))
+    } ?: allBodiesForPdf
 
     val winDbg = computeOalWindow(spec)
     VerboseLog.d(VerboseLog.Category.PDF, "ShaftPdf") {
@@ -266,7 +302,8 @@ fun composeShaftPdfOnCanvas(
     val nameTextPt = if (band == null) schematicNameTextPt(pdfPrefs) else TEXT_PT - 2f
     fun diaCallsAt(atCy: Float): List<DiaCallout> =
         if (effectiveOptions.showDiaCallouts) {
-            joinSharedOdCallouts(bodiesForPdf, spec.liners, displayUnits) +
+            // A liner a stub only clips is context, not a dimensioned part of this sheet.
+            joinSharedOdCallouts(bodiesForPdf, infoSpec.liners, displayUnits) +
                 buildBlendAngleCallouts(bodiesForPdf, blendsForPdf, ::xAt, ::rPx, atCy, displayUnits)
         } else {
             emptyList()
@@ -307,6 +344,7 @@ fun composeShaftPdfOnCanvas(
         val calls0 = diaCallsAt(0f)
         fun needAt(tiers: Int) = belowShaftBandNeedPt(
             spec = spec,
+            section = section,
             titlesDefault = pdfPrefs.showComponentTitles,
             showLabels = effectiveOptions.showLabels,
             geomRect = geomRect,
@@ -320,6 +358,7 @@ fun composeShaftPdfOnCanvas(
             spec, unit, displayUnits, pdfPrefs, effectiveOptions.blankValues,
             xAt = xMap::xAt,
             gap = RAIL_MIN_GAP_PT * pdfPrefs.dimTextScale,
+            section = section,
         )
         val roomBelow = geomRect.bottom - geomRect.top - 2f * halfHeightPx - railsTight
         var tiers = max(SCHEMATIC_CALLOUT_FALLBACK_TIERS, calls0.size)
@@ -361,6 +400,27 @@ fun composeShaftPdfOnCanvas(
     c.save()
     if (shaftTranslateY != 0f) {
         c.translate(0f, shaftTranslateY)
+    }
+    // A section's cut ends: everything drawn below is clipped to the S each cut end strokes, so
+    // fills and outlines END ON the curve (the window rule of [breakWindowClipPath]). A window
+    // edge on the shaft's own end is no cut — the clip stands off it, so the end face keeps its
+    // whole stroke.
+    val sectionEdges = section?.let { sec ->
+        fun edge(atMm: Float, cut: Boolean, probeMm: Float, standOff: Float): WindowEndEdge {
+            val dia = sectionDiaAtMm(viewSpec, bodiesForPdf, probeMm).takeIf { it > 0f } ?: maxDiaMm
+            val r = rPx(dia)
+            return if (cut) {
+                WindowEndEdge(xAt(atMm), cy - r, cy + r, min(r * SECTION_BREAK_AMP_FRAC_OF_R, SECTION_BREAK_AMP_MAX_PT))
+            } else {
+                WindowEndEdge(xAt(atMm) + standOff, cy - r, cy + r, 0f)
+            }
+        }
+        val probe = min(1f, (sec.endMm - sec.startMm) * 0.25f)
+        edge(sec.startMm, cutAft, sec.startMm + probe, -SECTION_END_STANDOFF_PT) to
+            edge(sec.endMm, cutFwd, sec.endMm - probe, SECTION_END_STANDOFF_PT)
+    }
+    sectionEdges?.let { (aft, fwd) ->
+        c.clipPath(breakWindowClipPath(aft, fwd, cy - 2f * halfHeightPx - 1f, cy + 2f * halfHeightPx + 1f))
     }
     // Antialiased like every other sheet's shade (and like every stroke here): a shade fill now
     // ends on the break glyph's own S curve, and an aliased edge against an antialiased stroke
@@ -404,18 +464,27 @@ fun composeShaftPdfOnCanvas(
     // Body keyways — drawn from model bodies (resolved fragments and center-break
     // compression keep true end faces, so the slot lands at its physical position).
     drawBodyKeywaysPdf(
-        c, spec.bodies, ::xAt, cy, diaPtPerMm, outline,
+        c, viewSpec.bodies, ::xAt, cy, diaPtPerMm, outline,
         clocking, hiddenKeywayIds, secondaryKeywayIds,
     )
     drawTapers(
-        c, spec.tapers, cy, ::xAt, ::rPx, outline, taperFill,
+        c, viewSpec.tapers, cy, ::xAt, ::rPx, outline, taperFill,
         hiddenKeywayIds, clocking, secondaryKeywayIds, diaPtPerMm,
         unfilledIds = unfilledTaperIds,
     )
-    drawThreads(c, spec.threads, cy, ::xAt, ::rPx, outline, dim)
-    drawLiners(c, spec.liners, cy, ::xAt, ::rPx, outline, dim, linerFill, unfilledIds = unfilledLinerIds)
-    drawCouplerBoltSlots(c, spec.couplerBoltSlots, spec, cy, ::xAt, ::rPx, outline, shadeFill(), bodies = bodiesForPdf)
+    drawThreads(c, viewSpec.threads, cy, ::xAt, ::rPx, outline, dim)
+    drawLiners(c, viewSpec.liners, cy, ::xAt, ::rPx, outline, dim, linerFill, unfilledIds = unfilledLinerIds)
+    drawCouplerBoltSlots(c, viewSpec.couplerBoltSlots, spec, cy, ::xAt, ::rPx, outline, shadeFill(), bodies = bodiesForPdf)
     c.restore()
+    // The cut ends' own strokes, outside the clip that ended the drawing on them. The pair's
+    // eyes alternate, as a body run's break pair does.
+    sectionEdges?.let { (aft, fwd) ->
+        c.save()
+        if (shaftTranslateY != 0f) c.translate(0f, shaftTranslateY)
+        if (aft.amplitude > 0f) drawBreakEdge(c, aft.x, aft.yTop, aft.yBot, aft.amplitude, outline, eyeAtTop = true)
+        if (fwd.amplitude > 0f) drawBreakEdge(c, fwd.x, fwd.yTop, fwd.yBot, fwd.amplitude, outline, eyeAtTop = false)
+        c.restore()
+    }
 
     // --- Ø callouts below the shaft: one leader per unique body OD and per unique liner OD ---
     // A blank draft may elect the whole pass out (`blankDiaCallouts`) so the shaft prints
@@ -437,6 +506,7 @@ fun composeShaftPdfOnCanvas(
         drawComponentLabelsPdf(
             canvas = c,
             spec = spec,
+            section = section,
             titlesDefault = pdfPrefs.showComponentTitles,
             geomRect = geomRect,
             cy = cy,
@@ -460,7 +530,7 @@ fun composeShaftPdfOnCanvas(
         val minDimTextSize = 7f
         val dimText = sheetTextPaint(startDimTextSize)
 
-        val railSpans = schematicRailSpans(spec, unit, displayUnits, pdfPrefs)
+        val railSpans = schematicRailSpans(spec, unit, displayUnits, pdfPrefs, section)
         val win = railSpans.win
         val pageX: (Double) -> Float = { dimMm ->
             xAt((dimMm + win.measureStartMm).toFloat())
@@ -484,22 +554,27 @@ fun composeShaftPdfOnCanvas(
             blankLabelWidthPx = BLANK_DIM_GAP_PT,
             blankLabelMinWidthPx = BLANK_DIM_GAP_MIN_PT,
             dualStacked = stacked,
+            clipXMin = section?.let { xAt(it.startMm) } ?: Float.NEGATIVE_INFINITY,
+            clipXMax = section?.let { xAt(it.endMm) } ?: Float.POSITIVE_INFINITY,
         )
 
-        val oalDimSpan = railSpans.oalDimSpan
+        // The overall-length rail: one span on the full sheet, none on a section that does not
+        // show both ends of the shaft.
+        val topSpans = railSpans.topSpans
+        val topRails = topSpans.size
 
         // Planner rows, OAL topmost. Rail y values here are UNLIFTED; the plan returns the
         // lifted line positions.
         fun rows(r: PdfDimensionRenderer, gap: Float, unliftedTopY: Float) =
             assignments.map { r.spanInput(it.rail, baseY - gap * it.rail, it.span) } +
-                r.spanInput(DimensionRailLayout.TOP_RAIL, unliftedTopY, oalDimSpan)
+                topSpans.map { r.spanInput(DimensionRailLayout.TOP_RAIL, unliftedTopY, it) }
 
         // The OAL lane is the topmost measurement but rides exactly ONE regular tier
         // pitch above the highest component tier (on-device report: a wider gap wastes
         // whitespace); the planner's lift adds a label band only when the tier below
         // floats a label into the lane.
         fun computeTopY(gap: Float): Float =
-            baseY - gap * (maxRail + 1f)
+            baseY - gap * (maxRail + topRails)
 
         val contentTopY = geomRect.top + topSafePad
 
@@ -570,7 +645,7 @@ fun composeShaftPdfOnCanvas(
             contentLeft = geomRect.left, contentRight = geomRect.right,
         )
         // One call for the whole plan: every line first, then every value over its halo.
-        renderer.drawPlan(c, assignments.map { it.span } + oalDimSpan, plan.placements)
+        renderer.drawPlan(c, assignments.map { it.span } + topSpans, plan.placements)
     }
 
     // The callouts themselves — planned above (the name labels had to see them), inked here.
@@ -585,7 +660,7 @@ fun composeShaftPdfOnCanvas(
         val infoRect = RectF(geomRect.left, infoTop, geomRect.right, infoBottom)
 
         drawFooter(
-            c, infoRect, spec, unit, project, filename, appVersion, schematicFooterTextPaint(pdfPrefs), footerCfg,
+            c, infoRect, infoSpec, unit, project, filename, appVersion, schematicFooterTextPaint(pdfPrefs), footerCfg,
             blankValues = blank, displayUnits = displayUnits,
         )
     }
@@ -678,23 +753,28 @@ internal fun schematicFittedPrefs(
     displayUnits: DisplayUnits,
     heightScale: Float,
     linerMinFracOfTrue: Float,
+    section: SheetSection? = null,
 ): PdfPrefs {
     val effectiveOptions = effectiveSchematicOptions(options)
     if (!effectiveOptions.showFooter || pdfPrefs.footerTextScale <= 1f) return pdfPrefs
+    val viewSpec = section?.let { spec.inSection(it) } ?: spec
+    val infoSpec = section?.let { spec.inSectionCore(it) } ?: spec
     fun fits(s: Float): Boolean {
         val prefs = pdfPrefs.copy(footerTextScale = s)
         val top = PAGE_MARGIN_PT + TOP_TEXT_PAD_PT
-        val bottom = pageH - PAGE_MARGIN_PT - schematicFooterBlockPt(pageW, spec, unit, project, prefs, options, displayUnits)
+        val bottom = pageH - PAGE_MARGIN_PT - schematicFooterBlockPt(pageW, infoSpec, unit, project, prefs, options, displayUnits)
         val profile = schematicProfileFit(
-            spec, prefs, heightScale, linerMinFracOfTrue,
+            viewSpec, prefs, heightScale, linerMinFracOfTrue,
             contentLeft = PAGE_MARGIN_PT, contentRight = pageW - PAGE_MARGIN_PT,
             budgetCapPt = bottom - top,
+            section = section,
         )
-        val shaftH = profile.diaPtPerMm * spec.maxOuterDiaMm().coerceAtLeast(1f)
+        val shaftH = profile.diaPtPerMm * viewSpec.maxOuterDiaMm().coerceAtLeast(1f)
         val rails = if (!effectiveOptions.showDimensions) 0f else schematicRailBlockPt(
             spec, unit, displayUnits, prefs, effectiveOptions.blankValues,
             xAt = profile.xMap::xAt,
             gap = RAIL_MIN_GAP_PT * prefs.dimTextScale,
+            section = section,
         )
         return top + rails + shaftH + INFO_GAP_PT <= bottom
     }
@@ -740,6 +820,7 @@ private fun schematicNameTextPt(pdfPrefs: PdfPrefs): Float = (TEXT_PT - 2f) * pd
  */
 private fun belowShaftBandNeedPt(
     spec: ShaftSpec,
+    section: SheetSection?,
     titlesDefault: Boolean,
     showLabels: Boolean,
     geomRect: RectF,
@@ -751,7 +832,7 @@ private fun belowShaftBandNeedPt(
 ): Float {
     val reserved = leader(calls)?.occupancy(calls).orEmpty()
     var bottom = reserved.maxOfOrNull { it.bottom } ?: halfHeightPx
-    val spans = if (showLabels) componentLabelSpans(spec, titlesDefault) else emptyList()
+    val spans = if (showLabels) sheetLabelSpans(spec, titlesDefault, section) else emptyList()
     if (spans.isNotEmpty()) {
         val paint = sheetTextPaint(nameTextPt.coerceAtLeast(COMPONENT_LABEL_MIN_TEXT_PT))
         val baseY = halfHeightPx + COMPONENT_LABEL_OFFSET_PT
@@ -772,8 +853,19 @@ class SchematicRailSpans(
     val win: OalWindow,
     val assignments: List<RailSpan>,
     val oalDimSpan: DimSpan,
+    /** False on a section sheet that does not show both ends of the shaft ([inSection]). */
+    val printsOal: Boolean = true,
+    /**
+     * The measurement datums in the spans' own space — each end's S.E.T. and the shaft's two
+     * ends. A section sheet reads them to tell a span that runs to a datum it does not show
+     * (printed, open at the cut) from one that runs to a feature it does not show (dropped).
+     */
+    val datumsMm: List<Double> = emptyList(),
 ) {
     val maxRail: Int get() = assignments.maxOfOrNull { it.rail } ?: 0
+
+    /** The spans of the topmost rail — the overall length, or none ([printsOal]). */
+    val topSpans: List<DimSpan> get() = if (printsOal) listOf(oalDimSpan) else emptyList()
 }
 
 /**
@@ -787,7 +879,10 @@ fun schematicRailSpans(
     unit: UnitSystem,
     displayUnits: DisplayUnits,
     pdfPrefs: PdfPrefs,
+    /** A section sheet's window: the same spans and values, only those the window shows. */
+    section: SheetSection? = null,
 ): SchematicRailSpans {
+    if (section != null) return schematicRailSpans(spec, unit, displayUnits, pdfPrefs).inSection(section)
     // Measurement reference (AFT/FWD/AUTO) is separate from tier origin.
     val measureFromMode = pdfPrefs.tieringMode
     val linerDims = mapToLinerDimsForPdf(spec, measureFromMode)
@@ -810,7 +905,10 @@ fun schematicRailSpans(
         oalAft, oalFwd, displayUnits.documentUnit,
         labelMm = spec.overallLengthMm.toDouble(), dual = displayUnits.dual,
     )
-    return SchematicRailSpans(win, assignments, oalDimSpan)
+    return SchematicRailSpans(
+        win, assignments, oalDimSpan,
+        datumsMm = listOf(sets.aftSETxMm, sets.fwdSETxMm, 0.0, win.oalMm),
+    )
 }
 
 /**
@@ -908,7 +1006,18 @@ fun schematicProfileFit(
     contentRight: Float,
     budgetCapPt: Float,
     drawnMaxDiaMm: Float = 0f,
+    /**
+     * A section sheet's window ([spec] is then the section's own view of the document,
+     * `ShaftSpec.inSection`): the map covers the window only, standing [SECTION_BREAK_ROOM_PT]
+     * in from the content edge at a cut end, and a window that fits the page with room to spare
+     * is drawn larger — up to the tallest shaft the paper band allows — and centred.
+     */
+    section: SheetSection? = null,
 ): SchematicProfileFit {
+    if (section != null) return sectionProfileFit(
+        spec, pdfPrefs, heightScale, linerMinFracOfTrue, contentLeft, contentRight, budgetCapPt,
+        drawnMaxDiaMm, section,
+    )
     // Total content span: shaft body (0..OAL) plus any excluded end threads that sit outside the
     // OAL range — the ONE drawn-extent rule (`geom/DrawnExtent.kt`).
     val drawnExtent = spec.drawnExtentMm()
@@ -952,6 +1061,92 @@ fun schematicProfileFit(
 }
 
 /**
+ * [schematicProfileFit] for a section sheet: the same floors, pins and solve, over the window.
+ *
+ * The features are the full sheet's, cut back to the window. The height starts where the full
+ * sheet's does (sizing curve × the "Shaft height" slider) and, when the window then fits the
+ * content width with room to spare, rises until the width is used or the paper band's ceiling is
+ * reached — a section is a detail, and a 3-foot stretch drawn at the scale that fits a 30-foot
+ * shaft would leave most of its page blank. It never draws smaller than the full sheet would.
+ */
+private fun sectionProfileFit(
+    viewSpec: ShaftSpec,
+    pdfPrefs: PdfPrefs,
+    heightScale: Float,
+    linerMinFracOfTrue: Float,
+    contentLeft: Float,
+    contentRight: Float,
+    budgetCapPt: Float,
+    drawnMaxDiaMm: Float,
+    section: SheetSection,
+): SchematicProfileFit {
+    val left = contentLeft + if (section.cutsAft(viewSpec)) SECTION_BREAK_ROOM_PT else 0f
+    val right = contentRight - if (section.cutsFwd(viewSpec)) SECTION_BREAK_ROOM_PT else 0f
+    val width = (right - left).coerceAtLeast(1f)
+    val lenMm = (section.endMm - section.startMm).coerceAtLeast(1e-3f)
+    val maxDiaMm = (if (drawnMaxDiaMm > 0f) drawnMaxDiaMm else viewSpec.maxOuterDiaMm()).coerceAtLeast(1f)
+    val features = profileFeatureSpans(
+        viewSpec,
+        linerFloorPt = SCHEMATIC_MIN_LINER_PT,
+        threadFloorPt = SCHEMATIC_MIN_THREAD_PT,
+        linerMinFracOfTrue = linerMinFracOfTrue,
+    ).mapNotNull { f ->
+        val a = max(f.startMm, section.startMm)
+        val b = min(f.endMm, section.endMm)
+        if (b - a <= 1e-4f) null else f.copy(startMm = a, endMm = b)
+    }
+    val base = defaultVisualScale(maxDiaMm, pdfPrefs.curveLoHeightPt, pdfPrefs.curveHiHeightPt)
+    val asSheet = exaggeratedProfileScale(base, heightScale, budgetCapPt, maxDiaMm)
+    val tallest = exaggeratedProfileScale(base, PROFILE_HEIGHT_SCALE_MAX, budgetCapPt, maxDiaMm)
+    val desired = max(asSheet, min(tallest, width / lenMm))
+    val diaPtPerMm = solveMaxProfileScale(
+        windowStartMm = section.startMm, windowEndMm = section.endMm,
+        features = features, contentWidth = width, scaleHi = desired,
+        gapMinWidthPt = SCHEMATIC_MIN_BODY_RUN_PT,
+    ).coerceAtLeast(1e-6f)
+    fun mapOver(l: Float, r: Float) = buildCompressedProfileXMap(
+        windowStartMm = section.startMm, windowEndMm = section.endMm,
+        features = features,
+        contentLeft = l, contentRight = r,
+        diaPtPerMm = diaPtPerMm,
+        gapMinWidthPt = SCHEMATIC_MIN_BODY_RUN_PT,
+    )
+    val map = mapOver(left, right)
+    // A window that fits at true scale ends short of the content edge; centre it.
+    val slack = right - map.x1
+    return SchematicProfileFit(diaPtPerMm, if (slack > 1f) mapOver(left + slack / 2f, right - slack / 2f) else map)
+}
+
+/** How far outside a section's shaft-end edge the drawing clip stands, so the end face keeps its stroke. */
+private const val SECTION_END_STANDOFF_PT = 12f
+
+/**
+ * The diameter a section draws at [mm]: the largest of its body runs, tapers, liners and threads
+ * there — what a cut end's S-break spans.
+ */
+private fun sectionDiaAtMm(viewSpec: ShaftSpec, bodyRuns: List<Body>, mm: Float): Float {
+    var d = 0f
+    bodyRuns.forEach { if (mm >= it.startFromAftMm && mm <= it.startFromAftMm + it.lengthMm) d = max(d, it.diaMm) }
+    viewSpec.liners.forEach { if (mm >= it.startFromAftMm && mm <= it.startFromAftMm + it.lengthMm) d = max(d, it.odMm) }
+    viewSpec.threads.forEach { if (mm >= it.startFromAftMm && mm <= it.startFromAftMm + it.lengthMm) d = max(d, it.majorDiaMm) }
+    viewSpec.tapers.forEach {
+        if (it.lengthMm > 0f && mm >= it.startFromAftMm && mm <= it.startFromAftMm + it.lengthMm) {
+            val t = (mm - it.startFromAftMm) / it.lengthMm
+            d = max(d, it.startDiaMm + (it.endDiaMm - it.startDiaMm) * t)
+        }
+    }
+    return d
+}
+
+/** The largest diameter a section draws: its components' and its body runs'. */
+private fun sectionMaxDiaMm(viewSpec: ShaftSpec, bodyRuns: List<Body>): Float =
+    max(viewSpec.maxOuterDiaMm(), bodyRuns.maxOfOrNull { it.diaMm } ?: 0f)
+
+/** The name labels a sheet prints: [componentLabelSpans], cut back to a section's window. */
+private fun sheetLabelSpans(spec: ShaftSpec, titlesDefault: Boolean, section: SheetSection?): List<ComponentLabelSpan> =
+    componentLabelSpans(spec, titlesDefault).let { all -> section?.let { labelSpansInSection(all, it) } ?: all }
+
+/**
  * Height from the content top to the shaft top that the rail block takes at lane pitch [gap] and
  * the starting value size: the safe pad, the clearance above the shaft, one pitch per rail (OAL
  * included) and the lift every above-line value adds — the same terms the composer's rail fit
@@ -965,8 +1160,9 @@ private fun schematicRailBlockPt(
     blank: Boolean,
     xAt: (Float) -> Float,
     gap: Float,
+    section: SheetSection? = null,
 ): Float {
-    val rails = schematicRailSpans(spec, unit, displayUnits, pdfPrefs)
+    val rails = schematicRailSpans(spec, unit, displayUnits, pdfPrefs, section)
     val renderer = PdfDimensionRenderer(
         pageX = { dimMm -> xAt((dimMm + rails.win.measureStartMm).toFloat()) },
         linePaint = Paint(),
@@ -978,11 +1174,14 @@ private fun schematicRailBlockPt(
         blankLabelWidthPx = BLANK_DIM_GAP_PT,
         blankLabelMinWidthPx = BLANK_DIM_GAP_MIN_PT,
         dualStacked = displayUnits.dual && pdfPrefs.dualUnitLayout == DualUnitLayout.STACKED,
+        clipXMin = section?.let { xAt(it.startMm) } ?: Float.NEGATIVE_INFINITY,
+        clipXMax = section?.let { xAt(it.endMm) } ?: Float.POSITIVE_INFINITY,
     )
+    val topRails = rails.topSpans.size
     val rows = rails.assignments.map { renderer.spanInput(it.rail, -gap * it.rail, it.span) } +
-        renderer.spanInput(DimensionRailLayout.TOP_RAIL, -gap * (rails.maxRail + 1), rails.oalDimSpan)
+        rails.topSpans.map { renderer.spanInput(DimensionRailLayout.TOP_RAIL, -gap * (rails.maxRail + topRails), it) }
     return RAIL_TOP_SAFE_PAD_PT + BAND_CLEAR_PT + BASE_DIM_OFFSET_PT +
-        gap * (rails.maxRail + 1) + renderer.topLift(rows)
+        gap * (rails.maxRail + topRails) + renderer.topLift(rows)
 }
 // ──────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -1097,7 +1296,13 @@ private const val COMPONENT_LABEL_MAX_ROWS = 8
 private const val INFO_GAP_PT = 72f          // exactly 1 inch below geometry
 
 /** One component-name label, as the axial span it centers over. */
-data class ComponentLabelSpan(val text: String, val startMm: Float, val endMm: Float)
+data class ComponentLabelSpan(
+    val text: String,
+    val startMm: Float,
+    val endMm: Float,
+    /** True for a body's name — a section sheet prints it wherever the body shows, a stub included. */
+    val isBody: Boolean = false,
+)
 
 /**
  * The component-name labels a sheet prints, AFT→FWD within each kind.
@@ -1115,17 +1320,17 @@ data class ComponentLabelSpan(val text: String, val startMm: Float, val endMm: F
  * #1 is hidden), so turning one label off never renumbers the rest.
  */
 fun componentLabelSpans(spec: ShaftSpec, titlesDefault: Boolean): List<ComponentLabelSpan> = buildList {
-    fun emit(shown: Boolean?, label: String, startMm: Float, lengthMm: Float) {
+    fun emit(shown: Boolean?, label: String, startMm: Float, lengthMm: Float, isBody: Boolean = false) {
         if (!(shown ?: titlesDefault)) return
         val trimmed = label.trim()
         if (trimmed.isEmpty()) return
-        add(ComponentLabelSpan(trimmed, startMm, startMm + lengthMm))
+        add(ComponentLabelSpan(trimmed, startMm, startMm + lengthMm, isBody))
     }
 
     val bodyTitleById = buildBodyTitleById(spec)
     spec.bodies.sortedWith(compareBy({ it.startFromAftMm }, { it.id }))
         .forEachIndexed { i, b ->
-            emit(b.showNameOnDrawing, bodyTitleById[b.id] ?: "Body #${i + 1}", b.startFromAftMm, b.lengthMm)
+            emit(b.showNameOnDrawing, bodyTitleById[b.id] ?: "Body #${i + 1}", b.startFromAftMm, b.lengthMm, isBody = true)
         }
 
     val taperTitleById = buildTaperTitleById(spec)
@@ -1165,6 +1370,7 @@ fun componentLabelSpans(spec: ShaftSpec, titlesDefault: Boolean): List<Component
 private fun drawComponentLabelsPdf(
     canvas: Canvas,
     spec: ShaftSpec,
+    section: SheetSection?,
     titlesDefault: Boolean,
     geomRect: RectF,
     cy: Float,
@@ -1173,7 +1379,7 @@ private fun drawComponentLabelsPdf(
     labelTextPt: Float,
     reserved: List<BelowShaftLabelLayout.Box> = emptyList(),
 ) {
-    val spans = componentLabelSpans(spec, titlesDefault)
+    val spans = sheetLabelSpans(spec, titlesDefault, section)
     if (spans.isEmpty()) return
 
     val labelPaint = sheetTextPaint(labelTextPt.coerceAtLeast(COMPONENT_LABEL_MIN_TEXT_PT))

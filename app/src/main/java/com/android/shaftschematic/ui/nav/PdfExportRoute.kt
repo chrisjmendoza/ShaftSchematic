@@ -1,5 +1,8 @@
 package com.android.shaftschematic.ui.nav
 
+import com.android.shaftschematic.pdf.SheetSection
+import com.android.shaftschematic.pdf.resolveSheetSection
+import com.android.shaftschematic.ui.screen.buildSectionFilename
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -67,6 +70,11 @@ fun PdfExportRoute(
      * gets written must be the same drawing.
      */
     target: SpecTarget = SpecTarget.ORIGINAL,
+    /**
+     * The section sheet being exported, or null for the whole shaft. From the route argument,
+     * like [target]: the preview hands over the sheet it was showing.
+     */
+    sectionId: String? = null,
 ) {
     val ctx = LocalContext.current
     var launched by rememberSaveable { mutableStateOf(false) }
@@ -94,7 +102,13 @@ fun PdfExportRoute(
     val finalRunoutBubbles by vm.finalRunoutBubbles.collectAsState()
     // The final drawing's before/after election — session-only, ON by default.
     val finalBeforeAfter by vm.finalBeforeAfter.collectAsState()
-    val sheetKind = finalSheetKind(target, finalRunoutBubbles, finalBeforeAfter)
+    val sheetKind = sectionSheetKind(sectionId != null, target, finalRunoutBubbles, finalBeforeAfter)
+    val sheetSections by vm.sheetSections.collectAsState()
+    val sectionDef = sheetSections.firstOrNull { it.id == sectionId }
+    // Resolved when the file is written, against the drawing as it then stands.
+    val exportSection: () -> SheetSection? = {
+        sectionDef?.let { resolveSheetSection(exportSpec(), exportResolved(), it.firstId, it.lastId, it.name) }
+    }
     val drawingSuffix = when {
         target != SpecTarget.FINAL -> ""
         else -> finalDrawingSuffix(finalRunoutBubbles, finalBeforeAfter)
@@ -124,22 +138,36 @@ fun PdfExportRoute(
     val shaftPosition by vm.shaftPosition.collectAsState()
     val currentDocumentName by vm.currentDocumentName.collectAsState()
 
+    // The name proposed for the file: the section's own for a section sheet, else the drawing's.
+    val suggestedName: () -> String = {
+        if (sectionDef != null) {
+            buildSectionFilename(
+                customer, vessel, jobNumber, shaftPosition,
+                sectionName = sectionDef.name,
+                final = target == SpecTarget.FINAL,
+                blankDraft = pdfBlankDraft,
+                documentName = currentDocumentName,
+            )
+        } else {
+            defaultFilename(
+                jobNumber = jobNumber,
+                customer = customer,
+                vessel = vessel,
+                shaftPosition = shaftPosition,
+                blankDraft = pdfBlankDraft,
+                drawingSuffix = drawingSuffix,
+                documentName = currentDocumentName,
+            )
+        }
+    }
+
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/pdf")
     ) { uri ->
         if (uri != null) {
             VerboseLog.d(VerboseLog.Category.IO, "PdfExport") { "picked uri=$uri" }
 
-            val filename = uri.lastPathSegment
-                ?: defaultFilename(
-                    jobNumber = jobNumber,
-                    customer = customer,
-                    vessel = vessel,
-                    shaftPosition = shaftPosition,
-                    blankDraft = pdfBlankDraft,
-                    drawingSuffix = drawingSuffix,
-                    documentName = currentDocumentName,
-                )
+            val filename = uri.lastPathSegment ?: suggestedName()
             val project = ProjectInfo(
                 customer = customer,
                 vessel = vessel,
@@ -178,6 +206,7 @@ fun PdfExportRoute(
                     lineThicknessScale = vm.lineThicknessScale.value,
                     runoutConfig = vm.runoutConfig.value,
                     displayUnits = vm.currentDisplayUnits(),
+                    section = exportSection(),
                 )
             }
 
@@ -196,22 +225,15 @@ fun PdfExportRoute(
     LaunchedEffect(Unit) {
         if (!launched) {
             launched = true
+            // A section that cannot be found on the drawing is refused rather than written as
+            // the whole shaft under a section's name.
             val error = blockingExportError(exportSpec())
+                ?: "This section names a part that is no longer on the shaft."
+                    .takeIf { sectionId != null && exportSection() == null }
             if (error != null) {
                 blockingErrorMessage = error
             } else {
-                launcher.launchPicker(
-                    defaultFilename(
-                        jobNumber = jobNumber,
-                        customer = customer,
-                        vessel = vessel,
-                        shaftPosition = shaftPosition,
-                        blankDraft = pdfBlankDraft,
-                        drawingSuffix = drawingSuffix,
-                        documentName = currentDocumentName,
-                    ),
-                    what = "schematic export",
-                )
+                launcher.launchPicker(suggestedName(), what = "schematic export")
             }
         }
     }

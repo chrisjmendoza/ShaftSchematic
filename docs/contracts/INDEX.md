@@ -13,7 +13,7 @@ repo-root folder and made the files hard to find; every reference now spells
 `docs/contracts/X.md` and resolves from anywhere.
 
 **v1.0 consolidation:** the pack was reorganized from 31 micro-docs down to the
-per-subsystem contracts below (16 at the time, **22** today) — per-file API restatements
+per-subsystem contracts below (16 at the time, **23** today) — per-file API restatements
 were merged into subsystem contracts or deleted where they merely mirrored code.
 (Sweep record in git history.) Design plans (`*_PLAN.md`) are not contracts — once their
 work ships they move to `docs/archive/`; each is listed under the contract it belongs to.
@@ -30,6 +30,9 @@ work ships they move to `docs/archive/`; each is listed under the contract it be
   parameter-order contract (thread major-Ø before pitch!)
 - **ComponentsOrdering.md** — carousel display order (resolved/physical, v1.2 —
   supersedes the locked newest-on-top rule; open product question)
+
+- **SectionSheets.md** — section sheets: a stretch of the shaft printed alone (stored
+  sections, the window and its stubs, which rails / names / footer lines a section prints)
 
 ## Model & geometry
 

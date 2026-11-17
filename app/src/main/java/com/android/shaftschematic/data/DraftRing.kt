@@ -88,5 +88,6 @@ fun AutosaveManager.SessionSnapshot.isDefaultSession(): Boolean {
         sheetDateText.isBlank() &&
         sheetDateSheets.isEmpty() &&
         sheetNotesSheets.isEmpty() &&
+        sheetSections.isEmpty() &&
         notes.isBlank()
 }

@@ -4,6 +4,7 @@ import android.graphics.pdf.PdfDocument
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.pdf.PdfExportOptions
+import com.android.shaftschematic.pdf.SheetSection
 import com.android.shaftschematic.pdf.composeBeforeAfterPdf
 import com.android.shaftschematic.pdf.composeRunoutPdf
 import com.android.shaftschematic.pdf.composeShaftPdf
@@ -55,6 +56,19 @@ internal fun finalSheetKind(
 }
 
 /**
+ * The sheet a surface draws once a section may be chosen: a section sheet is the plain schematic
+ * of its drawing whatever the Final tab's elections say — the bubbled and before/after sheets are
+ * whole-shaft documents.
+ */
+internal fun sectionSheetKind(
+    sectionChosen: Boolean,
+    target: SpecTarget,
+    finalRunoutBubbles: Boolean,
+    finalBeforeAfter: Boolean,
+): FinalSheetKind =
+    if (sectionChosen) FinalSheetKind.PLAIN else finalSheetKind(target, finalRunoutBubbles, finalBeforeAfter)
+
+/**
  * Composes the schematic sheet a surface asked for onto [page].
  *
  * Every input is already snapshotted by the caller — this runs on a binder thread under
@@ -73,6 +87,10 @@ internal fun finalSheetKind(
  * [runoutConfig] arrives already tuned (the preview's live sliders) and supplies the drawn
  * height and liner-compression terms to EVERY branch, so switching the election never changes
  * how the drawing is tuned.
+ *
+ * [section] makes the page a SECTION sheet — that stretch of [spec] alone. A section is always
+ * the plain schematic of its drawing, so callers pass [FinalSheetKind.PLAIN] with it
+ * ([sectionSheetKind]).
  */
 internal fun composeSchematicSheet(
     page: PdfDocument.Page,
@@ -90,6 +108,7 @@ internal fun composeSchematicSheet(
     lineThicknessScale: Float,
     runoutConfig: RunoutConfig,
     displayUnits: DisplayUnits,
+    section: SheetSection? = null,
 ) {
     when (kind) {
         FinalSheetKind.PLAIN -> composeShaftPdf(
@@ -106,6 +125,7 @@ internal fun composeSchematicSheet(
             heightScale = runoutConfig.heightScale,
             linerMinFracOfTrue = runoutConfig.linerMinFracOfTrue,
             displayUnits = displayUnits,
+            section = section,
         )
 
         FinalSheetKind.WITH_BUBBLES -> composeRunoutPdf(

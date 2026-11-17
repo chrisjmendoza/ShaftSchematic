@@ -8,6 +8,19 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-16
 
+### feat(schematic): section sheets — one stretch of the shaft as its own document
+
+On-device request, from the shop's "FWD end finish" hand sketch: print a section of the finished
+schematic alone, so there is a document for each section that needs one. On the PDF preview
+(Schematic and Final), a row under the title bar picks the sheet: "Whole shaft" or one of the
+job's sections. "Sections…" adds one — a name, and the parts it runs from and to (or the AFT / FWD
+end). The sheet draws those parts larger, with an S-break where the shaft carries on, under the
+section's name. Its dimensions are the full sheet's own values; one measured from a S.E.T. the
+section does not show runs open to the break. Names, Ø values and footer lines are those of the
+section's parts. Print and Export follow the sheet on screen, and Export all writes the original
+drawing's sections beside the schematic. Sections are saved with the job. See
+`docs/contracts/SectionSheets.md`.
+
 ### feat(undercut): the overall dimension ends at the liner or at the cuts
 
 On-device request: welding over the cuts, the shop needs to know where the liner ends so the seal

@@ -927,6 +927,31 @@ filename (two schemes had drifted apart and one of them did not sanitize — man
 report). `PdfPreviewScreen`/`PdfExportRoute` take the target from the NAV ROUTE ARGUMENT
 (`?target=final`), never from ViewModel state. See `docs/contracts/FinalSchematic.md`.
 
+### Section sheets are a window on the drawing, never a copy of it
+A section sheet (`SchematicSection`, envelope `sheet_sections` — a name, the STORED component ids
+it runs from and to, `null` = the AFT / FWD end, and which drawing it is of) prints one stretch of
+the shaft alone (on-device request: the shop's "FWD end finish" sketch). It is print metadata: it
+never affects OAL, resolution or collision, is never pruned (a section naming a part that is gone
+is kept and cannot print until edited), rides the autosave snapshot's builder AND combine, is not
+in `EditState`; New and a template reset it, a mate carries the original drawing's sections only.
+The window is derived each time by the ONE pure `resolveSheetSection` (`pdf/SchematicSection.kt`):
+the named parts' extent (the CORE) plus, at an end short of the shaft end, a stub of neighbouring
+stock (0.75 × Ø, never less than the blend or seal area on the face it butts). The composer draws
+the SAME spec through `composeShaftPdf(section = …)` (`null` = whole shaft, byte-identical) — do
+not build a cropped or re-based spec: the rails must stay the full sheet's own spans and VALUES
+(`SchematicRailSpans.inSection`: a span with an end on the core whose other end is on the sheet,
+or is a S.E.T. / shaft-end datum off it — that one prints open at the cut through
+`PdfDimensionRenderer(clipXMin, clipXMax)`, no extension line or arrowhead there; a span to a part
+the sheet does not show is dropped; the OAL rail only when both its ends show). Cut ends clip the
+draw passes to `breakWindowClipPath` so fills end ON the S-break; a taper, thread, liner or bolt
+row that only a stub clips is drawn but prints no name, Ø, rail or footer line (`inSectionCore`);
+a body's name and Ø print wherever it shows. A window with page room to spare draws larger, up to
+the paper band's ceiling, never smaller than the full sheet. Always the plain schematic of its
+drawing (`sectionSheetKind`). Surfaces: the PDF preview's sheet picker (`SheetPickerRow` +
+`SectionSheetsDialog`, both targets; Print and Export follow the chosen sheet, export route
+`&section=<id>`), and Export all, which writes the original's sections beside the schematic
+(`buildSectionFilename`). See `docs/contracts/SectionSheets.md`.
+
 ### Paper sheets are theme-independent
 The app theme (Settings → Appearance: System/Light/Dark + high contrast; default Light =
 the historical look) styles Compose chrome only. The five white-sheet canvases (undercut

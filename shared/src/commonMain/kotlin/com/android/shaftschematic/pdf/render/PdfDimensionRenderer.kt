@@ -113,7 +113,31 @@ class PdfDimensionRenderer(
      * sheet's few points of air let two neighbours read as one string there.
      */
     private val labelSideClear: Float? = null,
+    /**
+     * The page-x window the rails live in. A span end outside it is OPEN: the line stops at the
+     * window edge with no extension line and no arrowhead there, and the value is placed over
+     * the part that shows. A section sheet passes its window's edges, so a dimension whose datum
+     * is off the sheet runs to the cut and keeps its full value; every other caller leaves both
+     * infinite and nothing is ever clipped.
+     */
+    private val clipXMin: Float = Float.NEGATIVE_INFINITY,
+    private val clipXMax: Float = Float.POSITIVE_INFINITY,
 ) {
+    /** A span's two page-x ends inside the clip window, and which of them the window cut off. */
+    private class Ends(val xa: Float, val xb: Float, val openA: Boolean, val openB: Boolean)
+
+    private fun ends(span: DimSpan): Ends {
+        val x1 = pageX(span.x1Mm)
+        val x2 = pageX(span.x2Mm)
+        val lo = min(x1, x2)
+        val hi = max(x1, x2)
+        // Clamped into the window from both sides, so a span wholly outside collapses onto the
+        // edge it lies beyond instead of inverting.
+        val xa = lo.coerceIn(clipXMin, clipXMax)
+        val xb = hi.coerceIn(clipXMin, clipXMax)
+        return Ends(xa, xb, openA = lo < clipXMin - 0.01f, openB = hi > clipXMax + 0.01f)
+    }
+
     /**
      * The width this renderer occupies for a value — blank drafts reserve the write-in gap,
      * shrunk toward [blankLabelMinWidthPx] on a span too short for the full one so it still
@@ -123,7 +147,7 @@ class PdfDimensionRenderer(
     fun labelWidth(span: DimSpan): Float =
         if (blankLabels) {
             DimensionRailLayout.blankGapWidth(
-                spanWidth = abs(pageX(span.x2Mm) - pageX(span.x1Mm)),
+                spanWidth = ends(span).let { abs(it.xb - it.xa) },
                 preferredWidth = blankLabelWidthPx,
                 minWidth = blankLabelMinWidthPx,
                 textPad = textPad,
@@ -172,13 +196,12 @@ class PdfDimensionRenderer(
      * the plan returns the lifted y to draw at. Use [DimensionRailLayout.TOP_RAIL] for the OAL rail.
      */
     fun spanInput(railIndex: Int, railY: Float, span: DimSpan): DimensionRailLayout.SpanInput {
-        val x1 = pageX(span.x1Mm)
-        val x2 = pageX(span.x2Mm)
+        val e = ends(span)
         return DimensionRailLayout.SpanInput(
             railIndex = railIndex,
             railY = railY,
-            xa = min(x1, x2),
-            xb = max(x1, x2),
+            xa = e.xa,
+            xb = e.xb,
             labelWidth = labelWidth(span),
         )
     }
@@ -247,17 +270,17 @@ class PdfDimensionRenderer(
         placement: DimensionRailLayout.Placement,
         drawExtensions: Boolean,
     ) {
-        val x1 = pageX(span.x1Mm)
-        val x2 = pageX(span.x2Mm)
-        val xa = min(x1, x2)
-        val xb = max(x1, x2)
+        val e = ends(span)
+        val xa = e.xa
+        val xb = e.xb
         val y = placement.railY
 
-        // extension lines (from object to rail with clearance) — independent of the label
+        // extension lines (from object to rail with clearance) — independent of the label. An
+        // open end has no feature on the sheet to extend from.
         if (drawExtensions) {
             val extTop = objectTopY - objectClearance
-            canvas.drawLine(xa, extTop, xa, y, linePaint)
-            canvas.drawLine(xb, extTop, xb, y, linePaint)
+            if (!e.openA) canvas.drawLine(xa, extTop, xa, y, linePaint)
+            if (!e.openB) canvas.drawLine(xb, extTop, xb, y, linePaint)
         }
 
         if (placement.inline) {
@@ -278,8 +301,9 @@ class PdfDimensionRenderer(
         }
 
         // ---- arrowheads: outward only on a span too narrow to hold both (planner's call) ----
-        drawArrow(canvas, xAt = xa, y = y, inward = placement.arrowsInward, isLeftEnd = true)
-        drawArrow(canvas, xAt = xb, y = y, inward = placement.arrowsInward, isLeftEnd = false)
+        // An open end carries no head: the dimension runs on past the sheet's cut.
+        if (!e.openA) drawArrow(canvas, xAt = xa, y = y, inward = placement.arrowsInward, isLeftEnd = true)
+        if (!e.openB) drawArrow(canvas, xAt = xb, y = y, inward = placement.arrowsInward, isLeftEnd = false)
     }
 
     private fun drawLabel(canvas: Canvas, label: DualLabel, bounds: DimensionRailLayout.Box) {

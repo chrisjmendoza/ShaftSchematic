@@ -124,6 +124,37 @@ class SchematicRenderReviewTest {
         }
     }
 
+    /** Section sheets: the hand sketch's "FWD end finish" stretch of the Kelley C job, and others. */
+    @Test
+    fun `section sheets`() {
+        val doc = ShaftDocCodec.decode(
+            requireNotNull(javaClass.classLoader?.getResource("fixtures/blend_angle_kelley_c.shaft")).readText(),
+        )
+        val resolved = resolveComponents(doc.spec)
+        val liners = doc.spec.liners.sortedBy { it.startFromAftMm }
+        val tapers = doc.spec.tapers.sortedBy { it.startFromAftMm }
+        fun render(name: String, firstId: String?, lastId: String?, title: String, dual: Boolean = false) {
+            val section = requireNotNull(resolveSheetSection(doc.spec, resolved, firstId, lastId, title))
+            val unit = doc.preferredUnit ?: UnitSystem.INCHES
+            val (bmp, c) = bitmapPage()
+            composeShaftPdfOnCanvas(
+                c, PDF_PAGE_WIDTH_PT.toFloat(), PDF_PAGE_HEIGHT_PT.toFloat(),
+                spec = doc.spec, unit = unit, project = doc.project(),
+                appVersion = "review", filename = name, pdfPrefs = PdfPrefs(),
+                resolvedComponents = resolved,
+                displayUnits = if (dual) DisplayUnits(unit, emptyMap(), dual = true) else DisplayUnits.single(unit),
+                section = section,
+            )
+            save(name, bmp)
+        }
+        render("section_fwd_end.png", liners.last().id, null, "FWD END FINISH")
+        render("section_aft_end.png", null, liners.first().id, "AFT END")
+        if (liners.size >= 2) render("section_mid.png", liners.first().id, liners.last().id, "LINERS")
+        render("section_fwd_liner_only.png", liners.last().id, liners.last().id, "FWD LINER")
+        tapers.firstOrNull()?.let { render("section_aft_taper.png", null, it.id, "AFT TAPER") }
+        renderSchematic("section_full_sheet.png", doc)
+    }
+
     @Test
     fun `blend angle callout beside a liner diameter`() {
         val doc = ShaftDocCodec.decode(

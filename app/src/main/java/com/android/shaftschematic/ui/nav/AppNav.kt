@@ -540,7 +540,9 @@ fun AppNav(vm: ShaftViewModel) {
                 onBack = { nav.popBackStack() },
                 // The preview hands its OWN drawing to the export — the sheet on screen and
                 // the file written must never be two different geometries.
-                onExport = { nav.navigate("exportPdf?target=${targetArg(target)}") },
+                onExport = { sectionId ->
+                    nav.navigate("exportPdf?target=${targetArg(target)}&section=${sectionId.orEmpty()}")
+                },
                 target = target,
             )
         }
@@ -550,17 +552,25 @@ fun AppNav(vm: ShaftViewModel) {
            It writes PDF bytes to the chosen external location.
         */
         composable(
-            "exportPdf?target={target}",
-            arguments = listOf(navArgument("target") {
-                type = NavType.StringType
-                defaultValue = TARGET_ARG_ORIGINAL
-            }),
+            "exportPdf?target={target}&section={section}",
+            arguments = listOf(
+                navArgument("target") {
+                    type = NavType.StringType
+                    defaultValue = TARGET_ARG_ORIGINAL
+                },
+                // The section sheet the preview was showing; blank = the whole shaft.
+                navArgument("section") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                },
+            ),
         ) { entry ->
             PdfExportRoute(
                 nav = nav,
                 vm = vm,
                 onFinished = { nav.popBackStack() },
                 target = specTargetFromArg(entry.arguments?.getString("target")),
+                sectionId = entry.arguments?.getString("section")?.takeIf { it.isNotEmpty() },
             )
         }
     }
