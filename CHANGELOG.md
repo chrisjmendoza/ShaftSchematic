@@ -8,6 +8,17 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-17
 
+### feat(undercut): a liner section far from the shaft end prints the taper across an S-break
+
+On-device request, from a shop sketch that drew the FWD taper 47" from the first cut of the FWD
+liner so the section could not be taken for the mid liner's. With "Draw to the shaft end" on, a
+liner section that is too far from its S.E.T. to draw through now prints that shaft end as well —
+the taper, and the thread when there is one — with the plain shaft between left out behind a pair
+of S-breaks. Its dimensions run to the S.E.T. at their true values, as they do for a section close
+to the end. It applies only when nothing but plain shaft lies between the section and that end: a
+section with another liner or another section's cut in the way prints as before. Printed sheet and
+its preview only — the on-screen detail drawing is unchanged.
+
 ### feat(sheets): seal areas are off on the inspection sheets, with a switch to show them
 
 On-device request: on an inspection the seal areas' dashed lines are noise. The runout sheet and

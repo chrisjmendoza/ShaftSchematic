@@ -2665,6 +2665,34 @@ plain val captured by the `snapshotFlow` block would go stale), Print takes it a
 Export holds it across the file picker (`pendingExportRecord`). The document's own exclusion
 lists are never written. A section with no cuts returns the record unchanged.
 
+### Draw to the shaft end, past the reach: the break
+
+On-device request, from a shop sketch that drew the FWD taper 47" from the first cut of the FWD
+liner so the section could not be taken for the mid liner's. With "Draw to the shaft end" on
+(`UndercutRecord.drawToSet`), a liner strip with cuts that is beyond `UNDERCUT_SET_REACH_MM` of its
+S.E.T. prints that shaft end too, across an S-break:
+
+- **One rule**, the pure `linerStripWithSetBreak` (`geom/UndercutMath.kt`), applied to every liner
+  strip in `undercutSheetStrips` — the ONE place a sheet's strips are made — toward the S.E.T. the
+  strip measures to (`undercutStripSetSide`). The strip's chain moves onto that S.E.T. and its draw
+  range runs to the shaft end (over an end thread, `withUndercutEndThreads`), exactly as a strip
+  within the reach; the plain shaft between the strip's own window end and a point
+  `UNDERCUT_WINDOW_PAD_MM` inboard of the end taper (the S.E.T. when there is no taper; given break
+  room by `withUndercutBreakRoom`) is recorded as `UndercutStrip.setBreak` (`UndercutStripBreak`).
+- **Plain shaft only.** Another liner, or a cut of another section, between the strip and that end
+  leaves the strip as it was (its S.E.T. lead still prints). A strip with no cuts, a bare-shaft
+  strip and a chain already at its S.E.T. are untouched. When less than
+  `UNDERCUT_SET_BREAK_MIN_ELIDE_MM` (6") would be left out, the strip is carried to the end with no
+  break.
+- **Layout.** `planUndercutDetailStrip` sizes the strip with the gap closed up, in the cell less
+  `UNDERCUT_SET_BREAK_GAP_PT`, then opens the gap in the map (`UndercutStripXMap.withBreakGap`).
+  The map keeps `toScale`, so a break alone prints no "Not to scale" note; "Compress long sections"
+  composes with it. Every dimension that crosses the gap prints its true value.
+- **Draw.** The strip draws each side of the gap as its own window — profile, fills clipped to the
+  S, and an S-break at each cut end — so the gap is bare paper.
+- **Printed sheet only.** `linerStripFor` / `buildUndercutStrips` never set a break, so the detail
+  canvas and the tab's overview are unchanged; they owe the mirror.
+
 ### Header: the shaft side
 
 On-device request (two shafts' sheets side by side at the welder: the side had to be searched

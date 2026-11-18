@@ -1227,6 +1227,8 @@ data class UndercutLinerSpan(val id: String, val startMm: Float, val endMm: Floa
 sealed class UndercutStrip {
     abstract val drawStartMm: Float
     abstract val drawEndMm: Float
+    /** The plain shaft a PRINTED strip leaves out between two S-breaks ([linerStripWithSetBreak]); null draws the range whole. */
+    open val setBreak: UndercutStripBreak? get() = null
     /** Where the chained dimension rail starts/ends (witness datums, chain coverage). */
     abstract val chainStartMm: Float
     abstract val chainEndMm: Float
@@ -1241,6 +1243,7 @@ sealed class UndercutStrip {
         override val chainStartMm: Float,
         override val chainEndMm: Float,
         override val undercutIds: List<String>,
+        override val setBreak: UndercutStripBreak? = null,
     ) : UndercutStrip()
 
     /**
@@ -1390,6 +1393,80 @@ fun linerStripFor(
         chainEndMm = chainEnd.coerceIn(0f, hi),
         undercutIds = assignedSpans.sortedBy { it.startMm }.map { it.id },
     )
+}
+
+/**
+ * A stretch of plain shaft `[startMm, endMm]` a printed strip leaves out: the strip draws up to
+ * [startMm], an S-break pair, and on from [endMm]. Dimensions across it print their true values.
+ */
+data class UndercutStripBreak(val startMm: Float, val endMm: Float) {
+    val lengthMm: Float get() = endMm - startMm
+}
+
+/** Plain shaft shorter than this between a section and its end taper is drawn, not broken out (6 in). */
+const val UNDERCUT_SET_BREAK_MIN_ELIDE_MM = 152.4f
+
+/**
+ * "Draw to the shaft end" for a liner section that is too far from its S.E.T. to draw through
+ * ([UNDERCUT_SET_REACH_MM]) — on-device request, from a shop sketch that drew the FWD taper 47"
+ * from the first cut so the section could not be taken for the mid liner's: [strip] with its
+ * chain carried to the S.E.T. at [setMm] and its draw range to the shaft's end on that side
+ * ([toFwd]), the plain shaft between the section and the end taper left out as a
+ * [UndercutStripBreak]. The far piece starts [padMm] inboard of the end taper ([taperInboardMm],
+ * the S.E.T. itself when the end has no taper), given break room against [segs].
+ *
+ * Returns [strip] unchanged when it has no cuts, when its chain is already at or past that
+ * S.E.T., or when another liner or another section's cut lies between it and that end — a break
+ * leaves out plain shaft only, never a part. When less than [UNDERCUT_SET_BREAK_MIN_ELIDE_MM]
+ * would be left out the strip is carried to the end with no break. Pure; the PRINTED strip only —
+ * the strip builders ([linerStripFor], [buildUndercutStrips]) never set a break.
+ */
+fun linerStripWithSetBreak(
+    strip: UndercutStrip.LinerStrip,
+    toFwd: Boolean,
+    setMm: Float,
+    taperInboardMm: Float,
+    oalMm: Float,
+    segs: List<SurfaceSeg>,
+    /** Every OTHER liner on the shaft. */
+    otherLiners: List<UndercutLinerSpan>,
+    /** Every cut that is not this strip's. */
+    otherCutSpans: List<UndercutSpanMm>,
+    /** This strip's own cuts — the far piece's break clears their shoulders too. */
+    cutSpans: List<UndercutSpanMm>,
+    padMm: Float = UNDERCUT_WINDOW_PAD_MM,
+    aftEndMm: Float = 0f,
+    fwdEndMm: Float = oalMm,
+): UndercutStrip.LinerStrip {
+    if (strip.undercutIds.isEmpty() || strip.setBreak != null) return strip
+    val eps = UNDERCUT_SPAN_EPS_MM
+    val hi = oalMm.coerceAtLeast(0f)
+    if (toFwd) {
+        if (strip.chainEndMm >= setMm - eps) return strip
+        if (otherLiners.any { it.endMm > strip.chainEndMm + eps } ||
+            otherCutSpans.any { it.endMm > strip.chainEndMm + eps }
+        ) return strip
+        val farStart = withUndercutBreakRoom(
+            (min(setMm, taperInboardMm) - padMm).coerceIn(0f, hi), hi, segs, oalMm, cutSpans,
+        ).first
+        val drawEnd = withUndercutEndThreads(strip.drawStartMm, hi, oalMm, aftEndMm, fwdEndMm).second
+        val carried = strip.copy(drawEndMm = drawEnd, chainEndMm = setMm.coerceIn(0f, hi))
+        return if (farStart - strip.drawEndMm > UNDERCUT_SET_BREAK_MIN_ELIDE_MM) {
+            carried.copy(setBreak = UndercutStripBreak(strip.drawEndMm, farStart))
+        } else carried
+    }
+    if (strip.chainStartMm <= setMm + eps) return strip
+    if (otherLiners.any { it.startMm < strip.chainStartMm - eps } ||
+        otherCutSpans.any { it.startMm < strip.chainStartMm - eps }
+    ) return strip
+    val farEnd = withUndercutBreakRoom(
+        0f, (max(setMm, taperInboardMm) + padMm).coerceIn(0f, hi), segs, oalMm, cutSpans,
+    ).second
+    val drawStart = withUndercutEndThreads(0f, strip.drawEndMm, oalMm, aftEndMm, fwdEndMm).first
+    val carried = strip.copy(drawStartMm = drawStart, chainStartMm = setMm.coerceIn(0f, hi))
+    return if (strip.drawStartMm - farEnd > UNDERCUT_SET_BREAK_MIN_ELIDE_MM) {
+        carried.copy(setBreak = UndercutStripBreak(farEnd, strip.drawStartMm))
+    } else carried
 }
 
 /**

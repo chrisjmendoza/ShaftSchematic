@@ -30,6 +30,12 @@ class UndercutStripXMap private constructor(
     /** The strip's to-scale x per mm — the whole map when [isLinear], and the scale outside it. */
     val linearScale: Float,
     val isLinear: Boolean,
+    /**
+     * Every drawn stretch keeps its true proportion to the others. False once a map has moved a
+     * stretch off scale ([piecewise]); a break gap alone ([withBreakGap]) leaves it as it was —
+     * the S-break pair says the shaft is broken there.
+     */
+    val toScale: Boolean = isLinear,
 ) {
     val startMm: Float get() = knotsMm.first()
     val endMm: Float get() = knotsMm.last()
@@ -66,6 +72,22 @@ class UndercutStripXMap private constructor(
      */
     fun knotsInside(aMm: Float, bMm: Float): List<Float> =
         if (isLinear) emptyList() else knotsMm.filter { it > aMm + KNOT_EPS_MM && it < bMm - KNOT_EPS_MM }
+
+    /**
+     * This map with [gapLenMm] of shaft opened at station [atMm] and drawn [widthX] wide: this map
+     * was built over the strip with that stretch closed up (every station past [atMm] moved back
+     * by [gapLenMm]); the result maps real stations — up to [atMm] as before, the gap
+     * `[atMm, atMm + gapLenMm]` across [widthX], and everything past it [widthX] further on.
+     */
+    fun withBreakGap(atMm: Float, gapLenMm: Float, widthX: Float): UndercutStripXMap {
+        if (gapLenMm <= 0f) return this
+        val xAtGap = xAt(atMm)
+        val before = knotsMm.indices.filter { knotsMm[it] < atMm - KNOT_EPS_MM }
+        val after = knotsMm.indices.filter { knotsMm[it] > atMm + KNOT_EPS_MM }
+        val mm = before.map { knotsMm[it] } + listOf(atMm, atMm + gapLenMm) + after.map { knotsMm[it] + gapLenMm }
+        val xs = before.map { knotsX[it] } + listOf(xAtGap, xAtGap + widthX) + after.map { knotsX[it] + widthX }
+        return UndercutStripXMap(mm.toFloatArray(), xs.toFloatArray(), linearScale, isLinear = false, toScale = toScale)
+    }
 
     companion object {
         internal const val KNOT_EPS_MM = 1e-3f
