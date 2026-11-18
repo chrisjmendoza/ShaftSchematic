@@ -31,6 +31,7 @@ import com.android.shaftschematic.geom.UndercutLinerSpan
 import com.android.shaftschematic.geom.UndercutNotch
 import com.android.shaftschematic.geom.UndercutSpanMm
 import com.android.shaftschematic.geom.UndercutStrip
+import com.android.shaftschematic.geom.UndercutStripBreak
 import com.android.shaftschematic.geom.buildUndercutNotches
 import com.android.shaftschematic.geom.LinerOutlineEdge
 import com.android.shaftschematic.geom.UndercutLinerOd
@@ -48,6 +49,7 @@ import com.android.shaftschematic.geom.clampUndercutSpan
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
 import com.android.shaftschematic.geom.linerStripFor
+import com.android.shaftschematic.geom.linerStripWithSetBreak
 import com.android.shaftschematic.geom.undercutSetReachMm
 import com.android.shaftschematic.geom.effectiveUndercutTotalRail
 import com.android.shaftschematic.geom.NOTCH_FACE_MIN_STEP_PX
@@ -850,7 +852,26 @@ fun undercutSheetStrips(
                 aftEndMm = drawnAftEndMm, fwdEndMm = drawnFwdEndMm,
             )
         }
-    val allStrips = cutStrips.ifEmpty { startedStrips }
+    // "Draw to the shaft end", past the reach: a liner section with only plain shaft between it and
+    // the S.E.T. it measures to draws that end too — taper and thread — across an S-break, its chain
+    // carried to the S.E.T. (on-device request). The side is the strip's own (`undercutStripSetSide`).
+    val brokenStrips = if (!effectiveRecord.drawToSet) cutStrips else cutStrips.map { strip ->
+        if (strip !is UndercutStrip.LinerStrip) return@map strip
+        val own = liveSpans.filter { it.id in strip.undercutIds }
+        val toFwd = undercutStripSetSide(strip, docSpec, setPositions, effectiveRecord.setDatum, own) ==
+            UndercutAnchorSide.FWD_SET
+        linerStripWithSetBreak(
+            strip, toFwd,
+            setMm = if (toFwd) fwdSetMm else aftSetMm,
+            taperInboardMm = if (toFwd) fwdReachMm else aftReachMm,
+            oalMm = shaftExtentMm, segs = surfaceSegs,
+            otherLiners = linerSpans.filter { it.id != strip.linerId },
+            otherCutSpans = liveSpans.filter { it.id !in strip.undercutIds },
+            cutSpans = own,
+            aftEndMm = drawnAftEndMm, fwdEndMm = drawnFwdEndMm,
+        )
+    }
+    val allStrips = brokenStrips.ifEmpty { startedStrips }
     return UndercutSheetStrips(
         strips = allStrips.filter { isUndercutStripPrinted(it, undercutRecord) },
         allStrips = allStrips,
@@ -1322,6 +1343,8 @@ class UndercutStripPlan(
     val insideDiaPlan: UndercutInsideDiaPlan? = null,
     /** The values this plan writes inside the shaft; [diaPlan] holds every other station. */
     val insideDia: List<UndercutInsideDiaMark> = emptyList(),
+    /** The plain shaft this strip leaves out between two S-breaks (`UndercutStrip.setBreak`). */
+    val setBreak: UndercutStripBreak? = null,
 ) {
     fun xAt(mm: Float): Float = xMap.xAt(mm)
 
@@ -1349,7 +1372,7 @@ class UndercutStripPlan(
         }
         return UndercutStripPlan(
             drawStartMm, drawEndMm, hLayout, titleText, dimText, spans, plan, band, rails,
-            titleAirPt, xMap, insideDiaPlan, marks,
+            titleAirPt, xMap, insideDiaPlan, marks, setBreak,
         )
     }
 
@@ -1671,22 +1694,30 @@ fun planUndercutDetailStrip(
             arrowSizePt,
         )
     } ?: 0f
+    // A break gap is left out of the horizontal budget: the strip is sized as if the gap were
+    // closed up (`closed` stations), in the cell less the gap's own drawn width.
+    val gap = strip.setBreak?.takeIf { !startedStrip && it.lengthMm > 0f }
+    val gapLenMm = gap?.lengthMm ?: 0f
+    val gapWidthPt = if (gap == null) 0f else UNDERCUT_SET_BREAK_GAP_PT
+    fun closed(mm: Float): Float = if (gap == null) mm else mm - (mm - gap.startMm).coerceIn(0f, gapLenMm)
+    fun opened(mm: Float): Float = if (gap == null || mm <= gap.startMm) mm else mm + gapLenMm
     val drawRange = computeUndercutStripDrawRange(
-        strip.drawStartMm, strip.drawEndMm, strip.chainStartMm, strip.chainEndMm,
-        stripLeft, stripRight, shaftExtentMm,
+        closed(strip.drawStartMm), closed(strip.drawEndMm), closed(strip.chainStartMm), closed(strip.chainEndMm),
+        stripLeft, stripRight - gapWidthPt, closed(shaftExtentMm),
         leadSide = leadSide.takeIf { leadValueMm != null }, leadRoomPt = leadRoomPt,
-    )
+    ).let { UndercutStripDrawRangeMm(opened(it.startMm), opened(it.endMm)) }
     // The pad widening clamps to `[0, shaftExtentMm]`, so a strip that reaches a shaft end takes its
     // end thread back here, last — the strip builders' own rule over the final range.
     val (drawStartMm, drawEndMm) = withUndercutBreakRoom(
         drawRange.startMm, drawRange.endMm, segs, shaftExtentMm, memberCutSpans,
     ).let { (s, e) -> withUndercutEndThreads(s, e, shaftExtentMm, drawnAftEndMm, drawnFwdEndMm) }
-    val drawLengthMm = drawEndMm - drawStartMm
+    val drawLengthMm = drawEndMm - drawStartMm - gapLenMm
     if (drawLengthMm <= 0f) return null
 
     val hLayout = computeWearStripHorizontalLayout(
-        stripLeft, stripRight, drawLengthMm, stubWidthPt = UNDERCUT_STRIP_EDGE_INSET_PT,
-    )
+        stripLeft + gapWidthPt * 0.5f, stripRight - gapWidthPt * 0.5f, drawLengthMm,
+        stubWidthPt = UNDERCUT_STRIP_EDGE_INSET_PT,
+    ).let { it.copy(linerLeftPt = it.linerLeftPt - gapWidthPt * 0.5f, linerRightPt = it.linerRightPt + gapWidthPt * 0.5f) }
     val titleText = Paint(text).apply { textSize = (text.textSize - 1f).coerceAtLeast(7f) }
 
     // Spans on this strip, aft → fwd, render-clamped.
@@ -1709,15 +1740,16 @@ fun planUndercutDetailStrip(
     // job's "Compress long sections" shortens only the long stretches' excess, and the sheet then
     // says "Not to scale". The detail canvas's own widening (`planUndercutDetailXMap`) never
     // reaches the sheet.
-    val xMap = if (startedStrip || spans.isEmpty()) {
-        UndercutStripXMap.linear(drawStartMm, drawEndMm, hLayout.linerLeftPt, hLayout.ptPerMm)
+    val closedMap = if (startedStrip || spans.isEmpty()) {
+        UndercutStripXMap.linear(closed(drawStartMm), closed(drawEndMm), hLayout.linerLeftPt, hLayout.ptPerMm)
     } else {
         compressLongUndercutStripXMap(
-            drawStartMm, drawEndMm, hLayout.linerLeftPt, hLayout.ptPerMm,
-            strip.chainStartMm, strip.chainEndMm,
-            spans.flatMap { listOf(it.startMm, it.endMm) }, longCompressFrac,
+            closed(drawStartMm), closed(drawEndMm), hLayout.linerLeftPt, hLayout.ptPerMm,
+            closed(strip.chainStartMm), closed(strip.chainEndMm),
+            spans.flatMap { listOf(closed(it.startMm), closed(it.endMm)) }, longCompressFrac,
         )
     }
+    val xMap = if (gap == null) closedMap else closedMap.withBreakGap(gap.startMm, gapLenMm, gapWidthPt)
     fun xAtStrip(mm: Float): Float = xMap.xAt(mm)
 
     // Measured-Ø plan first, so the strip reserves exactly the label rows its cuts need.
@@ -1774,7 +1806,7 @@ fun planUndercutDetailStrip(
     )
     return UndercutStripPlan(
         drawStartMm, drawEndMm, hLayout, titleText, dimText, spans, diaPlan, diaBandPt, rails,
-        titleAirPt, xMap, insideDiaPlan,
+        titleAirPt, xMap, insideDiaPlan, setBreak = gap,
     )
 }
 
@@ -2040,7 +2072,7 @@ private fun drawUndercutDetailStrip(
         drawnAftEndMm = drawnAftEndMm,
         drawnFwdEndMm = drawnFwdEndMm,
     )?.resolveInsideDia(stripTop, stripBottom, dualStacked) ?: return
-    if (!plan.xMap.isLinear) onNotToScale()
+    if (!plan.xMap.toScale) onNotToScale()
     val drawStartMm = plan.drawStartMm
     val drawEndMm = plan.drawEndMm
     fun xAtStrip(mm: Float): Float = plan.xAt(mm)
@@ -2063,62 +2095,77 @@ private fun drawUndercutDetailStrip(
         ?: docSpec.maxOuterDiaMm().takeIf { it > 0f } ?: 1f
     fun rStrip(diaMm: Float): Float = (rCap * (diaMm / stripMaxDiaMm)).coerceIn(0f, rCap)
 
-    // Blank write-in template: only the STARTING geometry, so the liner's span stays clear
-    // paper (see the KDoc). The two outboard calls draw the neighbour slivers with their normal
-    // outline + fill; the liner edge sits at a window END in each, so the profile draws no cap
-    // there and the full-height end faces below are the only vertical lines at those stations.
-    // The window's two ends as the fills see them: each component fill runs past a cut end by the
-    // glyph's reach and is clipped to the S that end strokes, so the shade ends ON the curve.
-    val aftEdge = undercutWindowEndEdge(segs, drawStartMm, ::xAtStrip, ::rStrip, cy, shaftExtentMm)
-    val fwdEdge = undercutWindowEndEdge(segs, drawEndMm, ::xAtStrip, ::rStrip, cy, shaftExtentMm)
-    val fillClip = if (aftEdge != null && fwdEdge != null) {
-        breakWindowClipPath(aftEdge, fwdEdge, cy - 2f * rCap - 1f, cy + 2f * rCap + 1f)
-    } else null
     // The to-scale x per mm — the scale of the stock at each window end (`UndercutStripXMap`).
     val ptPerMmStrip = plan.xMap.linearScale
     val taperKnots: (Float, Float) -> List<Float> = { a, b -> plan.xMap.knotsInside(a, b) }
     fun fillReachMm(edge: WindowEndEdge?): Float =
         if (edge == null || edge.amplitude <= 0f || ptPerMmStrip <= 0f) 0f else edge.amplitude / ptPerMmStrip
-    val fillStartMm = drawStartMm - fillReachMm(aftEdge)
-    val fillEndMm = drawEndMm + fillReachMm(fwdEdge)
-
     val blankLiner = if (linerSpanBlank) strip as? UndercutStrip.LinerStrip else null
-    if (blankLiner != null) {
-        val faceAftMm = blankLiner.linerStartMm.coerceIn(drawStartMm, drawEndMm)
-        val faceFwdMm = blankLiner.linerEndMm.coerceIn(drawStartMm, drawEndMm)
-        drawUndercutWindowProfile(
-            c, docSpec, drawStartMm, faceAftMm, cy, ::xAtStrip, ::rStrip,
-            outline, bodyFill, taperFill, linerFill,
-            fillW0Mm = fillStartMm, fillW1Mm = faceAftMm, fillClip = fillClip,
-            knotsInside = taperKnots, blendCurves = blendCurves,
-        )
-        drawUndercutWindowProfile(
-            c, docSpec, faceFwdMm, drawEndMm, cy, ::xAtStrip, ::rStrip,
-            outline, bodyFill, taperFill, linerFill,
-            fillW0Mm = faceFwdMm, fillW1Mm = fillEndMm, fillClip = fillClip,
-            knotsInside = taperKnots, blendCurves = blendCurves,
-        )
-        // Full drawn height at the liner's own OD — the surface envelope over the liner's span
-        // is the liner, so its maximum there IS that OD. Drawn at outline weight: with the
-        // surface lines gone these faces carry the figure.
-        val rFace = rStrip(maxOuterDiaOver(segs, faceAftMm, faceFwdMm))
-        if (rFace > 0f) listOf(faceAftMm, faceFwdMm).forEach { mm ->
-            c.drawLine(xAtStrip(mm), cy - rFace, xAtStrip(mm), cy + rFace, outline)
+
+    // One window — the whole draw range — or, with a break gap, the piece each side of it: each is
+    // drawn as its own window, cut ends and fills alike, so the gap between them is bare paper.
+    val windows = plan.setBreak?.let { listOf(drawStartMm to it.startMm, it.endMm to drawEndMm) }
+        ?: listOf(drawStartMm to drawEndMm)
+    windows.forEach { (w0Mm, w1Mm) ->
+        // Past its own ends a window runs on at the strip's scale, never into the gap's map: the
+        // fills reach past a cut end by the glyph's reach, in drawn points.
+        fun xWin(mm: Float): Float = when {
+            mm < w0Mm -> xAtStrip(w0Mm) + (mm - w0Mm) * ptPerMmStrip
+            mm > w1Mm -> xAtStrip(w1Mm) + (mm - w1Mm) * ptPerMmStrip
+            else -> xAtStrip(mm)
         }
-    } else {
-        drawUndercutWindowProfile(
-            c, docSpec, drawStartMm, drawEndMm, cy, ::xAtStrip, ::rStrip,
-            outline, bodyFill, taperFill, linerFill,
-            fillW0Mm = fillStartMm, fillW1Mm = fillEndMm, fillClip = fillClip,
-            knotsInside = taperKnots, blendCurves = blendCurves,
-        )
+        // The window's two ends as the fills see them: each component fill runs past a cut end by
+        // the glyph's reach and is clipped to the S that end strokes, so the shade ends ON the curve.
+        val aftEdge = undercutWindowEndEdge(segs, w0Mm, ::xWin, ::rStrip, cy, shaftExtentMm)
+        val fwdEdge = undercutWindowEndEdge(segs, w1Mm, ::xWin, ::rStrip, cy, shaftExtentMm)
+        val fillClip = if (aftEdge != null && fwdEdge != null) {
+            breakWindowClipPath(aftEdge, fwdEdge, cy - 2f * rCap - 1f, cy + 2f * rCap + 1f)
+        } else null
+        val fillStartMm = w0Mm - fillReachMm(aftEdge)
+        val fillEndMm = w1Mm + fillReachMm(fwdEdge)
+
+        // Blank write-in template: only the STARTING geometry, so the liner's span stays clear
+        // paper (see the KDoc). The two outboard calls draw the neighbour slivers with their normal
+        // outline + fill; the liner edge sits at a window END in each, so the profile draws no cap
+        // there and the full-height end faces below are the only vertical lines at those stations.
+        val blankHere = blankLiner?.takeIf { it.linerEndMm > w0Mm && it.linerStartMm < w1Mm }
+        if (blankHere != null) {
+            val faceAftMm = blankHere.linerStartMm.coerceIn(w0Mm, w1Mm)
+            val faceFwdMm = blankHere.linerEndMm.coerceIn(w0Mm, w1Mm)
+            drawUndercutWindowProfile(
+                c, docSpec, w0Mm, faceAftMm, cy, ::xWin, ::rStrip,
+                outline, bodyFill, taperFill, linerFill,
+                fillW0Mm = fillStartMm, fillW1Mm = faceAftMm, fillClip = fillClip,
+                knotsInside = taperKnots, blendCurves = blendCurves,
+            )
+            drawUndercutWindowProfile(
+                c, docSpec, faceFwdMm, w1Mm, cy, ::xWin, ::rStrip,
+                outline, bodyFill, taperFill, linerFill,
+                fillW0Mm = faceFwdMm, fillW1Mm = fillEndMm, fillClip = fillClip,
+                knotsInside = taperKnots, blendCurves = blendCurves,
+            )
+            // Full drawn height at the liner's own OD — the surface envelope over the liner's span
+            // is the liner, so its maximum there IS that OD. Drawn at outline weight: with the
+            // surface lines gone these faces carry the figure.
+            val rFace = rStrip(maxOuterDiaOver(segs, faceAftMm, faceFwdMm))
+            if (rFace > 0f) listOf(faceAftMm, faceFwdMm).forEach { mm ->
+                c.drawLine(xAtStrip(mm), cy - rFace, xAtStrip(mm), cy + rFace, outline)
+            }
+        } else {
+            drawUndercutWindowProfile(
+                c, docSpec, w0Mm, w1Mm, cy, ::xWin, ::rStrip,
+                outline, bodyFill, taperFill, linerFill,
+                fillW0Mm = fillStartMm, fillW1Mm = fillEndMm, fillClip = fillClip,
+                knotsInside = taperKnots, blendCurves = blendCurves,
+            )
+        }
+        // Cut ends: an S-break where the strip slices through material (void beyond it, so the
+        // AFT stub's eye is at the top and the FWD stub's at the bottom — the stub convention,
+        // the inverse of a centred compression break), a flat edge where the draw range's end IS
+        // the physical shaft end.
+        drawUndercutWindowEnd(c, segs, w0Mm, cy, ::xWin, ::rStrip, outline, shaftExtentMm, eyeAtTop = true)
+        drawUndercutWindowEnd(c, segs, w1Mm, cy, ::xWin, ::rStrip, outline, shaftExtentMm, eyeAtTop = false)
     }
-    // Cut ends: an S-break where the strip slices through material (void beyond it, so the
-    // AFT stub's eye is at the top and the FWD stub's at the bottom — the stub convention,
-    // the inverse of a centred compression break), a flat edge where the draw range's end IS
-    // the physical shaft end.
-    drawUndercutWindowEnd(c, segs, drawStartMm, cy, ::xAtStrip, ::rStrip, outline, shaftExtentMm, eyeAtTop = true)
-    drawUndercutWindowEnd(c, segs, drawEndMm, cy, ::xAtStrip, ::rStrip, outline, shaftExtentMm, eyeAtTop = false)
 
     // Keyways that sit wholly inside this strip's window — the schematic's own slot draw, at the
     // strip's two scales (on-device request: a strip ending on a body reads as the shaft end once

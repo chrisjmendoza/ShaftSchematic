@@ -402,6 +402,12 @@ private const val UNDERCUT_STRIP_MAX_PAD_FRAC = 0.15f
 const val UNDERCUT_BREAK_AMP_MAX_PT = 18f
 
 /**
+ * Drawn width of a strip's break gap ([com.android.shaftschematic.geom.UndercutStripBreak]): the
+ * two facing S glyphs' reach at [UNDERCUT_BREAK_AMP_MAX_PT] plus daylight between them.
+ */
+const val UNDERCUT_SET_BREAK_GAP_PT = 22f
+
+/**
  * Air reserved ABOVE the total-span rail line, inside [UNDERCUT_TOTAL_RAIL_BAND_PT]: the row a
  * total whose value cannot seat in a break falls back to (`drawUndercutRail`'s
  * `fallbackLabelAbove`, which draws its label above the line because the chained rail owns the

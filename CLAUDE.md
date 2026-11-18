@@ -703,7 +703,18 @@ extends a liner strip whose chain ends within `UNDERCUT_SET_REACH_MM` (24") of i
 inboard end of the taper that S.E.T. sits on (`undercutSetReachAnchors`), so a liner beside a long
 taper never prints a break through the taper (on-device report) — out to the shaft end (chain to the S.E.T.) — flat physical end, no break — and the
 chain gains the span to it (the sketch's "12 3/4 to the S.E.T."); liner strips only, the total span
-unchanged. **The detail canvas's rail IS the printed strip's rail**: both run the ONE planner
+unchanged. **Past that reach the PRINTED strip
+breaks the plain shaft out** (on-device request, from a shop sketch that drew the FWD taper 47" from
+the first cut): `undercutSheetStrips` hands each liner strip with cuts to the ONE pure
+`linerStripWithSetBreak` (`geom/UndercutMath.kt`), toward the S.E.T. the strip measures to
+(`undercutStripSetSide`) — chain carried to that S.E.T., draw range to the shaft end, and the plain
+shaft between the section and the end taper left out as `UndercutStrip.setBreak`
+(`UndercutStripBreak`); never when another liner or another section's cut lies between (a break
+leaves out plain shaft only), no break when under `UNDERCUT_SET_BREAK_MIN_ELIDE_MM` would go. The
+plan sizes the strip with the gap closed up and opens it `UNDERCUT_SET_BREAK_GAP_PT` wide
+(`UndercutStripXMap.withBreakGap`, which keeps `toScale` — no "Not to scale" note), and the draw
+runs each side as its own window. Printed sheet only: the strip builders never set a break, so the
+canvases owe the mirror. **The detail canvas's rail IS the printed strip's rail**: both run the ONE planner
 `planUndercutStripRails` (`pdf/UndercutStripLayout.kt` — top-level chain, nested rows against the
 parent, total, row plan) and the ONE draw routine `drawUndercutStripRails` (`pdf/UndercutRailDraw.kt`), the
 canvas at `UNDERCUT_DETAIL_DP_PER_PT` through `scale` parameters that default to 1 (PDF byte-identical). A

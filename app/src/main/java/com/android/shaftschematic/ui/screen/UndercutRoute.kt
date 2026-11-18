@@ -2007,8 +2007,9 @@ private fun UndercutDrawToSetRow(
                 "A liner section within " +
                     formatLenWithUnit(UNDERCUT_SET_REACH_MM.toDouble(), unit) +
                     " of the end taper or its S.E.T. is drawn out to the shaft end, taper " +
-                    "included, and its dimensions run to the S.E.T. On for a new job. Saved " +
-                    "with this job.",
+                    "included, and its dimensions run to the S.E.T. A section farther away " +
+                    "prints the shaft end across an S-break when only plain shaft lies " +
+                    "between. On for a new job. Saved with this job.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
