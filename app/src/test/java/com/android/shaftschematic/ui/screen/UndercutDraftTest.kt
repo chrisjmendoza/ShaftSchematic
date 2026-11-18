@@ -808,6 +808,88 @@ class UndercutDraftTest {
         assertEquals(UNDERCUT_NO_STOCK_FWD_MSG, atEnd.caption)
     }
 
+    // ── The confirm check: what blocks, in what order, and what may be recorded anyway ──
+
+    @Test
+    fun `a stored overlap does not block an edit that leaves the span alone`() {
+        val others = listOf(UndercutSpanMm("u1", 200f, 300f))
+        val stored = draftOf("u2", 250f, 100f)
+        // Ø and note only: nothing already stored is retroactively rejected.
+        assertNull(undercutConfirmCheck(stored.copy(diaMm = 180f, note = "x"), 1000f, others, baseline = stored))
+        // Moving it — even by a hair — is a new placement and is checked.
+        val moved = undercutConfirmCheck(stored.copy(startFromAftMm = 251f), 1000f, others, baseline = stored)
+        assertEquals(UndercutIssueKind.OVERLAP, moved?.kind)
+        // A stored span that leaves the shaft still blocks: the bounds check is not gated.
+        val stale = draftOf("u3", 980f, 50f)
+        assertEquals(UndercutIssueKind.BOUNDS, undercutConfirmCheck(stale.copy(diaMm = 5f), 1000f, emptyList(), baseline = stale)?.kind)
+    }
+
+    @Test
+    fun `a duplicate span is a hard block that names its partner`() {
+        val others = listOf(UndercutSpanMm("u3", 200f, 300f))
+        val dup = undercutConfirmCheck(draftOf("x", 200f, 100f), 1000f, others, mapOf("u3" to 3))
+        assertEquals(UndercutIssueKind.DUPLICATE, dup?.kind)
+        assertEquals("Same span as cut 3 — entered twice?", dup?.reason)
+        assertFalse(UndercutIssueKind.DUPLICATE.overridable)
+        // No partner number known: the generic wording. Accepting an overlap does not pass it.
+        assertEquals(
+            "Same span as another cut — entered twice?",
+            undercutConfirmCheck(
+                draftOf("x", 200f, 100f), 1000f, others, mapOf("u1" to 1),
+                accepted = setOf(UndercutIssueKind.OVERLAP, UndercutIssueKind.OFF_LINER),
+            )?.reason,
+        )
+        assertEquals("Same span as another cut — entered twice?", undercutConfirmIssue(draftOf("x", 200f, 100f), 1000f, others))
+    }
+
+    @Test
+    fun `a cut off the page's liner is asked about, after the bounds and before an overlap`() {
+        val liner = UndercutLinerSpan("L1", 500f, 1000f)
+        val others = listOf(UndercutSpanMm("far", 1150f, 1250f))
+        // 1200–1300: off the liner by 200 mm AND half into "far".
+        val draft = draftOf(PENDING_UNDERCUT_ID, 1200f, 100f)
+        fun check(accepted: Set<UndercutIssueKind> = emptySet()) = undercutConfirmCheck(
+            draft, 2000f, others, stripLiner = liner, amountText = { "${it.toInt()} mm" }, accepted = accepted,
+        )
+        assertEquals(UndercutIssue(UndercutIssueKind.OFF_LINER, "Not on this liner — 200 mm FWD of it"), check())
+        assertTrue(UndercutIssueKind.OFF_LINER.overridable)
+        // Accepting the one never accepts the other.
+        assertEquals(UndercutIssueKind.OVERLAP, check(setOf(UndercutIssueKind.OFF_LINER))?.kind)
+        assertEquals(UndercutIssueKind.OFF_LINER, check(setOf(UndercutIssueKind.OVERLAP))?.kind)
+        assertNull(check(setOf(UndercutIssueKind.OFF_LINER, UndercutIssueKind.OVERLAP)))
+        // A blank first-cut field and the bounds outrank it.
+        assertEquals(
+            UndercutIssueKind.SEED_BLANK,
+            undercutConfirmCheck(draft, 2000f, others, seedBlankIssue = "Enter the length", stripLiner = liner)?.kind,
+        )
+        assertEquals(
+            UndercutIssueKind.BOUNDS,
+            undercutConfirmCheck(draft.copy(lengthMm = 900f), 2000f, others, stripLiner = liner)?.kind,
+        )
+        // Chained to a cut of the section, or on a bare-shaft page: no question.
+        assertNull(
+            undercutConfirmCheck(
+                draft, 2000f, emptyList(), stripLiner = liner,
+                sectionCuts = listOf(UndercutSpanMm("run", 1000f, 1200f)),
+            ),
+        )
+        assertNull(undercutConfirmCheck(draft, 2000f, emptyList()))
+    }
+
+    @Test
+    fun `the blocked pill reads its override for each overridable kind only`() {
+        assertEquals(
+            "Overlaps cut 2 — tap to save anyway",
+            undercutBlockedTapLabel(UndercutIssue(UndercutIssueKind.OVERLAP, "Overlaps cut 2 — sit fully inside it or fully clear")),
+        )
+        assertEquals(
+            "Not on this liner — tap to record anyway",
+            undercutBlockedTapLabel(UndercutIssue(UndercutIssueKind.OFF_LINER, "Not on this liner — 3 in FWD of it")),
+        )
+        assertNull(undercutBlockedTapLabel(UndercutIssue(UndercutIssueKind.DUPLICATE, "Same span as cut 1 — entered twice?")))
+        assertNull(undercutBlockedTapLabel(UndercutIssue(UndercutIssueKind.SEED_BLANK, "Enter the length")))
+    }
+
     // ── Saved across an activity recreation ──────────────────────────────────
 
     private val anyScope = SaverScope { true }

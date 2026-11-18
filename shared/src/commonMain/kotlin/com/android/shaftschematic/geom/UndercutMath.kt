@@ -1695,3 +1695,131 @@ fun undercutStripsReachThread(
 ): Boolean = threadSpansMm.any { (a, b) ->
     b > a && strips.any { st -> st.drawStartMm < b && st.drawEndMm > a }
 }
+
+// ── Duplicate spans ──
+
+/**
+ * The id of the first cut in [otherSpans] whose span is the SAME as `[canonicalStartMm,
+ * canonicalStartMm + lengthMm]` — both ends within [epsMm] — or `null` when none is. One cut
+ * entered twice, not a cut inside a cut ([undercutSpanContains] excludes it): the confirm check
+ * blocks it outright, where a partial overlap may be saved on request.
+ */
+fun undercutDuplicatePartnerId(
+    canonicalStartMm: Float,
+    lengthMm: Float,
+    otherSpans: List<UndercutSpanMm>,
+    epsMm: Float = UNDERCUT_TOUCH_EPS_MM,
+): String? {
+    val endMm = canonicalStartMm + lengthMm
+    return otherSpans.firstOrNull { o ->
+        abs(o.startMm - canonicalStartMm) <= epsMm && abs(o.endMm - endMm) <= epsMm
+    }?.id
+}
+
+/**
+ * The blocked-duplicate wording: `"Same span as cut N — entered twice?"` with [partnerPosition]
+ * the partner's 1-based page position, the generic `"another cut"` when it has none here.
+ */
+fun undercutDuplicateMessage(partnerPosition: Int?): String =
+    if (partnerPosition != null) "Same span as cut $partnerPosition — entered twice?"
+    else "Same span as another cut — entered twice?"
+
+// ── A cut typed off its liner's section ──
+
+/** Which side of a liner a span lies on. */
+enum class UndercutLinerSide { AFT, FWD }
+
+/** A span wholly clear of a liner: the [side] it lies on and the [gapMm] from the liner's nearer edge. */
+data class UndercutOffLiner(val side: UndercutLinerSide, val gapMm: Float)
+
+/**
+ * True when the span `[startMm, startMm + lengthMm]` touches or overlaps [liner] — ends within
+ * [epsMm] of each other count.
+ */
+fun undercutSpanTouchesLiner(
+    startMm: Float,
+    lengthMm: Float,
+    liner: UndercutLinerSpan,
+    epsMm: Float = UNDERCUT_TOUCH_EPS_MM,
+): Boolean = startMm <= liner.endMm + epsMm && liner.startMm <= startMm + lengthMm + epsMm
+
+/**
+ * Where the span `[startMm, startMm + lengthMm]` lies when it is wholly off a liner section's
+ * page: it touches [liner] nowhere AND touches, overlaps or nests with none of [sectionCuts] —
+ * the OTHER cuts on that liner's strip, which already chain to it ([assignUndercutLiners]), so a
+ * cut run on from them into the body is still on the section. `null` when the span is on the
+ * section by either test, or has no length.
+ *
+ * On-device report: a sketch drawn mirrored was entered from the FWD S.E.T. instead of the AFT
+ * one, and the cuts landed on bare shaft clear of the liner they were typed on. Pure; nothing is
+ * stored — the confirm check asks about it before the cut is recorded.
+ */
+fun undercutOffLiner(
+    startMm: Float,
+    lengthMm: Float,
+    liner: UndercutLinerSpan,
+    sectionCuts: List<UndercutSpanMm>,
+    epsMm: Float = UNDERCUT_TOUCH_EPS_MM,
+): UndercutOffLiner? {
+    if (lengthMm <= 0f) return null
+    if (undercutSpanTouchesLiner(startMm, lengthMm, liner, epsMm)) return null
+    val endMm = startMm + lengthMm
+    if (sectionCuts.any { c -> c.endMm > c.startMm && startMm <= c.endMm + epsMm && c.startMm <= endMm + epsMm }) {
+        return null
+    }
+    return if (startMm >= liner.endMm) {
+        UndercutOffLiner(UndercutLinerSide.FWD, startMm - liner.endMm)
+    } else {
+        UndercutOffLiner(UndercutLinerSide.AFT, liner.startMm - endMm)
+    }
+}
+
+/**
+ * The same typed Distance read from the OPPOSITE S.E.T.: [reference] is that S.E.T., [startMm]
+ * the canonical start that keeps the displayed distance under it, and [distanceMm] that distance.
+ */
+data class UndercutMirroredStart(
+    val reference: UndercutReference,
+    val startMm: Float,
+    val distanceMm: Float,
+)
+
+/**
+ * [UndercutMirroredStart] for a span authored against an S.E.T. — the displayed distance under
+ * [reference] carried to the opposite S.E.T. through the conversion pair
+ * ([canonicalToUndercutStartMm] / [undercutStartToCanonicalMm]) at [lengthMm]; `null` for any
+ * other datum.
+ */
+fun undercutMirroredSetStart(
+    reference: UndercutReference,
+    canonicalStartMm: Float,
+    lengthMm: Float,
+    aftSetXMm: Float,
+    fwdSetXMm: Float,
+): UndercutMirroredStart? {
+    val opposite = when (reference) {
+        UndercutReference.AFT_SET -> UndercutReference.FWD_SET
+        UndercutReference.FWD_SET -> UndercutReference.AFT_SET
+        else -> return null
+    }
+    val distanceMm = canonicalToUndercutStartMm(reference, canonicalStartMm, lengthMm, aftSetXMm, fwdSetXMm)
+    val startMm = undercutStartToCanonicalMm(opposite, distanceMm, lengthMm, aftSetXMm, fwdSetXMm)
+    return UndercutMirroredStart(opposite, startMm, distanceMm)
+}
+
+/**
+ * The mirrored reading ([undercutMirroredSetStart]) of a span that lands on [liner] — the fix for
+ * a Distance measured from the wrong S.E.T. — or `null` when the span is not S.E.T.-authored or
+ * its mirror misses the liner too.
+ */
+fun undercutMirrorOntoLiner(
+    reference: UndercutReference,
+    canonicalStartMm: Float,
+    lengthMm: Float,
+    aftSetXMm: Float,
+    fwdSetXMm: Float,
+    liner: UndercutLinerSpan,
+    epsMm: Float = UNDERCUT_TOUCH_EPS_MM,
+): UndercutMirroredStart? =
+    undercutMirroredSetStart(reference, canonicalStartMm, lengthMm, aftSetXMm, fwdSetXMm)
+        ?.takeIf { undercutSpanTouchesLiner(it.startMm, lengthMm, liner, epsMm) }

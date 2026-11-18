@@ -473,6 +473,8 @@ class UndercutDetailOverlayTest {
                 .fetchSemanticsNodes().isNotEmpty(),
         )
 
+        // A new cut's Length is its own measurement: typed before it can be recorded.
+        typeAndCommit(hasText("Length (in)") and pendingCard, "1")
         rule.onNodeWithTag("undercut_confirm", useUnmergedTree = true).performClick()
         rule.waitForIdle()
         assertEquals(listOf(expected), addedRefs)
@@ -495,6 +497,7 @@ class UndercutDetailOverlayTest {
             rule.onAllNodesWithText("Distance from Liner AFT (in)").fetchSemanticsNodes().isNotEmpty(),
         )
 
+        typeAndCommit(hasText("Length (in)") and pendingCard, "1")
         rule.onNodeWithTag("undercut_confirm", useUnmergedTree = true).performClick()
         rule.waitForIdle()
         assertEquals(listOf(UndercutReference.LINER_AFT), addedRefs)
@@ -979,13 +982,18 @@ class UndercutDetailOverlayTest {
 
     // ── "Past the liner edge" for an overhang the flush lands ──
 
-    /** The add flow's card with a 40 in Length typed but not committed: its FWD end runs off the liner. */
+    /**
+     * The add flow's card with a 1 in Length recorded in its draft, then a 40 in Length typed but
+     * not committed: its FWD end runs off the liner.
+     */
     private fun pendingWithInFlightOverhang() {
         show(listOf(cut("u1", 600f)))
         rule.onNodeWithTag("undercut_add_in_liner").performClick()
         settle()
         val length = hasText("Length (in)") and
             hasAnyAncestor(hasTestTag("undercut_card_$PENDING_UNDERCUT_ID"))
+        // A new cut's Length opens empty; one typed length makes it recordable.
+        typeAndCommit(length, "1")
         rule.onNode(length).performScrollTo().performTextReplacement("40")
         rule.waitForIdle()
     }
@@ -1070,9 +1078,15 @@ class UndercutDetailOverlayTest {
         rule.onNodeWithText("New undercut").assertIsDisplayed()
         rule.onNode(hasText("Distance from Liner AFT (in)") and pendingCard).assertExists()
         assertTrue(rule.onAllNodes(editableStartsWith("5.905") and pendingCard).fetchSemanticsNodes().isNotEmpty())
-        assertTrue(rule.onAllNodes(editableIs("1") and pendingCard).fetchSemanticsNodes().isNotEmpty())
+        // The Length is the next cut's own measurement: it opens EMPTY, and the pill asks for it
+        // rather than offering to record a 1 in placeholder nobody typed.
+        (hasText("Length (in)") and pendingCard).holds("")
         assertTrue(rule.onAllNodes(editableStartsWith("7") and pendingCard).fetchSemanticsNodes().isEmpty())
-        // A new cut is offered for recording, not as a change to confirm.
+        rule.onNodeWithTag("undercut_status_pill", useUnmergedTree = true)
+            .assert(hasAnyDescendant(hasText("Enter the length")))
+        rule.onNodeWithTag("undercut_confirm", useUnmergedTree = true).assertDoesNotExist()
+        // Typed, it is a new cut offered for recording, not a change to confirm.
+        typeAndCommit(hasText("Length (in)") and pendingCard, "1")
         rule.onNodeWithTag("undercut_status_pill", useUnmergedTree = true)
             .assert(hasAnyDescendant(hasText("Record cut")))
     }
@@ -1082,6 +1096,7 @@ class UndercutDetailOverlayTest {
         show(listOf(cut("u1", 900f)))
         rule.onNodeWithTag("undercut_add_in_liner").performClick()
         settle()
+        typeAndCommit(hasText("Length (in)") and pendingCard, "1")
         typeAndCommit(hasText("Measured Ø (in)") and pendingCard, "6")
         rule.onNode(nextCutOn(PENDING_UNDERCUT_ID)).performScrollTo().performClick()
         settle()
@@ -1093,6 +1108,76 @@ class UndercutDetailOverlayTest {
         // 975.4 − 500 = 475.4 mm = 18.7165 in from the liner's AFT edge.
         assertTrue(rule.onAllNodes(editableStartsWith("18.71") and pendingCard).fetchSemanticsNodes().isNotEmpty())
         assertTrue(rule.onAllNodes(editableStartsWith("6") and pendingCard).fetchSemanticsNodes().isEmpty())
+        (hasText("Length (in)") and pendingCard).holds("")
+    }
+
+    @Test
+    fun `next cut is held while the new cut's own Length is empty`() {
+        show(listOf(cut("u1", 900f)))
+        rule.onNodeWithTag("undercut_add_in_liner").performClick()
+        settle()
+        typeAndCommit(hasText("Measured Ø (in)") and pendingCard, "6")
+        rule.onNode(nextCutOn(PENDING_UNDERCUT_ID)).performScrollTo().assertIsNotEnabled()
+        assertTrue("a cut with no typed Length was recorded at $added", added.isEmpty())
+    }
+
+    @Test
+    fun `a next cut with only its Ø typed is not recorded on the way out`() {
+        // On-device report: a dirty seed committed on leave, so typing only the Ø recorded a 1 in cut.
+        show(listOf(cut("u1", 600f), cut("u2", 900f)), initialSelectedId = "u1")
+        rule.onNode(nextCutOn("u1")).performScrollTo().performClick()
+        settle()
+        typeAndCommit(hasText("Measured Ø (in)") and pendingCard, "6")
+        rule.onNodeWithContentDescription("Back to Undercut Drawing").performClick()
+        settle()
+        rule.onNodeWithText("Undercut can't be saved").assertIsDisplayed()
+        assertTrue(rule.onAllNodesWithText("Enter the length", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
+        assertTrue(rule.onAllNodesWithTag("undercut_leave_save_anyway").fetchSemanticsNodes().isEmpty())
+        assertEquals(0, closed)
+        assertTrue("a cut with no typed Length was recorded at $added", added.isEmpty())
+    }
+
+    // ── A stored overlap, and a duplicate ──
+
+    @Test
+    fun `a Ø typed on a recorded cut that overlaps another records on the way out`() {
+        // u2 (650–750) already overlaps u1 (600–700): nothing stored is retroactively rejected,
+        // so a Ø edit that leaves the span alone records as usual — and the card still says so.
+        show(listOf(cut("u1", 600f, len = 100f), cut("u2", 650f, len = 100f)), initialSelectedId = "u2")
+        typeAndCommit(hasText("Measured Ø (in)") and onCard("u2"), "7")
+        pill.assert(hasAnyDescendant(hasText("Confirm change")))
+        assertTrue(
+            rule.onAllNodes(
+                hasText("Overlaps cut 1 — sit fully inside it or fully clear") and onCard("u2"),
+                useUnmergedTree = true,
+            ).fetchSemanticsNodes().isNotEmpty(),
+        )
+
+        swipe(left = false)
+        assertTrue(
+            "a leave prompt is up",
+            rule.onAllNodesWithText("Save with an overlap?").fetchSemanticsNodes().isEmpty(),
+        )
+        assertNoLeavePrompt()
+        assertEquals(listOf("u2"), updated)
+        assertEquals(7f * 25.4f, updatedValues.single().second, 1e-3f)
+    }
+
+    @Test
+    fun `a cut moved onto another's span is blocked as a duplicate with no save anyway`() {
+        // 100 mm from the liner's AFT edge, 50 mm long: exactly u1's span.
+        show(listOf(cut("u1", 600f), cut("u2", 900f)), initialSelectedId = "u2")
+        typeAndCommit(hasText("Distance from Liner AFT (in)") and onCard("u2"), "3.93700787")
+        val msg = "Same span as cut 1 — entered twice?"
+        pill.assert(hasAnyDescendant(hasText(msg)))
+        rule.onNodeWithTag("undercut_blocked_save", useUnmergedTree = true).assertDoesNotExist()
+
+        swipe(left = false)
+        rule.onNodeWithText("Undercut can't be saved").assertIsDisplayed()
+        assertTrue(rule.onAllNodesWithTag("undercut_leave_save_anyway").fetchSemanticsNodes().isEmpty())
+        assertTrue(rule.onAllNodesWithTag("undercut_leave_record_off_liner").fetchSemanticsNodes().isEmpty())
+        rule.onNodeWithTag("undercut_leave_discard").assertIsDisplayed()
+        assertTrue("a duplicate reached the record", updated.isEmpty())
     }
 
     @Test
@@ -1501,7 +1586,8 @@ class UndercutDetailOverlayTest {
         show(listOf(cut("u1", 600f)), seedNewCut = true)
         settle()
         rule.onNodeWithText("New undercut").assertIsDisplayed()
-        pill.assert(hasAnyDescendant(hasText("Record cut")))
+        // Butted on u1, its Distance sits on a real shoulder; its Length is still to be typed.
+        pill.assert(hasAnyDescendant(hasText("Enter the length")))
         rule.onNodeWithTag("undercut_add_in_liner").assertIsNotEnabled()
         assertTrue("a seeded add was recorded at $added", added.isEmpty())
 
@@ -1601,6 +1687,7 @@ class UndercutDetailOverlayTest {
         val restorer = StateRestorationTester(rule)
         show(listOf(cut("u1", 600f)), seedNewCut = true, restorer = restorer)
         settle()
+        typeAndCommit(hasText("Length (in)") and pendingCard, "1")
         diaField(pendingCard).performScrollTo().performTextReplacement("5")
         rule.waitForIdle()
 
