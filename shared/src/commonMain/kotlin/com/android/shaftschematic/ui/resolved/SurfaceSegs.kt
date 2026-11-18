@@ -122,23 +122,30 @@ private fun bodyBlendCurves(b: ResolvedBody, blends: List<BodyBlend>): List<Unde
     val aft = mine.firstOrNull { it.end == LinerAuthoredReference.AFT }
     val fwd = mine.firstOrNull { it.end == LinerAuthoredReference.FWD }
     var flat0 = b.startMmPhysical
-    val out = mutableListOf<UndercutBlendCurve>()
+    var aftCurve: UndercutBlendCurve? = null
+    var fwdCurve: UndercutBlendCurve? = null
 
-    fun curve(x0: Float, x1: Float, dia0: Float, dia1: Float, blend: BodyBlend, atAft: Boolean) {
-        out += UndercutBlendCurve(
+    fun curve(x0: Float, x1: Float, dia0: Float, dia1: Float, blend: BodyBlend, atAft: Boolean) =
+        UndercutBlendCurve(
             atAft, blendPolyline(x0, x1, dia0 / 2f, dia1 / 2f, blend.profile, chamfer = blend.chamfer()),
         )
-    }
 
     if (aft != null) {
         val end = (b.startMmPhysical + aft.lengthMm).coerceAtMost(b.endMmPhysical)
-        if (end > b.startMmPhysical) { curve(b.startMmPhysical, end, aft.neighbourDiaMm, b.diaMm, aft, true); flat0 = end }
+        if (end > b.startMmPhysical) { aftCurve = curve(b.startMmPhysical, end, aft.neighbourDiaMm, b.diaMm, aft, true); flat0 = end }
     }
+    var flat1 = b.endMmPhysical
     if (fwd != null) {
         val start = (b.endMmPhysical - fwd.lengthMm).coerceAtLeast(flat0)
-        if (b.endMmPhysical > start) curve(start, b.endMmPhysical, b.diaMm, fwd.neighbourDiaMm, fwd, false)
+        if (b.endMmPhysical > start) { fwdCurve = curve(start, b.endMmPhysical, b.diaMm, fwd.neighbourDiaMm, fwd, false); flat1 = start }
     }
-    return out
+    // The flat run between the ramps: each ramp's retrace may run on along it, to the body's far
+    // face, or to the middle when both faces are blended, so the two never retrace one stretch twice.
+    val mid = if (aftCurve != null && fwdCurve != null) (flat0 + flat1) / 2f else null
+    return listOfNotNull(
+        aftCurve?.copy(flatToMm = mid ?: flat1),
+        fwdCurve?.copy(flatToMm = mid ?: flat0),
+    )
 }
 
 /** Every blended body face's ramp, aft → fwd — the undercut drawings' blend input. */
