@@ -34,6 +34,9 @@ import com.android.shaftschematic.ui.resolved.withAutoDiaOverridesSurviving
 import com.android.shaftschematic.ui.resolved.withDemotedBodyDiaCallout
 import com.android.shaftschematic.ui.resolved.withDemotedBodyFiberglass
 import com.android.shaftschematic.ui.resolved.autoSectionFiberglassOn
+import com.android.shaftschematic.ui.resolved.autoSectionFacesOn
+import com.android.shaftschematic.ui.resolved.withAutoSectionFaces
+import com.android.shaftschematic.ui.resolved.withDemotedBodyFaces
 import com.android.shaftschematic.model.withFiberglass
 import com.android.shaftschematic.model.withAutoSectionFiberglassAndSeals
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel.Companion.deriveTaperDiameters
@@ -115,10 +118,18 @@ fun ShaftViewModel.addBodyAt(
     blendFwdRadiusMm: Float = 0f,
     /** Whether the body is wrapped in fiberglass (`AddBodyDialog`'s Fiberglass box). */
     fiberglass: Boolean = false,
+    /**
+     * A PROMOTION ("Explicit body" on an auto card): the body takes every face choice of the
+     * bare-shaft section it is created on — blends, Angle entries, liner targets, seal areas and
+     * their lengths (`autoSectionFacesOn`), over the blend arguments above (on-device ruling:
+     * "all checkboxes must carry over"). Off for `AddBodyDialog`, whose own choices stand.
+     */
+    carryAutoSectionFaces: Boolean = false,
     target: SpecTarget = SpecTarget.ORIGINAL,
 ) {
     val id = newId()
     updateSpec(target) { s ->
+        val sectionFaces = if (carryAutoSectionFaces) s.autoSectionFacesOn(startMm, startMm + max(0f, lengthMm)) else null
         s.copy(
             bodies = listOf(
                 Body(
@@ -159,7 +170,7 @@ fun ShaftViewModel.addBodyAt(
                     // Promoting a wrapped bare-shaft section keeps it wrapped, the Ø-callout carry.
                     fiberglass = fiberglass ||
                         s.autoSectionFiberglassOn(startMm, startMm + max(0f, lengthMm)),
-                )
+                ).let { b -> sectionFaces?.let { (aft, fwd) -> b.withAutoSectionFaces(aft, fwd) } ?: b }
             ) + s.bodies
         ).withAutoDiaOverridesSurviving(before = s)
     }
@@ -256,6 +267,7 @@ fun ShaftViewModel.removeBody(id: String, target: SpecTarget = SpecTarget.ORIGIN
         ).withAutoDiaOverridesSurviving(before = s)
             .withDemotedBodyDiaCallout(s.bodies[idx])
             .withDemotedBodyFiberglass(s.bodies[idx])
+            .withDemotedBodyFaces(s.bodies[idx])
     }
 
     if (removed) {
