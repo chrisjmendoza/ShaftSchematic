@@ -935,7 +935,7 @@ measurement sheet before shipping). Every final sheet is MARKED (`ProjectInfo.dr
 "Final": `Drawing: Final` in the footer job block and the runout header, a bold FINAL badge on
 the Side line, and a filename suffix — `_Final`, `_Final_Runout` with bubbles elected,
 `_Final_RunoutSheet` for the banner's blank classic sheet, and `_Final_BeforeAfter` for the
-Original + Final sheet: FOUR distinct documents, never collapsed onto one name); blank on every other caller, so existing output is
+Original + Final sheet (plus `_Final_FullLength`, below): FIVE distinct documents, never collapsed onto one name); blank on every other caller, so existing output is
 byte-identical. Every OTHER export (the original schematic included) names its file through the
 ONE builder `buildOutputFilename` (`ui/screen/OutputDoc.kt`): `DocumentNaming`'s sanitized
 "Job - Customer - Vessel - SIDE" base (the saved document's name when the job has none) + `_<document suffix>` (`_schematic`, `_runout`, `_wear`,

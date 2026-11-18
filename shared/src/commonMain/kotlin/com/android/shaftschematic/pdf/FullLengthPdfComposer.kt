@@ -10,6 +10,7 @@ import com.android.shaftschematic.gfx.RectF
 import com.android.shaftschematic.gfx.left
 import com.android.shaftschematic.gfx.right
 import com.android.shaftschematic.gfx.top
+import com.android.shaftschematic.geom.drawnExtentMm
 import com.android.shaftschematic.gfx.color
 import com.android.shaftschematic.gfx.isFakeBoldText
 import com.android.shaftschematic.gfx.strokeWidth
@@ -157,8 +158,11 @@ internal fun drawFullLengthBand(
     )
 
     val docSpec = spec.withResolvedBodies(resolved)
-    val lengthMm = spec.renderSpanSpec().overallLengthMm
-    if (lengthMm <= 0f) return
+    val spanSpec = spec.renderSpanSpec()
+    if (spanSpec.overallLengthMm <= 0f) return
+    // The drawn extent, not the OAL: a thread excluded from the overall length sits outside
+    // 0..OAL, and a map fitted to the OAL alone would draw it off the band's end.
+    val extent = spanSpec.drawnExtentMm()
     val maxDiaMm = listOfNotNull(
         docSpec.bodies.maxOfOrNull { it.diaMm },
         docSpec.liners.maxOfOrNull { it.odMm },
@@ -166,8 +170,8 @@ internal fun drawFullLengthBand(
         docSpec.threads.maxOfOrNull { it.majorDiaMm },
     ).maxOrNull()?.takeIf { it > 0f } ?: return
 
-    val xPerMm = rect.width() / lengthMm
-    val xAt: (Float) -> Float = { mm -> rect.left + mm * xPerMm }
+    val xPerMm = rect.width() / extent.spanMm
+    val xAt: (Float) -> Float = { mm -> rect.left + (mm - extent.startMm) * xPerMm }
     val drawnMaxDiaPt = fullLengthDrawnDiaPt(maxDiaMm, xPerMm)
     val rPerMm = drawnMaxDiaPt / maxDiaMm / 2f
     val rPx: (Float) -> Float = { dia -> dia * rPerMm }
@@ -212,20 +216,32 @@ internal fun drawFullLengthBand(
         contentRight = rect.right,
     )
     val leader = Paint(outline).apply { strokeWidth = FULL_LENGTH_DIM_PT * thickness }
+    val halo = Paint(ANTI_ALIAS_FLAG).apply { style = PaintStyle.FILL; color = Color.WHITE }
+    val labelHalf = label.measureText(FIBERGLASS_LABEL) / 2f
+    fun aboveBaseline(row: Int) = shaftTop - 3f - row * FULL_LENGTH_LABEL_ROW_PT
+    // Every leader first, then every label on a sheet-white knockout: a leader dropping from the
+    // upper row passes through the lower row, and drawn label by label it would strike through
+    // a word already printed there.
     placements.forEachIndexed { i, p ->
+        if (p.row < 0) return@forEachIndexed
         val b = wrapped[i]
-        val r = rPx(b.diaMm)
+        val runMid = (xAt(b.startMmPhysical) + xAt(b.endMmPhysical)) / 2f
+        c.drawLine(p.centerX, aboveBaseline(p.row) + 2f, runMid, cy - rPx(b.diaMm), leader)
+    }
+    placements.forEach { p ->
         if (p.row < 0) {
             // Inside: on a knockout of the plain fiberglass colour, so the winding lines never
             // run through the letters.
-            val half = label.measureText(FIBERGLASS_LABEL) / 2f + FIBERGLASS_LABEL_PAD_PT
+            val half = labelHalf + FIBERGLASS_LABEL_PAD_PT
             c.drawRect(p.centerX - half, cy - FIBERGLASS_LABEL_PT * 0.6f, p.centerX + half, cy + FIBERGLASS_LABEL_PT * 0.6f, fill)
             c.drawText(FIBERGLASS_LABEL, p.centerX, cy + FIBERGLASS_LABEL_PT * 0.35f, label)
         } else {
-            val baseline = shaftTop - 3f - p.row * FULL_LENGTH_LABEL_ROW_PT
+            val baseline = aboveBaseline(p.row)
+            c.drawRect(
+                p.centerX - labelHalf - 1f, baseline - FIBERGLASS_LABEL_PT,
+                p.centerX + labelHalf + 1f, baseline + 1.5f, halo,
+            )
             c.drawText(FIBERGLASS_LABEL, p.centerX, baseline, label)
-            val runMid = (xAt(b.startMmPhysical) + xAt(b.endMmPhysical)) / 2f
-            c.drawLine(p.centerX, baseline + 2f, runMid, cy - r, leader)
         }
     }
 }

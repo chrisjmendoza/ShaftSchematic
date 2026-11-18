@@ -129,6 +129,30 @@ class FullLengthPdfComposerTest {
     }
 
     @Test
+    fun `a thread excluded from the OAL stays inside the band`() {
+        // The band maps the DRAWN extent: an excluded AFT thread sits before 0, and a map fitted
+        // to the OAL alone would draw it off the band's left end.
+        val threadLen = 5.5f * 25.4f
+        val base = FiberglassShaftFixture.spec()
+        val spec = base.copy(
+            threads = base.threads.map {
+                it.copy(startFromAftMm = -threadLen, excludeFromOAL = true, isAftEnd = true)
+            },
+        )
+        val c = compose(spec)
+        val band = fullLengthBands(PDF_PAGE_WIDTH_PT.toFloat(), PDF_PAGE_HEIGHT_PT.toFloat()).fullLength
+        val xPerMm = band.width() / (spec.overallLengthMm + threadLen)
+        val sections = fiberglassBodyRuns(spec, resolveComponents(spec)).sortedBy { it.startMmPhysical }
+        val fills = c.rects.filter { it.color == FIBERGLASS_FILL_COLOR && it.rect.height() > 20f }
+            .sortedBy { it.rect.left }
+        assertEquals(sections.size, fills.size)
+        sections.zip(fills).forEach { (s, f) ->
+            assertEquals(band.left + (s.startMmPhysical + threadLen) * xPerMm, f.rect.left, 0.5f)
+            assertEquals(band.left + (s.endMmPhysical + threadLen) * xPerMm, f.rect.right, 0.5f)
+        }
+    }
+
+    @Test
     fun `a shaft with no fiberglass prints no label and no legend`() {
         val c = compose(FiberglassShaftFixture.spec().copy(autoFiberglass = emptyList()))
         assertTrue(c.texts.none { it.text == FIBERGLASS_LABEL })

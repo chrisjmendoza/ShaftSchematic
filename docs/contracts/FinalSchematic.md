@@ -107,7 +107,8 @@ represented, unbroken like the wear drawing, with the schematic and its measurem
 selects `FinalSheetKind.FULL_LENGTH` — `composeFullLengthPdfOnCanvas`
 (`pdf/FullLengthPdfComposer.kt`): a `FULL_LENGTH_BAND_PT` band across the top of the page drawing
 the whole FINAL shaft through the ONE simple profile (`drawSimpleShaftProfile(breakLongRuns = false)`)
-at a LINEAR x map — lengths to scale, no S-break — with diameters enlarged to a readable height
+at a LINEAR x map over the drawn extent (`drawnExtentMm`, so a thread excluded from the OAL stays
+inside the band) — lengths to scale, no S-break — with diameters enlarged to a readable height
 (`fullLengthDrawnDiaPt`: true scale when ≥ `FULL_LENGTH_SHAFT_MIN_PT`, else enlarged to it, capped
 at `FULL_LENGTH_SHAFT_MAX_PT`; it carries no values, so nothing is measured off it), and under it
 the final schematic through the ONE schematic composer in a `SheetBand` hosting the footer (the
