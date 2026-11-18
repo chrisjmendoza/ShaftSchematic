@@ -1974,6 +1974,8 @@ fun UndercutWindowDetailOverlay(
                                     setTierPitch = setTierPitchPx,
                                     captionMinX = UNDERCUT_EDGE_PAD_DP.dp.toPx() / 2f,
                                     captionMaxX = size.width - UNDERCUT_EDGE_PAD_DP.dp.toPx() / 2f,
+                                    // The canvas's own top edge: a caption is never cut off there.
+                                    captionMinY = 0f,
                                 )
                             }
 

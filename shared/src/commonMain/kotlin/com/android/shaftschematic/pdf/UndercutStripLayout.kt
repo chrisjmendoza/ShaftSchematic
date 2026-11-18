@@ -1143,19 +1143,73 @@ fun undercutCaptionTwoLines(caption: String): Pair<String, String>? {
 }
 
 /**
+ * A rectangle a rail caption must stay clear of — a rail value's halo, or a caption already placed
+ * — in canvas units, y down. Plain numbers, so the placement rule stays pure.
+ */
+data class UndercutCaptionBox(val left: Float, val top: Float, val right: Float, val bottom: Float) {
+    /** The area this box shares with [o]; 0 when they only touch or stand apart. */
+    fun overlapArea(o: UndercutCaptionBox): Float {
+        val w = minOf(right, o.right) - maxOf(left, o.left)
+        val h = minOf(bottom, o.bottom) - maxOf(top, o.top)
+        return if (w > 0f && h > 0f) w * h else 0f
+    }
+}
+
+/**
+ * The box a caption set at [spot] covers, padded by [padX] / [padY]: one line [textWidth] wide, or
+ * — [UndercutRailCaptionSpot.wrapped] — two lines [wrappedWidth] wide, the second one line height
+ * (`descent − ascent`) down. Up and down it runs from [inkTop] over the first baseline to
+ * [inkBottom] under the last (the caption's own glyphs, baseline-relative, y down — the font's
+ * [ascent] / [descent] when not measured). The ONE measure [undercutRailCaptionSpot] tests and the
+ * draw site hands on as an obstacle for the next caption.
+ */
+fun undercutRailCaptionBox(
+    spot: UndercutRailCaptionSpot,
+    textWidth: Float,
+    wrappedWidth: Float?,
+    ascent: Float,
+    descent: Float,
+    padX: Float,
+    padY: Float,
+    inkTop: Float = ascent,
+    inkBottom: Float = descent,
+): UndercutCaptionBox {
+    val wrapped = spot.wrapped && wrappedWidth != null
+    val w = if (wrapped) wrappedWidth!! else textWidth
+    val lastBaseline = if (wrapped) spot.baselineY + (descent - ascent) else spot.baselineY
+    return UndercutCaptionBox(
+        spot.leftX - padX, spot.baselineY + inkTop - padY, spot.leftX + w + padX, lastBaseline + inkBottom + padY,
+    )
+}
+
+/**
  * Places a baseline rail's caption ([UndercutSetRailSpan.caption]) — the ONE rule behind the
- * printed strip and the detail canvas. The caption stands just PAST the rail's station end, on the
- * rail's own height, reading on from the arrowhead (on-device request: a label at the edge of the
- * dimension line saying what it references). Where that would run past the drawable range
- * `[minX, maxX]` it is set on two lines there when those fit ([wrappedWidth], the wider of the two;
- * on-device report: a caption moved above its line overprinted the title of the section above),
- * and only then moves inboard of the arrowhead, above the line and clear of the rail's own value,
- * kept inside the range.
+ * printed strip and the detail canvas. It tries, in order, and takes the first spot that is inside
+ * the drawable range — `[minX, maxX]` across, and `[minTopY, maxBottomY]` up and down for the
+ * caption's halo — and clear of every box in [obstacles] (the strip's rail values and the captions
+ * placed before it):
+ *
+ * 1. one line just PAST the rail's station end, on the rail's height, reading on from the arrowhead
+ *    (on-device request: a label at the edge of the dimension line saying what it references);
+ * 2. two lines there ([wrappedWidth], the wider of the two), centred on the rail's height;
+ * 3. two lines there with the FIRST on the rail's height — the block hangs down a line (on-device
+ *    report: a centred block rose over the "FWD →" row and the title of the section above);
+ * 4. two lines there, wholly below the rail line;
+ * 5. one line there, just below the rail line;
+ * 6. one line inboard of the arrowhead, above the line clear of the rail's own value, then below
+ *    it — both kept inside `[minX, maxX]`.
+ *
+ * When no spot is clear it takes the one overlapping least (obstacle area plus the area outside
+ * the range), earlier first on a tie — a caption is never dropped. With no vertical range and no
+ * obstacles the rule is the original three steps (1, 2, then 6 above the line).
  *
  * [stationX] is the rail's station end and [setOnLeft] whether its S.E.T. lies to the left (an
  * AFT datum on an AFT-left drawing); [lineY] its tier line; [textWidth], [ascent] (negative) and
  * [descent] the caption's measure in the rail's text paint; [gap] the air between the station
- * witness and the text; [arrow] the drawn head length.
+ * witness and the text; [arrow] the drawn head length; [padX]/[padY] the clearance round the
+ * caption's glyphs ([inkTop]/[inkBottom]) that the range and the obstacles are tested with. The
+ * glyphs, not the font's full ascent, decide: two values on neighbouring tiers stand that close
+ * already, and a caption on its rail's height is no nearer its neighbours than a value there.
  */
 fun undercutRailCaptionSpot(
     stationX: Float,
@@ -1170,20 +1224,61 @@ fun undercutRailCaptionSpot(
     maxX: Float,
     /** The wider line of the caption set on two lines; null never wraps. */
     wrappedWidth: Float? = null,
+    minTopY: Float = Float.NEGATIVE_INFINITY,
+    maxBottomY: Float = Float.POSITIVE_INFINITY,
+    obstacles: List<UndercutCaptionBox> = emptyList(),
+    padX: Float = 0f,
+    padY: Float = 0f,
+    /** The caption's glyphs over / under its baseline (y down) — the font's [ascent] / [descent] when not measured. */
+    inkTop: Float = ascent,
+    inkBottom: Float = descent,
 ): UndercutRailCaptionSpot {
+    val lineH = descent - ascent
     val centredBaseline = lineY - (ascent + descent) / 2f
+    // A first line whose top stands `gap / 2` under the rail line.
+    val belowBaseline = lineY + gap * 0.5f - ascent
+    val candidates = ArrayList<UndercutRailCaptionSpot>(7)
     val outboardLeft = if (setOnLeft) stationX + gap else stationX - gap - textWidth
-    val fits = if (setOnLeft) outboardLeft + textWidth <= maxX else outboardLeft >= minX
-    if (fits) return UndercutRailCaptionSpot(outboardLeft, centredBaseline)
+    candidates += UndercutRailCaptionSpot(outboardLeft, centredBaseline)
     if (wrappedWidth != null) {
         val left = if (setOnLeft) stationX + gap else stationX - gap - wrappedWidth
-        val wrapFits = if (setOnLeft) left + wrappedWidth <= maxX else left >= minX
-        // Two lines centred on the rail's height.
-        if (wrapFits) return UndercutRailCaptionSpot(left, centredBaseline - (descent - ascent) / 2f, wrapped = true)
+        candidates += UndercutRailCaptionSpot(left, centredBaseline - lineH / 2f, wrapped = true)
+        candidates += UndercutRailCaptionSpot(left, centredBaseline, wrapped = true)
+        candidates += UndercutRailCaptionSpot(left, belowBaseline, wrapped = true)
     }
+    candidates += UndercutRailCaptionSpot(outboardLeft, belowBaseline)
     val inboardLeft = if (setOnLeft) stationX - arrow - gap - textWidth else stationX + arrow + gap
     val hi = (maxX - textWidth).coerceAtLeast(minX)
-    return UndercutRailCaptionSpot(inboardLeft.coerceIn(minX, hi), lineY - gap - descent)
+    val inboard = inboardLeft.coerceIn(minX, hi)
+    candidates += UndercutRailCaptionSpot(inboard, lineY - gap - descent)
+    candidates += UndercutRailCaptionSpot(inboard, lineY + arrow * 0.5f + gap * 0.5f - ascent)
+
+    // What a spot costs: the area it lies over another box or outside the range. Across, the
+    // text itself must fit (an outboard spot past the range edge fails); up and down, its halo.
+    fun cost(s: UndercutRailCaptionSpot): Float {
+        val b = undercutRailCaptionBox(s, textWidth, wrappedWidth, ascent, descent, padX, padY, inkTop, inkBottom)
+        val textLeft = b.left + padX
+        val textRight = b.right - padX
+        val h = b.bottom - b.top
+        val w = b.right - b.left
+        var c = 0f
+        c += (minX - textLeft).coerceAtLeast(0f) * h + (textRight - maxX).coerceAtLeast(0f) * h
+        c += (minTopY - b.top).coerceAtLeast(0f).coerceAtMost(h) * w
+        c += (b.bottom - maxBottomY).coerceAtLeast(0f).coerceAtMost(h) * w
+        obstacles.forEach { c += b.overlapArea(it) }
+        return c
+    }
+    var best = candidates.first()
+    var bestCost = Float.POSITIVE_INFINITY
+    for (s in candidates) {
+        val c = cost(s)
+        if (c <= 0f) return s
+        if (c < bestCost) {
+            best = s
+            bestCost = c
+        }
+    }
+    return best
 }
 
 /**

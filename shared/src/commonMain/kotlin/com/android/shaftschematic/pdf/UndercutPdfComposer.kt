@@ -637,8 +637,18 @@ private fun drawUndercutSheet(
 
     // ── Detail strips, one per liner / bare-shaft cluster ────────────────────
     var notToScale = false
+    // What prints above each strip — the "← AFT / FWD →" row, then, per strip drawn, its title —
+    // so a strip's rail captions are placed under it (on-device report: a caption overprinted the
+    // "FWD →" label and the title of the section above).
+    val directionRowInkBottom = midTopFull + text.textSize + text.fontMetrics.descent
+    val drawnTitles = ArrayList<Pair<WearStripCell, Float>>(onPage.size)
     onPage.forEachIndexed { i, strip ->
         val cell = stripCells[i]
+        val ceiling = drawnTitles
+            .filter { (above, _) -> above.top < cell.top && above.left < cell.right && above.right > cell.left }
+            .maxOfOrNull { it.second }
+            ?.let { maxOf(it, directionRowInkBottom) }
+            ?: directionRowInkBottom
         // A liner strip's title anchor is the LINER's own edge-to-SET datum — the same
         // figure the schematic and the wear sheet print for this liner — never a cut's
         // shoulder (on-device report: a cut 11.5 in into a liner 20 in from the AFT SET
@@ -647,7 +657,7 @@ private fun drawUndercutSheet(
         val stripLiner = stripLinerOf(strip)
         val stripUnit = stripUnitOf(strip)
         val stripSide = stripSideOf(strip)
-        drawUndercutDetailStrip(
+        drawnTitles += cell to drawUndercutDetailStrip(
             c, docSpec, surfaceSegs, strip,
             strip.undercutIds.mapNotNull { id -> undercutById[id] },
             clampedById,
@@ -706,6 +716,7 @@ private fun drawUndercutSheet(
             diaInside = diaInside && !startedPage,
             drawnAftEndMm = sheet.drawnAftEndMm,
             drawnFwdEndMm = sheet.drawnFwdEndMm,
+            captionMinY = ceiling + UC_CAPTION_CLEAR_PT,
         )
     }
     if (overflow.isNotEmpty()) {
@@ -1964,6 +1975,9 @@ class UndercutInsideDiaMark(
  * onto (on-device report: a fully outlined liner reads as a finished figure and invites
  * sketching on top of printed lines). A non-blank export of an empty record keeps the fully
  * drawn started strip.
+ *
+ * Returns where the strip's ink ends at the bottom — its title's descent, never above
+ * [stripBottom] — so the strip below keeps its rail captions under it.
  */
 private fun drawUndercutDetailStrip(
     c: Canvas,
@@ -2078,7 +2092,12 @@ private fun drawUndercutDetailStrip(
      */
     drawnAftEndMm: Float = 0f,
     drawnFwdEndMm: Float = shaftExtentMm,
-) {
+    /**
+     * The highest a rail caption may reach — just under whatever prints above this strip (the
+     * "← AFT / FWD →" row, the title of the section above), so it can never overprint it.
+     */
+    captionMinY: Float = Float.NEGATIVE_INFINITY,
+): Float {
     fun planWith(breakGapWidthPt: Float) = planUndercutDetailStrip(
         segs, strip, undercuts, clampedById, stripLeft, stripRight, unit, text, diaText,
         shaftExtentMm, startedStrip, dual, dualStacked, railSplitAtMm, arrowSizePt, titleAirPt,
@@ -2093,7 +2112,7 @@ private fun drawUndercutDetailStrip(
         drawnFwdEndMm = drawnFwdEndMm,
         breakGapWidthPt = breakGapWidthPt,
     )?.resolveInsideDia(stripTop, stripBottom, dualStacked)
-    val widePlan = planWith(UNDERCUT_SET_BREAK_GAP_PT) ?: return
+    val widePlan = planWith(UNDERCUT_SET_BREAK_GAP_PT) ?: return stripBottom
     // A break gap is only as wide as the S pair this strip draws needs — the schematic's own rule
     // (on-device report: the fixed gap stood wider than it had to). The curves' size follows the
     // drawn shaft height, known once the strip is planned, so the strip is planned again with it.
@@ -2276,10 +2295,14 @@ private fun drawUndercutDetailStrip(
         setTierPitch = inner.setTierPitchPt,
         captionMinX = stripLeft,
         captionMaxX = stripRight,
+        captionMinY = captionMinY,
+        captionMaxY = inner.cylTop - UNDERCUT_RAIL_WITNESS_GAP_PT,
     )
 
     // ── Title at the bottom: "<liner name> — <dist> FROM … S.E.T." ──
     val titleBaselineY = (stripBottom - 2f).coerceAtLeast(inner.cylBottom + titleText.textSize)
+    // Where the title's ink ends — the strip below keeps its captions under it.
+    val titleInkBottom = maxOf(stripBottom, titleBaselineY + titleText.fontMetrics.descent)
     if (blankValues) {
         // Write-in title: the anchor value becomes a writing rule and BOTH directions print
         // for the machinist to circle one. Always left-aligned — the FWD right-align cue
@@ -2338,6 +2361,7 @@ private fun drawUndercutDetailStrip(
             stripLeft, titleBaselineY, titleText,
         )
     }
+    return titleInkBottom
 }
 
 /**
@@ -2637,6 +2661,7 @@ private const val UC_NOTES_BOTTOM_OFFSET_PT = 24f    // notes baseline above con
 private const val UC_NOTES_GAP_PT = 28f              // drawing area bottom → notes
 private const val UC_PORTRAIT_TITLE_AIR_PT = 10f      // Ø callouts → strip title, stacked pages only
 private const val UC_OVERFLOW_NOTE_HEIGHT_PT = 16f   // reserved band for the "+N more" note
+private const val UC_CAPTION_CLEAR_PT = 2f           // ink above a strip → the top of its rail captions' halos
 private const val UC_PROFILE_RADIUS_MARGIN_PT = 8f   // headroom above/below the shaft's drawn radius
 
 

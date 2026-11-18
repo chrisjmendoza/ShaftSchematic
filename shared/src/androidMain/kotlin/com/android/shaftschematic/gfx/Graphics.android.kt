@@ -25,6 +25,7 @@ actual val RectF.top: Float get() = this.top
 actual val RectF.right: Float get() = this.right
 actual val RectF.bottom: Float get() = this.bottom
 actual val Rect.top: Int get() = this.top
+actual val Rect.bottom: Int get() = this.bottom
 
 actual fun <R> withArgbScratchCanvas(width: Int, height: Int, block: (Canvas) -> R): R {
     val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)

@@ -12,6 +12,9 @@ import com.android.shaftschematic.gfx.left
 import com.android.shaftschematic.gfx.Paint
 import com.android.shaftschematic.gfx.PaintAlign
 import com.android.shaftschematic.gfx.PaintStyle
+import com.android.shaftschematic.gfx.Rect
+import com.android.shaftschematic.gfx.bottom
+import com.android.shaftschematic.gfx.top
 import com.android.shaftschematic.gfx.right
 import com.android.shaftschematic.gfx.strokeWidth
 import com.android.shaftschematic.gfx.style
@@ -19,6 +22,10 @@ import com.android.shaftschematic.gfx.textAlign
 import com.android.shaftschematic.gfx.textSize
 import com.android.shaftschematic.geom.railValueLeader
 import com.android.shaftschematic.settings.PDF_ARROW_SIZE_DEFAULT_PT
+import com.android.shaftschematic.util.DualLabel
+import com.android.shaftschematic.util.FractionStyle
+import com.android.shaftschematic.util.FractionText
+import com.android.shaftschematic.util.FractionTypography
 import com.android.shaftschematic.util.drawDualLabelCentered
 import com.android.shaftschematic.util.dualStackMetrics
 import com.android.shaftschematic.util.measureDualLabel
@@ -109,6 +116,11 @@ internal fun drawUndercutRail(
     /** False skips the witness line at every span's start / end (a datum witness drawn once by the caller). */
     witnessStart: Boolean = true,
     witnessEnd: Boolean = true,
+    /**
+     * Collects the box ([undercutRailValueBox]) of every value the label pass draws — the obstacles
+     * a rail caption is placed clear of ([undercutRailCaptionSpot]). Null collects nothing.
+     */
+    labelBoxes: MutableList<UndercutCaptionBox>? = null,
 ) {
     if (layout.isEmpty()) return
     val arrow = arrowSizePt * scale
@@ -182,6 +194,7 @@ internal fun drawUndercutRail(
     }
     if (!drawLabels || phase == UndercutRailPhase.LINES) return
     val halo = Paint(ANTI_ALIAS_FLAG).apply { style = PaintStyle.FILL; color = haloColor }
+    val inkScratch = Rect()
     layout.forEachIndexed { i, s ->
         val lw = dimText.measureDualLabel(s.label, dualStacked)
         if (s.seatsInBreak) {
@@ -209,6 +222,9 @@ internal fun drawUndercutRail(
                     halo,
                 )
             }
+            labelBoxes?.add(
+                undercutRailValueBox(dimText, s.label, dualStacked, s.labelCxPt, lw, seatBaseline, haloPadX, haloPadY, inkScratch),
+            )
             c.drawDualLabelCentered(s.label, s.labelCxPt, seatBaseline, dimText, dualStacked)
             return@forEachIndexed
         }
@@ -220,8 +236,48 @@ internal fun drawUndercutRail(
             lineReach = dim.strokeWidth * 0.5f + UNDERCUT_RAIL_HALO_AA_PT * scale,
         )
         c.drawRect(haloLeft, f.haloTop, haloRight, f.haloBottom, halo)
+        labelBoxes?.add(
+            undercutRailValueBox(dimText, s.label, dualStacked, s.labelCxPt, lw, f.baselineY, haloPadX, haloPadY, inkScratch)
+                .copy(left = haloLeft, right = haloRight),
+        )
         c.drawDualLabelCentered(s.label, s.labelCxPt, f.baselineY, dimText, dualStacked)
     }
+}
+
+/**
+ * The box a rail value set at [cx] (centred, [width] wide) on [baselineY] covers, as a rail caption
+ * must stay clear of it ([undercutRailCaptionSpot]): the font's full ascent over the first line —
+ * a stacked fraction's numerator may reach it — and, under the last line, the value's own glyphs
+ * (digits sit on the baseline; a stacked fraction's denominator may hang into the descent), so the
+ * empty descent under a value is not counted against a caption on the tier below. Padded by
+ * [padX] / [padY].
+ */
+private fun undercutRailValueBox(
+    dimText: Paint,
+    label: DualLabel,
+    dualStacked: Boolean,
+    cx: Float,
+    width: Float,
+    baselineY: Float,
+    padX: Float,
+    padY: Float,
+    scratch: Rect,
+): UndercutCaptionBox {
+    val fm = dimText.fontMetrics
+    val stacked = label.setsStacked(dualStacked)
+    val last = if (stacked) label.lines().last() else label.inline()
+    val lastBaseline = baselineY + if (stacked) dimText.dualStackMetrics().advance else 0f
+    val stackedFraction = FractionTypography.active.style == FractionStyle.STACKED &&
+        FractionText.parse(last).any { it is FractionText.Run.Frac }
+    val below = if (stackedFraction) {
+        fm.descent
+    } else {
+        dimText.getTextBounds(last, 0, last.length, scratch)
+        scratch.bottom.toFloat().coerceIn(0f, fm.descent)
+    }
+    return UndercutCaptionBox(
+        cx - width * 0.5f - padX, baselineY + fm.ascent - padY, cx + width * 0.5f + padX, lastBaseline + below + padY,
+    )
 }
 
 /** Which of [drawUndercutRail]'s two passes a call runs. */
@@ -382,8 +438,17 @@ fun drawUndercutStripRails(
      */
     captionMinX: Float = Float.NEGATIVE_INFINITY,
     captionMaxX: Float = Float.POSITIVE_INFINITY,
+    /**
+     * The y range a rail caption's halo may occupy — on the page, under whatever prints above the
+     * strip (the "← AFT / FWD →" row, the title of the section above) and over the shaft.
+     */
+    captionMinY: Float = Float.NEGATIVE_INFINITY,
+    captionMaxY: Float = Float.POSITIVE_INFINITY,
 ) {
     val plan = rails.rows
+    // Every value box the label passes draw — what the captions, drawn last, are placed clear of.
+    val labelBoxes: MutableList<UndercutCaptionBox>? =
+        if (rails.setRailSpans.any { it.caption != null }) mutableListOf() else null
     // From S.E.T.: every baseline rail's LINES first — its station witness rises from the shaft
     // through the chain (and a nested cut's through the nested rows), so the chain and nested
     // passes below paint their values' halos over those witnesses — and its VALUES last.
@@ -415,6 +480,7 @@ fun drawUndercutStripRails(
         // A liner-end station's witness rises through the total's line and value.
         haloClearXs = setCrossXs,
         haloSeated = setCrossXs.isNotEmpty(),
+        labelBoxes = labelBoxes,
     )
     // The level-0 line carries the S.E.T. lead at its outboard end, laid out with the chain.
     drawUndercutRail(
@@ -436,6 +502,7 @@ fun drawUndercutStripRails(
         haloClearXs = (if (plan.aboveRows > 0) rails.total.flatMap { listOf(it.x0Pt, it.x1Pt) } else emptyList()) +
             setCrossXs,
         haloSeated = setCrossXs.isNotEmpty(),
+        labelBoxes = labelBoxes,
     )
     if (rails.nested.isNotEmpty()) {
         val rowStep = undercutRailRowHeightPt(dimText, dualStacked, scale)
@@ -456,24 +523,29 @@ fun drawUndercutStripRails(
                 arrowSizePt = arrowSizePt,
                 haloClearXs = setCrossXs,
                 haloSeated = setCrossXs.isNotEmpty(),
+                labelBoxes = labelBoxes,
             )
         }
     }
     if (setLineYs.isNotEmpty()) {
         drawUndercutSetRails(
             c, dim, dimText, rails, setLineYs, witnessBottomY, drawLabels, dualStacked, scale, haloColor,
-            arrowSizePt, UndercutRailPhase.LABELS, setCrossXs,
+            arrowSizePt, UndercutRailPhase.LABELS, setCrossXs, labelBoxes,
         )
-        drawUndercutRailCaptions(c, dimText, rails, setLineYs, scale, haloColor, arrowSizePt, captionMinX, captionMaxX)
+        drawUndercutRailCaptions(
+            c, dimText, rails, setLineYs, scale, haloColor, arrowSizePt, captionMinX, captionMaxX,
+            captionMinY, captionMaxY, labelBoxes.orEmpty(),
+        )
     }
 }
 
 /**
  * The captions of a strip's baseline rails ([UndercutSetRailSpan.caption] — the liner-end rails'
  * "S.E.T. to liner start" / "S.E.T. to liner end"), each where [undercutRailCaptionSpot] puts it
- * and on a sheet-white halo, so a witness line or a rail it stands across is knocked out behind
- * it. Drawn last of the rail stack. A caption names the rail, it is not a measured value, so it
- * prints on a blank draft too.
+ * and on a sheet-white halo round its glyphs, so a witness line or a rail it stands across is
+ * knocked out behind it. Drawn last of the rail stack, clear of [valueBoxes] (every rail value this stack drew) and
+ * of the captions placed before it, inside `[minY, maxY]`. A caption names the rail, it is not a
+ * measured value, so it prints on a blank draft too.
  */
 private fun drawUndercutRailCaptions(
     c: Canvas,
@@ -485,23 +557,34 @@ private fun drawUndercutRailCaptions(
     arrowSizePt: Float,
     minX: Float,
     maxX: Float,
+    minY: Float,
+    maxY: Float,
+    valueBoxes: List<UndercutCaptionBox>,
 ) {
     val fm = dimText.fontMetrics
     val halo = Paint(ANTI_ALIAS_FLAG).apply { style = PaintStyle.FILL; color = haloColor }
     val padX = UNDERCUT_RAIL_HALO_PAD_X_PT * scale
     val padY = UNDERCUT_RAIL_HALO_PAD_Y_PT * scale
     val text = Paint(dimText).apply { textAlign = PaintAlign.LEFT }
+    val obstacles = valueBoxes.toMutableList()
+    val inkBounds = Rect()
     rails.setRails.forEachIndexed { i, l ->
         val span = rails.setRailSpans.getOrNull(i) ?: return@forEachIndexed
         val caption = span.caption ?: return@forEachIndexed
         val setOnLeft = span.side == UndercutAnchorSide.AFT_SET
         val twoLines = undercutCaptionTwoLines(caption)
         val wrappedWidth = twoLines?.let { maxOf(text.measureText(it.first), text.measureText(it.second)) }
+        val textWidth = text.measureText(caption)
+        // The caption's own glyphs over and under the baseline: both lines of a wrap are its
+        // characters, so the whole string's bounds hold for either setting.
+        text.getTextBounds(caption, 0, caption.length, inkBounds)
+        val inkTop = inkBounds.top.toFloat().takeIf { it < 0f } ?: fm.ascent
+        val inkBottom = inkBounds.bottom.toFloat().coerceAtLeast(0f)
         val spot = undercutRailCaptionSpot(
             stationX = if (setOnLeft) l.x1Pt else l.x0Pt,
             setOnLeft = setOnLeft,
             lineY = lineYs[i],
-            textWidth = text.measureText(caption),
+            textWidth = textWidth,
             ascent = fm.ascent,
             descent = fm.descent,
             gap = UNDERCUT_RAIL_LABEL_GAP_PT * scale,
@@ -509,15 +592,25 @@ private fun drawUndercutRailCaptions(
             minX = minX,
             maxX = maxX,
             wrappedWidth = wrappedWidth,
+            minTopY = minY,
+            maxBottomY = maxY,
+            obstacles = obstacles,
+            padX = padX,
+            padY = padY,
+            inkTop = inkTop,
+            inkBottom = inkBottom,
         )
-        // One line, or two stacked on the rail's height with their edge toward the station.
+        obstacles += undercutRailCaptionBox(spot, textWidth, wrappedWidth, fm.ascent, fm.descent, padX, padY, inkTop, inkBottom)
+        // One line, or two stacked with their edge toward the station.
         val lines = if (spot.wrapped && twoLines != null) listOf(twoLines.first, twoLines.second) else listOf(caption)
         val blockW = lines.maxOf { text.measureText(it) }
         lines.forEachIndexed { row, line ->
             val w = text.measureText(line)
             val x = if (setOnLeft) spot.leftX else spot.leftX + blockW - w
             val baseline = spot.baselineY + row * (fm.descent - fm.ascent)
-            c.drawRect(x - padX, baseline + fm.ascent - padY, x + w + padX, baseline + fm.descent + padY, halo)
+            // The halo covers the glyphs the placement tested, so it never reaches past them onto a
+            // neighbouring value the caption was placed clear of.
+            c.drawRect(x - padX, baseline + inkTop - padY, x + w + padX, baseline + inkBottom + padY, halo)
             c.drawText(line, x, baseline, text)
         }
     }
@@ -546,6 +639,7 @@ private fun drawUndercutSetRails(
     arrowSizePt: Float,
     phase: UndercutRailPhase,
     crossXs: List<Float>,
+    labelBoxes: MutableList<UndercutCaptionBox>? = null,
 ) {
     if (phase == UndercutRailPhase.LINES) {
         rails.setDatumX?.let { x ->
@@ -571,6 +665,7 @@ private fun drawUndercutSetRails(
             // The S.E.T. end's witness is the shared datum witness, drawn once above.
             witnessStart = !aft,
             witnessEnd = aft,
+            labelBoxes = labelBoxes,
         )
     }
 }
