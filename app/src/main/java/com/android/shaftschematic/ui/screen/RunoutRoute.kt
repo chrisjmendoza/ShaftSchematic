@@ -514,7 +514,7 @@ fun RunoutRoute(
     // Zoom state for the shaft preview (hoisted so it survives spec updates)
     var previewScale  by remember { mutableFloatStateOf(1f) }
     var previewOffset by remember { mutableStateOf(Offset.Zero) }
-    val previewTransformState = rememberTransformableState { zoomChange, panChange, _ ->
+    val previewTransformState = rememberTransformableState { _, zoomChange, panChange, _ ->
         previewScale  = (previewScale * zoomChange).coerceIn(0.5f, 5f)
         previewOffset += panChange
     }

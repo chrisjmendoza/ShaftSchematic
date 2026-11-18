@@ -441,7 +441,7 @@ fun ComponentWearDetailOverlay(
     var zoomOffset by remember { mutableStateOf(Offset.Zero) }
     // 0.5×–6×: zoom out past 1× gives a step-back overall view; pan resets at ≤1× (the whole
     // drawing is already on screen there, so a stale offset could only lose it).
-    val zoomTransformState = rememberTransformableState { zoomChange, panChange, _ ->
+    val zoomTransformState = rememberTransformableState { _, zoomChange, panChange, _ ->
         zoomScale = (zoomScale * zoomChange).coerceIn(0.5f, 6f)
         zoomOffset = if (zoomScale <= 1f) Offset.Zero else zoomOffset + panChange
     }
