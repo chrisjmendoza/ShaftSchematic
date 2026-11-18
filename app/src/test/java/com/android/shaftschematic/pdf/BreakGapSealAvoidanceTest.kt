@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
+import com.android.shaftschematic.geom.BREAK_EDGE_OUTWARD_REACH_FRAC
 import com.android.shaftschematic.model.BlendProfile
 import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.LinerAuthoredReference
@@ -38,6 +39,28 @@ class BreakGapSealAvoidanceTest {
     @Test
     fun `seal areas at both ends leave the centered gap alone`() {
         assertEquals(50f, breakGapCenter(0f, 100f, 20f, listOf(0f..20f, 80f..100f))!!, 1e-3f)
+    }
+
+    @Test
+    fun `the glyph's lobes keep clear of a seal area, not just the gap`() {
+        // On-device report: on a short compressed fiberglass section the S lobes lay over both
+        // seal areas — the gap cleared them, the curves reaching past its edges did not.
+        val amp = 20f
+        val reach = breakEdgeReachPt(amp, 1.25f)
+        val seals = listOf(0f..30f, 120f..150f)
+        val c = breakGapCenter(0f, 150f, 20f, seals, edgeReachPt = reach)!!
+        assertTrue("AFT lobes clear the AFT seal", c - 10f - reach >= 30f - 1e-3f)
+        assertTrue("FWD lobes clear the FWD seal", c + 10f + reach <= 120f + 1e-3f)
+
+        // Too tight for the lobes: no placement, so the run prints plain rather than overlap.
+        assertNull(breakGapCenter(0f, 150f, 20f, listOf(0f..60f, 90f..150f), edgeReachPt = reach))
+        // The same seals with no reach asked for still place (the gap alone fits).
+        assertTrue(breakGapCenter(0f, 150f, 20f, listOf(0f..60f, 90f..150f)) != null)
+    }
+
+    @Test
+    fun `the edge reach covers the return sweep, the stroke and daylight`() {
+        assertEquals(BREAK_EDGE_OUTWARD_REACH_FRAC * 10f + 1f + BREAK_PAIR_MIN_CLEAR_PT, breakEdgeReachPt(10f, 2f), 1e-4f)
     }
 
     @Test
