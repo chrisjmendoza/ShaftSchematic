@@ -665,12 +665,19 @@ pruned) — the liner formulas with the parent's span, offered only while the cu
 a stored cut, displayed from the nearer S.E.T. once that parent is gone or no longer contains it
 (canonical untouched). Two butted top-level cuts draw ONE step between their floors (a touching
 end's face top is the neighbour's DRAWN floor; a deeper neighbour leaves no face); an UNTOUCHED
-"New undercut" is discarded on leave, never recorded; the overlap message names the partner cut;
+"New undercut" is discarded on leave, never recorded; the FIRST cut on a section opens with Distance
+and Length EMPTY (on-device request: the seeded guess was always wrong and had to be deleted) — the
+seed still places the preview, `undercutSeedBlankIssue` blocks Record until both are typed
+("Enter the distance and length"), and a butted seed (a section with cuts, "Next cut") keeps its
+values; the overlap message names the partner cut;
 containment, touching and duplicates share `UNDERCUT_TOUCH_EPS_MM`. A draft's id ALWAYS equals its card's page id (`writeDraft` refuses a write
 from a card with no page; Confirm and every leave flush the focused field first — a field still
 holding focus on a disposed "New undercut" card resurrected an invisible PENDING draft and lost
 its typed Ø, on-device report). Cuts chained to a liner's cuts by touching/nesting
-(`assignUndercutLiners`, transitive) belong to that liner's strip, and `withUndercutBreakRoom`
+(`assignUndercutLiners`, transitive) belong to that liner's strip — and a cut recorded from a
+liner's page that its strip does NOT hold (typed onto bare shaft clear of the liner's cuts) is
+FOLLOWED: `UndercutRoute.followedCutId` moves the open page onto the section that holds it under the
+same overlay identity, instead of the cut vanishing from the page (on-device report) — and `withUndercutBreakRoom`
 also clears cut shoulders. `PdfPrefs.undercutLinerOutline` (app-wide look pref, default on)
 draws each liner's ERASED edges/OD as a dotted outline over the cuts from the ONE pure
 `geom/LinerOutlineMath.kt`, identically on canvas and PDF. **The chain rail prints each cut's FULL
@@ -750,9 +757,16 @@ the child's floor — the silhouette two separately-authored adjacent sections w
 (`nestedSurfacePoints` gives the child a zero-width step point at the outer surface there, so
 its own face redraws the sliver its void erased off the parent's; do not "fix" this in a draw
 site). `undercutNestingForest` parents each span to the smallest span containing it (ties to the
-first in record order), and `undercutOverlapIssue` blocks only a PARTIAL overlap or a DUPLICATE
+first in record order), and `undercutOverlapIssue` flags only a PARTIAL overlap or a DUPLICATE
 span at confirm (stored partial overlaps are tolerated as siblings and keep rendering; nothing
-is retroactively rejected). A child is cut
+is retroactively rejected). **An overlap ASKS, it does not refuse** (on-device report: one of two
+cuts sharing an edge could not be corrected before the other): while the overlap is the draft's ONLY
+issue (`undercutIssueIsOverlapOnly` — a shaft-bounds issue is never overridable) the blocked pill is
+tappable ("Overlaps cut 2 — tap to save anyway", `undercut_blocked_save`) and the leave prompt reads
+"Save with an overlap?" with **Save anyway** (`undercut_leave_save_anyway`) beside Keep editing /
+Discard; the acceptance is per card, consumed by that card's next confirm (`overlapAccepted`), and
+"Next cut" stays blocked. A RECORDED cut that overlaps another keeps the warning under its fields.
+A child is cut
 against its **parent's floor**, not the shaft surface: true floor via `effectiveNotchDiaMm` on
 that floor, drawn floor via `nestedNotchFloorDiaMm` — the exaggerated depth is RELATIVE to the
 parent's true floor and stacks below the parent's DRAWN floor, so the stair is visible at every
@@ -1826,7 +1840,13 @@ absorbed), so its anchors stay live while the gap exists.
 Promotion to a real body happens only on an **explicit user action**: ticking the
 **"Explicit body"** checkbox (relabeled from "Make editable body"). Checking it calls
 `onAddBody` with the auto-body's current derived Start/Length/Ø, guarded by a `promoted`
-state so it fires once. Explicit-body cards carry the same "Explicit body" checkbox,
+state so it fires once. **Every checkbox and face choice on the auto card carries over** (on-device
+ruling): `addBodyAt(carryAutoSectionFaces = true)` writes the section's `AutoBlend` faces onto the
+body (`autoSectionFacesOn` → `withAutoSectionFaces` — Square | Blend and its length, Length | Angle
+with angle and corner radius, "At a liner", seal areas and their lengths), beside the Ø-callout and
+fiberglass carries; the Add Body dialog never carries (its own choices stand). Demotion is the
+inverse — `removeBody` applies `withDemotedBodyFaces`, so the section takes the BODY's faces, not
+the anchors left dormant under it since promotion. Explicit-body cards carry the same "Explicit body" checkbox,
 checked; unchecking opens an AlertDialog ("Make body automatic?", with an extra sentence
 when `body.hasKeyway` warning that the keyway will be lost) — confirming demotes via the
 existing `onRemoveBody(b.id)` pipeline (the resolve layer regenerates the auto-fill span);

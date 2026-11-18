@@ -239,8 +239,9 @@ class UndercutDetailOverlayTest {
         settle()
 
         val msg = "Overlaps cut 1 — sit fully inside it or fully clear"
+        // The pill names the partner and offers the override; the card and the prompt give the rule.
         rule.onNodeWithTag("undercut_status_pill", useUnmergedTree = true)
-            .assert(hasAnyDescendant(hasText(msg)))
+            .assert(hasAnyDescendant(hasText("Overlaps cut 1 — tap to save anyway")))
         assertTrue(
             "the card's inline reason must read the same",
             rule.onAllNodes(hasText(msg) and hasAnyAncestor(hasTestTag("undercut_card_u2")), useUnmergedTree = true)
@@ -249,13 +250,45 @@ class UndercutDetailOverlayTest {
 
         rule.onNodeWithTag("undercut_card_pager").performTouchInput { swipeRight() }
         settle()
-        rule.onNodeWithText("Undercut can't be saved").assertIsDisplayed()
+        rule.onNodeWithText("Save with an overlap?").assertIsDisplayed()
         assertTrue(
             "the leave prompt must state the same reason",
-            rule.onAllNodesWithText(msg, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty(),
+            rule.onAllNodes(hasText(msg, substring = true), useUnmergedTree = true)
+                .fetchSemanticsNodes().isNotEmpty(),
         )
         rule.onNodeWithTag("undercut_leave_discard").assertIsDisplayed()
         assertTrue("a blocked draft reached the record", updated.isEmpty())
+    }
+
+    @Test
+    fun `an overlapping edit can be saved anyway, from the pill and on the way out`() {
+        // On-device report: one of two cuts sharing an edge could not be corrected first.
+        show(listOf(cut("u1", 600f, len = 100f), cut("u2", 900f)), initialSelectedId = "u2")
+        val distance = hasText("Distance from Liner AFT (in)") and hasAnyAncestor(hasTestTag("undercut_card_u2"))
+        rule.onNode(distance).performTextReplacement("3")
+        rule.onNode(distance).performImeAction()
+        settle()
+
+        // From the pill: the question, then the cut is recorded as typed and stays warned.
+        rule.onNodeWithTag("undercut_blocked_save", useUnmergedTree = true).performClick()
+        settle()
+        rule.onNodeWithText("Save with an overlap?").assertIsDisplayed()
+        rule.onNodeWithTag("undercut_leave_save_anyway").performClick()
+        settle()
+        assertEquals(listOf("u2"), updated)
+    }
+
+    @Test
+    fun `a recorded cut that overlaps another keeps its warning on the card`() {
+        show(listOf(cut("u1", 600f, len = 100f), cut("u2", 650f, len = 100f)), initialSelectedId = "u2")
+        settle()
+        assertTrue(
+            rule.onAllNodes(
+                hasText("Overlaps cut 1 — sit fully inside it or fully clear") and
+                    hasAnyAncestor(hasTestTag("undercut_card_u2")),
+                useUnmergedTree = true,
+            ).fetchSemanticsNodes().isNotEmpty(),
+        )
     }
 
     @Test
@@ -1171,7 +1204,7 @@ class UndercutDetailOverlayTest {
 
         rule.onNodeWithTag("undercut_detail_preview").performClick()
         settle()
-        rule.onNodeWithText("Undercut can't be saved").assertIsDisplayed()
+        rule.onNodeWithText("Save with an overlap?").assertIsDisplayed()
         assertEquals("no preview while the question is open", 0, previewed)
 
         rule.onNodeWithTag("undercut_leave_keep").performClick()
@@ -1416,7 +1449,7 @@ class UndercutDetailOverlayTest {
         // 3 in from the liner's AFT edge runs half into u1: blocked, and discard still there.
         typeAndCommit(hasText("Distance from Liner AFT (in)") and inU2, "3")
         rule.onNodeWithTag("undercut_status_pill", useUnmergedTree = true)
-            .assert(hasAnyDescendant(hasText("Overlaps cut 1 — sit fully inside it or fully clear")))
+            .assert(hasAnyDescendant(hasText("Overlaps cut 1 — tap to save anyway")))
         rule.onNodeWithTag("undercut_confirm", useUnmergedTree = true).assertDoesNotExist()
         rule.onNodeWithTag("undercut_cancel", useUnmergedTree = true).assertIsDisplayed()
 
@@ -1490,7 +1523,11 @@ class UndercutDetailOverlayTest {
         )
         settle()
         rule.onNodeWithText("New undercut").assertIsDisplayed()
-        pill.assert(hasAnyDescendant(hasText("Record cut")))
+        // A first cut's Distance and Length open EMPTY (on-device request: the seeded guess was
+        // always wrong and had to be deleted), and the pill asks for them.
+        pill.assert(hasAnyDescendant(hasText("Enter the distance and length")))
+        (hasText("Distance from", substring = true) and pendingCard).holds("")
+        (hasText("Length (in)") and pendingCard).holds("")
         assertTrue(rule.onAllNodesWithText("No undercuts recorded here yet.").fetchSemanticsNodes().isEmpty())
 
         rule.onNodeWithContentDescription("Back to Undercut Drawing").performClick()
@@ -1510,6 +1547,11 @@ class UndercutDetailOverlayTest {
         )
         settle()
         typeAndCommit(hasText("Measured Ø (in)") and pendingCard, "5 5/8")
+        // Not recordable until the first cut's Distance and Length are typed.
+        rule.onNodeWithTag("undercut_confirm", useUnmergedTree = true).assertDoesNotExist()
+        typeAndCommit(hasText("Distance from", substring = true) and pendingCard, "1")
+        pill.assert(hasAnyDescendant(hasText("Enter the length")))
+        typeAndCommit(hasText("Length (in)") and pendingCard, "1")
         rule.onNodeWithTag("undercut_confirm", useUnmergedTree = true).performClick()
         settle()
         assertEquals(1, added.size)

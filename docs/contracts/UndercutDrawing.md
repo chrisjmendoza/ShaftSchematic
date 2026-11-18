@@ -173,6 +173,20 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   halo, measured in the rail paint — to its top pad whenever a baseline rail is captioned: at the
   drawing's edge `undercutRailCaptionSpot` sets the caption ABOVE its line, and the card's top cut it
   off at the fitted view (on-device report).
+- **A first cut opens empty.** The pending card seeded with the DEFAULT span (no neighbour to butt
+  against — `seedPendingCut`'s non-butted branch) shows Distance and Length empty
+  (`seedDistanceBlank` / `seedLengthBlank`, overlay state, cleared by each field's first commit).
+  The seeded span still places the canvas preview, but `undercutSeedBlankIssue` is the card's
+  confirm issue until both are typed, so the guess is never recorded; an untouched card is still
+  discarded on leave. Butted seeds ("Next cut", an add on a section with cuts) keep their values
+  (on-device request: the first cut's pre-filled position was always wrong).
+- **A liner page follows a cut it does not hold.** A cut recorded from a liner's page can land on
+  bare shaft clear of the liner and of its cuts, where `assignUndercutLiners` gives it to a free
+  section (or another liner). `UndercutRoute` records the last cut added from a liner page
+  (`followedCutId`) and, while that cut's liner is not the page's, `activeStrip` is the strip that
+  holds it — same `overlayKey`, so drafts, selection and a "Next cut" seed carry over. Deleting the
+  followed cut moves to a sibling in that section, else back to the liner's own strip. Before, the
+  recorded cut vanished from the page (on-device report).
 - Pinch-to-zoom (0.5×–6×) + pan, one finger or two, at EVERY zoom (an offset locked to zero at ≤ 1×
   left a one-finger drag at the fitted view doing nothing — on-device report); taps invert the same transform so hit-testing
   always runs in untransformed canvas space. A double-tap, or the corner "Reset view" button
@@ -1258,7 +1272,14 @@ silently dropped: leaving raises an AlertDialog whose text is the blocking reaso
 had got to, and cancels the close) and **"Discard"** (`testTag "undercut_leave_discard"` — drops
 the draft and **resumes the sweep**, so a second unsettled draft gets its own question rather than
 riding out on this answer, and only then does the navigation/close proceed). Dismissing the dialog
-(tap-outside, back) is "Keep editing", so an edit is never lost to a stray tap. The pending add
+(tap-outside, back) is "Keep editing", so an edit is never lost to a stray tap. When the reason
+is an OVERLAP and nothing else (`undercutIssueIsOverlapOnly`), the dialog is titled "Save with an
+overlap?" and carries a third button, **"Save anyway"** (`testTag "undercut_leave_save_anyway"`):
+it records the cut as typed and resumes the sweep, so one of two cuts that share an edge can be
+corrected before the other (on-device report). The same question opens from a tap on the blocked
+pill (`undercut_blocked_save`, text "Overlaps cut N — tap to save anyway"), where Save anyway
+confirms in place. The acceptance lasts for that card's next confirm only; a shaft-bounds issue
+is never overridable; a recorded overlapping cut keeps the warning under its fields. The pending add
 page follows the same rules once it has been EDITED — clear → its add-confirm flow runs; blocked →
 the same dialog, Discard dropping the page. An add page left **exactly as it was seeded** (the
 default span, Ø 0, no note, the seeded reference) is **discarded** on leave — never committed and

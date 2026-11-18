@@ -18,6 +18,9 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performImeAction
+import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.test.core.app.ApplicationProvider
@@ -67,6 +70,12 @@ class UndercutRouteTest {
                 UndercutRoute(vm = vm)
             }
         }
+    }
+
+    private fun typeField(field: androidx.compose.ui.test.SemanticsMatcher, text: String) {
+        rule.onNode(field).performScrollTo().performTextReplacement(text)
+        rule.onNode(field).performImeAction()
+        rule.waitForIdle()
     }
 
     private fun openChooser() {
@@ -128,6 +137,34 @@ class UndercutRouteTest {
     }
 
     @Test
+    fun `a cut recorded off the liner from a liner page stays on screen`() {
+        // On-device report: cuts typed on a liner's page at a distance that put them on bare shaft
+        // beside the liner were recorded and then vanished from the page.
+        val vm = vm()
+        host(vm)
+        openChooser()
+        val liner = vm.spec.value.liners.minBy { it.startFromAftMm }
+        rule.onNodeWithTag("undercut_add_where_liner_${liner.id}").performClick()
+        rule.waitForIdle()
+
+        // Far FWD of the liner's end, whichever datum and unit the card opened on.
+        typeField(hasText("Distance from", substring = true), "600")
+        typeField(hasText("Length (", substring = true), "25")
+        rule.onNodeWithTag("undercut_confirm", useUnmergedTree = true).performClick()
+        rule.waitForIdle()
+
+        val cut = vm.undercutRecord.value.undercuts.single()
+        val linerEnd = liner.startFromAftMm + liner.lengthMm
+        assertTrue(
+            "the fixture must put the cut clear of the liner",
+            cut.startFromAftMm > linerEnd || cut.startFromAftMm + cut.lengthMm < liner.startFromAftMm,
+        )
+        // The page followed the cut to the bare-shaft section that holds it.
+        rule.onNodeWithTag("undercut_card_${cut.id}").assertExists()
+        rule.onNodeWithTag("undercut_add_in_strip").assertExists()
+    }
+
+    @Test
     fun `a bare-shaft add records only on confirm and stays open on the new cut`() {
         val vm = vm()
         host(vm)
@@ -140,13 +177,16 @@ class UndercutRouteTest {
         rule.onNodeWithTag("undercut_add_in_strip").assertExists()
         assertTrue(vm.undercutRecord.value.undercuts.isEmpty())
 
+        // A first cut opens with Distance and Length empty; both are typed before it records.
+        typeField(hasText("Distance from", substring = true), "0")
+        typeField(hasText("Length (", substring = true), "25")
         rule.onNodeWithTag("undercut_confirm", useUnmergedTree = true).performClick()
         rule.waitForIdle()
 
         val cuts = vm.undercutRecord.value.undercuts
         assertEquals("the confirm records exactly the pending cut", 1, cuts.size)
         val (aftSet, _) = undercutSetPositions(vm.spec.value)
-        assertEquals("the seed sits on the AFT S.E.T.", aftSet, cuts.single().startFromAftMm, 1e-3f)
+        assertEquals("the cut sits on the AFT S.E.T.", aftSet, cuts.single().startFromAftMm, 1e-3f)
         // The overlay moved onto the real strip holding the cut instead of closing.
         rule.onNodeWithTag("undercut_card_pager").assertExists()
         rule.onAllNodesWithText("New undercut").assertCountEquals(0)

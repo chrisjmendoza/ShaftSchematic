@@ -8,6 +8,40 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-17
 
+### feat(undercut): the first cut on a section opens with Distance and Length empty
+
+On-device request: the first cut's pre-filled position was always wrong and had to be deleted
+before typing. The first "New undercut" card on a liner or bare-shaft section now opens with
+Distance and Length empty; the pill reads "Enter the distance and length" until both are typed,
+and the card cannot be recorded before then. A cut added to a section that already has cuts, and
+"Next cut", still open butted to the neighbouring cut with their values filled in.
+
+### fix(undercut): a cut recorded off the liner from a liner's page no longer vanishes
+
+On-device report (Pacific Warrior PORT, MID liner): two cuts typed on the liner's page at a
+distance that put them on bare shaft just FWD of the liner were recorded, then both disappeared
+from the page on "Next cut". They were in the job, under their own bare-shaft section, but the
+liner's page only shows cuts on the liner or touching its cuts. The page now follows the cut: when
+a cut recorded from a liner's page lands on a section the liner does not hold, the page carries on
+over that section, so the cuts stay on screen and "Next cut" continues the run.
+
+### fix(undercut): an overlapping cut can be saved so the other cut can be fixed next
+
+On-device report: correcting one of two cuts that share an edge was refused ("Overlaps cut 2")
+until the other cut was corrected too, which could not be done first either. An overlap now asks
+instead of refusing: the red pill reads "Overlaps cut 2 — tap to save anyway", and the question on
+leaving the card offers "Save anyway" beside Keep editing and Discard. The cut is recorded as
+typed; both cards keep the overlap warning until the cuts no longer overlap. A cut that runs off
+the shaft is still refused.
+
+### fix(body): making a bare-shaft section an explicit body keeps everything set on it
+
+On-device ruling: ticking "Explicit body" on a bare-shaft card now carries every setting of that
+section onto the new body — seal areas and their lengths, blends (by length or angle, with the
+corner radius), "At a liner", Fiberglass wrap and the Ø callout. Before, the new body started with
+square ends and no seal areas. Unticking "Explicit body" hands the body's settings back to the
+section, including any changes made on the explicit card.
+
 ### fix(undercut): the section page shows the "S.E.T. to liner end" caption, and drags at any zoom
 
 On-device report, AFT liner page: the caption over the overall dimension was cut off by the top of

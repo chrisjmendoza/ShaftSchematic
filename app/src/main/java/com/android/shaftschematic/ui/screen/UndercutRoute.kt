@@ -347,6 +347,12 @@ fun UndercutRoute(
     // anchor moves to a sibling when its own cut is deleted, so the overlay's state cannot key on
     // the anchor itself — the identity outlives every edit made inside the overlay.
     var overlayKey by rememberSaveable { mutableStateOf<String?>(null) }
+    // The cut last recorded from an open LINER page. A cut typed there can land off the liner and
+    // clear of its cuts — on bare shaft beside it — where the liner's strip does not hold it; the
+    // page then follows the cut to the section that does (see `activeStrip`), instead of the cut
+    // vanishing from the page it was just typed on (on-device report: two cuts recorded from a
+    // liner page "both disappeared").
+    var followedCutId by rememberSaveable { mutableStateOf<String?>(null) }
     var overlayInitialSelectedId by rememberSaveable { mutableStateOf<String?>(null) }
     // The "Add undercut" path: the overlay opens on a PENDING "New undercut" card (its own add
     // seed) instead of a recorded cut, so backing out records nothing. Only the add chooser sets
@@ -370,6 +376,7 @@ fun UndercutRoute(
         if (linerId != null || undercutId != null) showTabOptions = false
         anchorLinerId = linerId
         anchorUndercutId = undercutId
+        followedCutId = null
         overlayInitialSelectedId = selectId
         overlayKey = linerId?.let { "liner:$it" } ?: undercutId?.let { "free:$it" }
         seedNewCutOnOpen = seedNewCut
@@ -381,6 +388,7 @@ fun UndercutRoute(
         showTabOptions = false
         anchorLinerId = null
         anchorUndercutId = null
+        followedCutId = null
         overlayInitialSelectedId = null
         overlayKey = if (fromAft) "free:new:aft" else "free:new:fwd"
         seedNewCutOnOpen = true
@@ -548,7 +556,14 @@ fun UndercutRoute(
     val syntheticStrip = bareShaftAddFromAft?.let { fromAft ->
         undercutBareShaftAddStrip(fromAft, stripAftSetMm, stripFwdSetMm, oalMm)
     }
+    // A liner page whose last recorded cut the liner's strip does not hold shows the section that
+    // holds it, under the same overlay identity (drafts and selection carry over). Until that
+    // cut's strip resolves, and once the cut is deleted, the liner's own strip stands.
+    val followedStrip = followedCutId
+        ?.takeIf { anchorLinerId != null && it in linerOfCut && linerOfCut[it] != anchorLinerId }
+        ?.let { id -> strips.firstOrNull { id in it.undercutIds } }
     val activeStrip: UndercutStrip? = when {
+        followedStrip != null -> followedStrip
         anchorLinerId != null ->
             linerSpans.firstOrNull { it.id == anchorLinerId }?.let { ln -> stripForLiner(ln) }
         anchoredStrip != null -> anchoredStrip
@@ -1527,6 +1542,8 @@ fun UndercutRoute(
                 if (bareShaftAddFromAft != null && anchorLinerId == null && anchorUndercutId == null) {
                     anchorUndercutId = newId
                 }
+                // A liner page follows a cut its liner's strip turns out not to hold.
+                if (anchorLinerId != null) followedCutId = newId
                 // The open seed is spent; a recreation must not seed a second pending card.
                 seedNewCutOnOpen = false
                 newId
@@ -1540,6 +1557,8 @@ fun UndercutRoute(
                 if (anchorLinerId == null && id == anchorUndercutId) {
                     anchorUndercutId = s.undercutIds.firstOrNull { it != id }
                 }
+                // A followed section stays open on a sibling the same way.
+                if (id == followedCutId) followedCutId = s.undercutIds.firstOrNull { it != id }
                 vm.removeUndercut(id)
             },
             onClose = { openOverlay(linerId = null, undercutId = null, selectId = null) },
