@@ -25,6 +25,7 @@ import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.geom.AutoKeyedData
 import com.android.shaftschematic.geom.PIT_SIZE_FACTOR_DEFAULT
 import com.android.shaftschematic.geom.bodyKeySuccessors
+import com.android.shaftschematic.geom.reanchoredFor
 import com.android.shaftschematic.geom.storedBodyRuns
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.autoBodyRuns
@@ -261,6 +262,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
                 val before = _spec.value
                 _spec.update(transform)
                 followAutoBodyKeys(before, _spec.value)
+                followUndercutDatums(before, _spec.value)
             }
             SpecTarget.FINAL -> _finalSpec.update { cur -> if (cur == null) null else transform(cur) }
         }
@@ -307,6 +309,21 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
         _runoutStationPlacements.value = rekeyed.placements
         _runoutConfig.update { it.copy(componentOverrides = rekeyed.stationCountOverrides) }
         _wearRecord.value = rekeyed.wearRecord
+    }
+
+    /**
+     * An undercut always keeps its reference position (on-device ruling): when an ORIGINAL edit
+     * moves the datum a cut's Distance was typed against — a S.E.T., its reference liner's edge,
+     * its parent cut's shoulder — the cut's canonical start follows so that Distance still reads
+     * as typed (`geom/UndercutReanchorMath.kt`). Written synchronously with the spec edit, like
+     * [followAutoBodyKeys], so the edit and the moved cuts are ONE undo step. A record no cut of
+     * which moved is left as the same instance, so nothing is dirtied or recorded for it. Loads,
+     * undo/redo and the other boundaries write `_spec` directly and never re-anchor.
+     */
+    private fun followUndercutDatums(before: ShaftSpec, after: ShaftSpec) {
+        val record = _undercutRecord.value
+        val moved = record.reanchoredFor(before, after)
+        if (moved !== record) _undercutRecord.value = moved
     }
 
     /**
