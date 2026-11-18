@@ -198,6 +198,7 @@ fun RunoutRoute(
     val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
     val pdfOutputFont      by vm.pdfOutputFont.collectAsState()
     val pdfShowUnitsNote   by vm.pdfShowUnitsNote.collectAsState()
+    val pdfInspectionSealAreas by vm.pdfInspectionSealAreas.collectAsState()
     val pdfThreadSlant     by vm.pdfThreadSlant.collectAsState()
     val pdfThreadDensity   by vm.pdfThreadDensity.collectAsState()
     val pdfDualUnitLayout  by vm.pdfDualUnitLayout.collectAsState()
@@ -404,6 +405,7 @@ fun RunoutRoute(
                 fractionStyle = pdfFractionStyle,
                 outputFont = pdfOutputFont,
                 showUnitsNote = pdfShowUnitsNote,
+                inspectionSealAreas = pdfInspectionSealAreas,
                 threadSlant = pdfThreadSlant,
                 threadDensity = pdfThreadDensity,
                 dualUnitLayout = pdfDualUnitLayout,
@@ -1217,6 +1219,7 @@ fun RunoutRoute(
                     vm = vm,
                     showCouplingFaceRow = true,
                     couplingFaceOn = runoutConfig.showCouplingFace,
+                    showSealAreasRow = true,
                     showSBreak = true,
                     sBreakThresholdFrac = pdfSBreakThresholdFrac,
                     fractionStyle = pdfFractionStyle,
@@ -1325,6 +1328,8 @@ private data class RunoutRenderInputs(
     val outputFont: OutputFont,
     /** `PdfPrefs.showUnitsNote` — key only, inside the `PdfPrefs` snapshot. */
     val showUnitsNote: Boolean,
+    /** `PdfPrefs.inspectionSealAreas` — key only, inside the `PdfPrefs` snapshot. */
+    val inspectionSealAreas: Boolean,
     /**
      * The thread-hatch slant. Not a composer argument — it reaches the ink via
      * `ThreadHatchStyle.slant`. Key only.

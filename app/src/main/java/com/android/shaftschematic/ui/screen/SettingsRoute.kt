@@ -191,6 +191,7 @@ fun SettingsRoute(
     val pdfShowUnitsNote by vm.pdfShowUnitsNote.collectAsState()
     val pdfFooterCapturedKwInset by vm.pdfFooterCapturedKwInset.collectAsState()
     val pdfFooterBoltHoleDia by vm.pdfFooterBoltHoleDia.collectAsState()
+    val pdfInspectionSealAreas by vm.pdfInspectionSealAreas.collectAsState()
     val pdfTaperRatePerFoot by vm.pdfTaperRatePerFoot.collectAsState()
     val pdfWearAreaStyle by vm.pdfWearAreaStyle.collectAsState()
 
@@ -488,6 +489,20 @@ fun SettingsRoute(
                             Text(FOOTER_CAPTURED_KW_SETTING_TITLE)
                             Text(
                                 FOOTER_CAPTURED_KW_SETTING_CAPTION,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    SettingSwitchRow(
+                        checked = pdfInspectionSealAreas,
+                        onCheckedChange = { vm.setPdfInspectionSealAreas(it) },
+                        modifier = Modifier.testTag("settings_inspection_seal_areas"),
+                    ) {
+                        Column {
+                            Text(INSPECTION_SEAL_AREAS_SETTING_TITLE)
+                            Text(
+                                INSPECTION_SEAL_AREAS_CAPTION,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

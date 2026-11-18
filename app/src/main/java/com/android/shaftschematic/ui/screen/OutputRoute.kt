@@ -176,6 +176,8 @@ private data class ConsolidatedRenderInputs(
     val showUnitsNote: Boolean,
     val footerCapturedKwInset: Boolean,
     val footerBoltHoleDia: Boolean,
+    /** `PdfPrefs.inspectionSealAreas` — key only, inside the `PdfPrefs` snapshot. */
+    val inspectionSealAreas: Boolean,
     val taperRatePerFoot: Boolean,
     /**
      * The thread-hatch slant. Not a composer argument — it reaches the ink via
@@ -272,6 +274,7 @@ fun OutputRoute(
     val pdfShowUnitsNote   by vm.pdfShowUnitsNote.collectAsState()
     val pdfFooterCapturedKwInset by vm.pdfFooterCapturedKwInset.collectAsState()
     val pdfFooterBoltHoleDia by vm.pdfFooterBoltHoleDia.collectAsState()
+    val pdfInspectionSealAreas by vm.pdfInspectionSealAreas.collectAsState()
     val pdfTaperRatePerFoot by vm.pdfTaperRatePerFoot.collectAsState()
     val pdfThreadSlant     by vm.pdfThreadSlant.collectAsState()
     val pdfThreadDensity   by vm.pdfThreadDensity.collectAsState()
@@ -651,6 +654,7 @@ fun OutputRoute(
                 showUnitsNote = pdfShowUnitsNote,
                 footerCapturedKwInset = pdfFooterCapturedKwInset,
                 footerBoltHoleDia = pdfFooterBoltHoleDia,
+                inspectionSealAreas = pdfInspectionSealAreas,
                 taperRatePerFoot = pdfTaperRatePerFoot,
                 threadSlant = pdfThreadSlant,
                 threadDensity = pdfThreadDensity,
@@ -1116,6 +1120,7 @@ fun OutputRoute(
             optionsSheet = {
                 RunoutWearOptionsSheet(
                     dateSheet = SheetDateSheet.CONSOLIDATED,
+                    showSealAreasRow = true,
                     lineThicknessScale = lineThicknessScale,
                     pdfShadedBodies = pdfShadedBodies,
                     pdfShadedTapers = pdfShadedTapers,

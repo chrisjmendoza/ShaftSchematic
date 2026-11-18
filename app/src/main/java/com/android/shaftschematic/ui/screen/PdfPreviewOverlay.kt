@@ -97,6 +97,7 @@ import com.android.shaftschematic.ui.viewmodel.setPdfArrowSizePt
 import com.android.shaftschematic.ui.viewmodel.setPdfDimTextScale
 import com.android.shaftschematic.ui.viewmodel.setPdfFooterTextScale
 import com.android.shaftschematic.ui.viewmodel.setPdfFooterBoltHoleDia
+import com.android.shaftschematic.ui.viewmodel.setPdfInspectionSealAreas
 import com.android.shaftschematic.ui.viewmodel.setPdfTaperRatePerFoot
 import com.android.shaftschematic.ui.viewmodel.setPdfFooterCapturedKwInset
 import com.android.shaftschematic.ui.viewmodel.setPdfOutputFont
@@ -565,6 +566,11 @@ internal fun RunoutWearOptionsSheet(
      * sheets, which draw compression breaks; off for the wear and undercut documents, whose
      * profiles never break, so the control would be inert noise there.
      */
+    /**
+     * Shows the "Seal areas" switch — the app-wide `PdfPrefs.inspectionSealAreas` — in "Lines &
+     * text". On for the two sheets that read it: the classic runout sheet and the consolidated one.
+     */
+    showSealAreasRow: Boolean = false,
     showSBreak: Boolean = false,
     /** The app-wide `PdfPrefs.sBreakThresholdFrac`; read only when [showSBreak]. */
     sBreakThresholdFrac: Float = PDF_SBREAK_THRESHOLD_DEFAULT,
@@ -1003,6 +1009,14 @@ internal fun RunoutWearOptionsSheet(
                     checked = undercutKeyways,
                     onCheckedChange = { vm.setPdfUndercutKeyways(it) },
                     testTag = "pdf_undercut_keyways",
+                )
+            }
+            if (showSealAreasRow) {
+                val sealAreas by vm.pdfInspectionSealAreas.collectAsState()
+                InspectionSealAreasRow(
+                    checked = sealAreas,
+                    onCheckedChange = { vm.setPdfInspectionSealAreas(it) },
+                    testTag = "pdf_inspection_seal_areas",
                 )
             }
             OutputFontChips(

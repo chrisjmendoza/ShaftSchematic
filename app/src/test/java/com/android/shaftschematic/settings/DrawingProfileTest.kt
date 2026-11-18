@@ -115,7 +115,7 @@ class DrawingProfileTest {
 
         listOf(
             "tieringMode", "showComponentTitles", "shadedBodies", "shadedTapers", "shadedLiners",
-            "undercutLineArt", "undercutLinerOutline", "undercutDiaInside", "undercutKeyways", "undercutSplitAtLinerEdge", "undercutTotalRail", "curveLoHeightIn", "curveHiHeightIn", "sBreakThresholdFrac", "arrowSizePt",
+            "undercutLineArt", "undercutLinerOutline", "undercutDiaInside", "undercutKeyways", "inspectionSealAreas", "undercutSplitAtLinerEdge", "undercutTotalRail", "curveLoHeightIn", "curveHiHeightIn", "sBreakThresholdFrac", "arrowSizePt",
             "threadSlant", "threadDensity", "fractionStyle", "outputFont", "dualUnitLayout", "showUnitsNote", "wearAreaStyle", "wearTraceDepthFrac", "wearBandShadeFrac",
             "wearJoinGapMaxMm", "lineThicknessScale",
         ).forEach { field ->

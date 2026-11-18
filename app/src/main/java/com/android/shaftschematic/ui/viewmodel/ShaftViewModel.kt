@@ -553,6 +553,10 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _pdfFooterBoltHoleDia = MutableStateFlow(PdfPrefs().footerBoltHoleDia)
     val pdfFooterBoltHoleDia: StateFlow<Boolean> = _pdfFooterBoltHoleDia.asStateFlow()
 
+    // Settings → Drawing → "Seal areas on inspection sheets" (`PdfPrefs.inspectionSealAreas`).
+    internal val _pdfInspectionSealAreas = MutableStateFlow(PdfPrefs().inspectionSealAreas)
+    val pdfInspectionSealAreas: StateFlow<Boolean> = _pdfInspectionSealAreas.asStateFlow()
+
     // Settings → Drawing → "Taper rate per foot" (`PdfPrefs.taperRatePerFoot`); also seeds the
     // taper rate fields' "Rate as" chips.
     internal val _pdfTaperRatePerFoot = MutableStateFlow(PdfPrefs().taperRatePerFoot)
@@ -1423,6 +1427,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             SettingsStore.pdfFooterCapturedKwInsetFlow(getApplication()).collectLatest { persisted ->
                 _pdfFooterCapturedKwInset.value = persisted
                 SettingsStore.updatePdfPrefs { it.copy(footerCapturedKwInset = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfInspectionSealAreasFlow(getApplication()).collectLatest { persisted ->
+                _pdfInspectionSealAreas.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(inspectionSealAreas = persisted) }
             }
         }
         viewModelScope.launch {
