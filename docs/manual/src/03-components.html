@@ -193,6 +193,7 @@
       <tr><td><span class="ui">Length</span></td><td>Axial length. On a FWD-measured body, the FWD edge stays put and the body grows toward AFT.</td></tr>
       <tr><td><span class="ui">Diameter</span></td><td>The body diameter.</td></tr>
       <tr><td><span class="ui">Component blend</span></td><td>Square or Blend at each end; see below.</td></tr>
+      <tr><td><span class="ui">Fiberglass wrap</span></td><td>The section is wrapped in fiberglass. Ticking it also turns on a seal area at each end; see below.</td></tr>
       <tr><td><span class="ui">Seal areas</span></td><td>Grooved fiberglass seat areas at either end; see below.</td></tr>
       <tr><td><span class="ui">Keyway</span> checkbox and section</td><td>See <a href="#components-keyways">Keyways</a>.</td></tr>
     </tbody>
@@ -202,7 +203,7 @@
 
   <h3>Bare-shaft card</h3>
   <p>A bare-shaft card is titled <span class="ui">Body (auto)</span>. <span class="ui">Start</span> and <span class="ui">Length</span> are greyed out because the surrounding components decide them. <span class="ui">Diameter</span> is editable: with more than one stretch of bare shaft it asks whether the new diameter is for <span class="ui">This section</span> or <span class="ui">All auto sections</span> (see <a href="#editor-bodies">Bodies and bare shaft</a>). The card also carries <span class="ui">Show bare-shaft Ø on drawing</span>, the same <span class="ui">Component blend</span> and <span class="ui">Seal areas</span> controls as an explicit body, and the <span class="ui">Explicit body</span> checkbox that promotes it.</p>
-  <aside class="note"><p>Blends and seal areas set on an auto section belong to that stretch of bare shaft and follow it when the components around it move. Promoting the section starts the new explicit body with square faces and no seal areas; set them again on its card.</p></aside>
+  <aside class="note"><p>Blends and seal areas set on an auto section belong to that stretch of bare shaft and follow it when the components around it move. Promoting the section starts the new explicit body with square faces and no seal areas; set them again on its card. A <span class="ui">Fiberglass wrap</span> does carry over, both ways.</p></aside>
 
   <h3 id="components-blends">Component blend: Square or Blend</h3>
   <p>A <strong>blend</strong> is a smooth machined transition at a body end, curving from the diameter on the other side of the face into the body's own diameter, with no square shoulder and no stated taper rate. The curve is cut from the body that carries it; no other component changes.</p>
@@ -226,6 +227,10 @@
     <li>An angle blend needs a diameter step to work from. With nothing across the face, or a neighbor at the same Ø, the line under the angle says so and nothing is drawn.</li>
     <li>An angle outside 0° to 90° is not taken: the field says why and keeps the angle you had.</li>
   </ul>
+
+  <h3>Fiberglass wrap</h3>
+  <p>Tick <span class="ui">Fiberglass wrap</span> on a body card (explicit or bare shaft) or in <span class="ui">Add Body</span> when that stretch of shaft is wrapped in fiberglass. Ticking it also turns on a seal area at each end that does not have one, at 4″ (or a quarter of a short body), so you only have to adjust the lengths. Unticking it leaves the seal areas as they are; untick them separately if they should go.</p>
+  <p>The wrap shows on the Final tab's <span class="ui">Full length</span> sheet, where each wrapped section is coloured and labelled FIBERGLASS (see <a href="#documents-final">The Final Schematic tab</a>). It changes nothing else on any sheet. On bare shaft it belongs to that stretch and follows it when the liners around it move.</p>
 
   <h3>Seal areas</h3>
   <p>A seal area is the stretch at a body end that the fiberglass seats into, cut with small radius grooves. It belongs to the body section, not to the blend: a body can have grooves at a square end, grooves behind a blended end, or a blend with no grooves.</p>

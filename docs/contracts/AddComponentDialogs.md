@@ -477,6 +477,7 @@ submit, but every control and every visibility condition is decided in one place
 | Axial length field, per face ("Blend AFT/FWD") | that face is **Blend** by **Length** |
 | Angle field, per face ("Angle AFT/FWD (°)") + the derived-length line under it (`body_blend_aft_angle_note`) + "Corner radius AFT/FWD" field | that face is **Blend** by **Angle** |
 | "At a liner" chips, per face — **Seat \| Liner OD** (`body_blend_aft_liner_target_<SEAT\|LINER_OD>`, `body_blend_fwd_…`) | that face is **Blend** — shown whether or not a liner butts it today (the dialog cannot know the neighbour; one rule on both surfaces) |
+| "Fiberglass wrap" checkbox (`body_fiberglass`) — above the "Seal areas" heading | always |
 ||| Seal area checkbox, per face (AFT / FWD) — under its own "Seal areas" heading | always |
 | Seal area length field, per face ("Seal area AFT/FWD") | that face's seal is ON (both surfaces — parity) |
 
@@ -513,6 +514,17 @@ touches the blend length. Ticking a seal seeds an empty seal length with the pre
 unticking keeps the typed value (`sealLenForSeal`). A stored `0` follows the blend length (documents
 saved before the field). The "Seal areas" section is a sibling of "Component blend" — never a
 third Square | Blend chip, never nested under a blend control.
+
+**"Fiberglass wrap"** marks the body section as wrapped (`Body.fiberglass`; on a bare-shaft section
+an `AutoFiberglass` anchor, the `AutoBlend` posture — never pruned, dormant under a component) and,
+in the same edit, switches on a seal area at each face that has none, seeding its length the way the
+seal checkbox does (`sealLenForSeal` / `defaultSealLenMm`; a seal already on keeps its typed length —
+`Body.withFiberglass`, `withAutoSectionFiberglassAndSeals`). Unticking it touches only the flag: the
+seal areas are their own controls and real machining. It is draw-only — it prints on the Final tab's
+**Full length** sheet, where the section is coloured and labelled FIBERGLASS — but it rides the parity
+rule because it changes the seal areas. Promotion ("Explicit body") carries it onto the new body
+(`autoSectionFiberglassOn`) and demotion back onto the section (`withDemotedBodyFiberglass`); split
+and merge fragments keep it (`carryBodyDisplay`).
 
 The auto-body card carries the same section, anchored in shaft space (`AutoBlend`), so a template's
 seal areas survive liners moving under it; the dialog has no auto counterpart because an Add dialog

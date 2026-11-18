@@ -117,6 +117,13 @@ import com.android.shaftschematic.util.randomUuidString
  *   the cone and to the smaller surface. A radius too large for the cone is clamped only where it
  *   is DRAWN. Ignored in Length mode, and kept through a mode switch.
  * @property blendFwdRadiusMm The same for the FWD face.
+ * @property fiberglass Whether this body section is wrapped in fiberglass. Draw-only: it changes
+ *   nothing in the model, resolve, OAL, collision or the footer, and no stored value moves when
+ *   it changes. It prints on the Final tab's "Full length" sheet, where the section is coloured
+ *   and labelled FIBERGLASS (the label is what carries it on a black-and-white printer). Ticking
+ *   it on a card also switches on a seal area at each face — the grooves the wrap seats into —
+ *   through the card's own seal toggles; unticking it leaves the seal areas as they are.
+ *   Default `false`, so every document saved before the field decodes unchanged.
  * @property blendProfile How both faces ease. Drawing-only, like the blend lengths.
  * @property authoredReference Which shaft end this body's Start is measured from — the
  *   "Measure From: AFT | FWD" chips, the liner/taper field. It is a display/entry choice and an
@@ -157,6 +164,7 @@ data class Body(
     val blendFwdRadiusMm: Float = 0f,
     val blendProfile: BlendProfile = BlendProfile.OGEE,
     val authoredReference: LinerAuthoredReference = LinerAuthoredReference.AFT,
+    val fiberglass: Boolean = false,
     /** Optional user-defined label for display (not used for geometry). */
     val label: String? = null,
 ) : Segment

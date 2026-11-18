@@ -150,6 +150,10 @@ internal const val ANGLE_BLEND_NO_STEP_NOTE =
  * curves that differ by less than a line width at the size a blend prints (on-device report).
  * A body whose stored `blendProfile` is another shape keeps drawing it.
  *
+ * The "Fiberglass wrap" row sits above the seal areas on all three surfaces: ticking it marks the
+ * section wrapped and switches on a seal area at each face that has none (the grooves the wrap
+ * seats into); unticking it leaves the seal areas as they are.
+ *
  * A blended face is entered one of two ways — "Blend by: Length | Angle" ([BlendEntry]). Length
  * shows the length field; Angle shows the angle field, the derived length read-only under it
  * ([aftAngleNote]/[fwdAngleNote], computed by the host because only it knows the shaft), and the
@@ -184,6 +188,13 @@ fun BlendSection(
     fwdRadiusField: @Composable () -> Unit,
     aftAngleNote: String,
     fwdAngleNote: String,
+    /**
+     * Whether the body section is wrapped in fiberglass, and its toggle — `null` hides the row.
+     * Ticking it switches on the seal areas below (the host's callback does that in the same
+     * edit), so it sits directly above them.
+     */
+    fiberglass: Boolean = false,
+    onSetFiberglass: ((Boolean) -> Unit)? = null,
 ) {
     Column(Modifier.fillMaxWidth()) {
         Text(
@@ -209,6 +220,19 @@ fun BlendSection(
                 angleNote = fwdAngleNote, radiusField = fwdRadiusField,
             )
             BlendLinerTargetRow(fwdLinerTarget, "body_blend_fwd_liner_target", onSetFwdLinerTarget)
+        }
+
+        if (onSetFiberglass != null) {
+            Spacer(Modifier.height(8.dp))
+            SealFaceCheckbox(
+                "Fiberglass wrap", fiberglass, "body_fiberglass", onSetFiberglass, Modifier.fillMaxWidth(),
+            )
+            Text(
+                "Adds a seal area at each end. Prints coloured and labelled on the Final tab's " +
+                    "Full length sheet.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
 
         Spacer(Modifier.height(8.dp))

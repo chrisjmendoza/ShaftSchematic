@@ -32,6 +32,10 @@ import com.android.shaftschematic.ui.order.ComponentKind
 import com.android.shaftschematic.ui.resolved.autoSectionShowsDiaOn
 import com.android.shaftschematic.ui.resolved.withAutoDiaOverridesSurviving
 import com.android.shaftschematic.ui.resolved.withDemotedBodyDiaCallout
+import com.android.shaftschematic.ui.resolved.withDemotedBodyFiberglass
+import com.android.shaftschematic.ui.resolved.autoSectionFiberglassOn
+import com.android.shaftschematic.model.withFiberglass
+import com.android.shaftschematic.model.withAutoSectionFiberglassAndSeals
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel.Companion.deriveTaperDiameters
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel.Companion.taperSmallEndAtStart
 import com.android.shaftschematic.util.UnitSystem
@@ -109,6 +113,8 @@ fun ShaftViewModel.addBodyAt(
     blendFwdAngleDeg: Float? = null,
     blendAftRadiusMm: Float = 0f,
     blendFwdRadiusMm: Float = 0f,
+    /** Whether the body is wrapped in fiberglass (`AddBodyDialog`'s Fiberglass box). */
+    fiberglass: Boolean = false,
     target: SpecTarget = SpecTarget.ORIGINAL,
 ) {
     val id = newId()
@@ -150,6 +156,9 @@ fun ShaftViewModel.addBodyAt(
                     blendAftRadiusMm = max(0f, blendAftRadiusMm),
                     blendFwdRadiusMm = max(0f, blendFwdRadiusMm),
                     authoredReference = reference,
+                    // Promoting a wrapped bare-shaft section keeps it wrapped, the Ø-callout carry.
+                    fiberglass = fiberglass ||
+                        s.autoSectionFiberglassOn(startMm, startMm + max(0f, lengthMm)),
                 )
             ) + s.bodies
         ).withAutoDiaOverridesSurviving(before = s)
@@ -246,11 +255,48 @@ fun ShaftViewModel.removeBody(id: String, target: SpecTarget = SpecTarget.ORIGIN
             bodies = s.bodies.toMutableList().apply { removeAt(idx) }
         ).withAutoDiaOverridesSurviving(before = s)
             .withDemotedBodyDiaCallout(s.bodies[idx])
+            .withDemotedBodyFiberglass(s.bodies[idx])
     }
 
     if (removed) {
         emitDeletedSnack(ComponentKind.BODY, id)
     }
+}
+
+/**
+ * Ticks or unticks fiberglass on the stored body at [index] — one edit, one undo step. Ticking
+ * also switches on each face's seal area that is off, at [aftSealLenMm] / [fwdSealLenMm] (the
+ * card's seal-toggle seed); unticking leaves the seal areas alone (`Body.withFiberglass`).
+ */
+fun ShaftViewModel.setBodyFiberglass(
+    index: Int,
+    on: Boolean,
+    aftSealLenMm: Float,
+    fwdSealLenMm: Float,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
+    if (index !in s.bodies.indices) s else {
+        val old = s.bodies[index]
+        val next = old.withFiberglass(on, max(0f, aftSealLenMm), max(0f, fwdSealLenMm))
+        if (next == old) s else s.copy(bodies = s.bodies.toMutableList().also { it[index] = next })
+    }
+}
+
+/**
+ * Ticks or unticks fiberglass on the bare-shaft section `[spanStartMm, spanEndMm)` — one edit,
+ * the [setBodyFiberglass] rule through `withAutoSectionFiberglassAndSeals`.
+ */
+fun ShaftViewModel.setAutoSectionFiberglass(
+    spanStartMm: Float,
+    spanEndMm: Float,
+    on: Boolean,
+    aftSealLenMm: Float,
+    fwdSealLenMm: Float,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
+    s.withAutoSectionFiberglassAndSeals(
+        spanStartMm, spanEndMm, on, max(0f, aftSealLenMm), max(0f, fwdSealLenMm),
+    )
 }
 
 // Tapers

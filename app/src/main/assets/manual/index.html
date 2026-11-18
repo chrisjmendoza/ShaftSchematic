@@ -753,6 +753,7 @@
       <tr><td><span class="ui">Length</span></td><td>Axial length. On a FWD-measured body, the FWD edge stays put and the body grows toward AFT.</td></tr>
       <tr><td><span class="ui">Diameter</span></td><td>The body diameter.</td></tr>
       <tr><td><span class="ui">Component blend</span></td><td>Square or Blend at each end; see below.</td></tr>
+      <tr><td><span class="ui">Fiberglass wrap</span></td><td>The section is wrapped in fiberglass. Ticking it also turns on a seal area at each end; see below.</td></tr>
       <tr><td><span class="ui">Seal areas</span></td><td>Grooved fiberglass seat areas at either end; see below.</td></tr>
       <tr><td><span class="ui">Keyway</span> checkbox and section</td><td>See <a href="#components-keyways">Keyways</a>.</td></tr>
     </tbody>
@@ -762,7 +763,7 @@
 
   <h3>Bare-shaft card</h3>
   <p  class="keep">A bare-shaft card is titled <span class="ui">Body (auto)</span>. <span class="ui">Start</span> and <span class="ui">Length</span> are greyed out because the surrounding components decide them. <span class="ui">Diameter</span> is editable: with more than one stretch of bare shaft it asks whether the new diameter is for <span class="ui">This section</span> or <span class="ui">All auto sections</span> (see <a href="#editor-bodies">Bodies and bare shaft</a>). The card also carries <span class="ui">Show bare-shaft Ø on drawing</span>, the same <span class="ui">Component blend</span> and <span class="ui">Seal areas</span> controls as an explicit body, and the <span class="ui">Explicit body</span> checkbox that promotes it.</p>
-  <aside class="note"><p  class="keep">Blends and seal areas set on an auto section belong to that stretch of bare shaft and follow it when the components around it move. Promoting the section starts the new explicit body with square faces and no seal areas; set them again on its card.</p></aside>
+  <aside class="note"><p  class="keep">Blends and seal areas set on an auto section belong to that stretch of bare shaft and follow it when the components around it move. Promoting the section starts the new explicit body with square faces and no seal areas; set them again on its card. A <span class="ui">Fiberglass wrap</span> does carry over, both ways.</p></aside>
 
   <h3 id="components-blends">Component blend: Square or Blend</h3>
   <p  class="keep">A <strong>blend</strong> is a smooth machined transition at a body end, curving from the diameter on the other side of the face into the body's own diameter, with no square shoulder and no stated taper rate. The curve is cut from the body that carries it; no other component changes.</p>
@@ -786,6 +787,10 @@
     <li  class="keep">An angle blend needs a diameter step to work from. With nothing across the face, or a neighbor at the same Ø, the line under the angle says so and nothing is drawn.</li>
     <li  class="keep">An angle outside 0° to 90° is not taken: the field says why and keeps the angle you had.</li>
   </ul>
+
+  <h3>Fiberglass wrap</h3>
+  <p  class="keep">Tick <span class="ui">Fiberglass wrap</span> on a body card (explicit or bare shaft) or in <span class="ui">Add Body</span> when that stretch of shaft is wrapped in fiberglass. Ticking it also turns on a seal area at each end that does not have one, at 4″ (or a quarter of a short body), so you only have to adjust the lengths. Unticking it leaves the seal areas as they are; untick them separately if they should go.</p>
+  <p  class="keep">The wrap shows on the Final tab's <span class="ui">Full length</span> sheet, where each wrapped section is coloured and labelled FIBERGLASS (see <a href="#documents-final">The Final Schematic tab</a>). It changes nothing else on any sheet. On bare shaft it belongs to that stretch and follows it when the liners around it move.</p>
 
   <h3>Seal areas</h3>
   <p  class="keep">A seal area is the stretch at a body end that the fiberglass seats into, cut with small radius grooves. It belongs to the body section, not to the blend: a body can have grooves at a square end, grooves behind a blended end, or a blend with no grooves.</p>
@@ -1119,7 +1124,8 @@
       <tr><td><span class="ui">Split cuts at liner edges</span></td><td>Off</td><td>Undercut only</td><td>Off: every cut prints its full length as one dimension. On: a cut that runs past a liner edge is dimensioned as two spans meeting at the edge. It sits under <span class="ui">Distance to S.E.T.</span> because it decides how a cut is dimensioned. App-wide, the same switch as in Settings.</td></tr>
       <tr><td><span class="ui">Overall dimension</span></td><td>On</td><td>Undercut only</td><td>On: each section prints one dimension from the S.E.T., above the cut lengths, to the end of the liner or the end of the cuts as <span class="ui">Overall dimension to</span> chooses. Off: only the cut lengths print. Some jobs read better without the overall figure. Saved with the job; a job that has never changed it follows the default in Settings.</td></tr>
       <tr><td><span class="ui">Sections to print</span></td><td>All ticked</td><td>Undercut only</td><td>One checkbox per section, shown when the sheet has two or more. Unticked sections are left off the printed sheet. Saved with this job. See <a href="#recording-sections">Sections to print</a>.</td></tr>
-      <tr><td><span class="ui">Original + Final</span></td><td>On</td><td>Final only</td><td>Prints the original shaft above the final one on one sheet, each with its dimensions, under the final's footer. Off prints the final alone. Greyed out while Runout bubbles is on. See <a href="#documents-final">The Final Schematic tab</a>.</td></tr>
+      <tr><td><span class="ui">Original + Final</span></td><td>On</td><td>Final only</td><td>Prints the original shaft above the final one on one sheet, each with its dimensions, under the final's footer. Off prints the final alone. Greyed out while Runout bubbles or Full length is on. See <a href="#documents-final">The Final Schematic tab</a>.</td></tr>
+      <tr><td><span class="ui">Full length</span></td><td>Off</td><td>Final only</td><td>Prints the whole shaft unbroken, lengths to scale, with its fiberglass sections coloured and labelled, above the final schematic. Takes the place of Original + Final. Greyed out while Runout bubbles is on. See <a href="#documents-final">The Final Schematic tab</a>.</td></tr>
       <tr><td><span class="ui">Runout bubbles</span></td><td>Off</td><td>Final only</td><td>Turns the Final schematic into a Schematic + Runout sheet. See <a href="#documents-final">The Final Schematic tab</a>.</td></tr>
     </tbody>
   </table>
@@ -1143,7 +1149,7 @@
   <table class="ref">
     <thead><tr><th>Sheet</th><th>Content chips</th><th>Sections and controls</th></tr></thead>
     <tbody>
-      <tr class="short"><td>Schematic / Final</td><td>Blank draft, Ø callouts, Template, Component names (+ Original + Final and Runout bubbles on Final)</td><td>Shaft (all four controls) · Thread · Lines &amp; text (all of it) · Footer lines · Shade in Components · Measurement reference · Units</td></tr>
+      <tr class="short"><td>Schematic / Final</td><td>Blank draft, Ø callouts, Template, Component names (+ Original + Final, Full length and Runout bubbles on Final)</td><td>Shaft (all four controls) · Thread · Lines &amp; text (all of it) · Footer lines · Shade in Components · Measurement reference · Units</td></tr>
       <tr><td>Runout Sheet</td><td>Blank draft, Coupling face</td><td>Shaft (all four) · Runout bubbles · Thread · Lines &amp; text (Line thickness, Output font, Fractions) · Shade in Components · Units</td></tr>
       <tr><td>Consolidated Sheet</td><td>Blank draft, Coupling face</td><td>Every section except Wear. The fullest panel.</td></tr>
       <tr><td>Wear Document</td><td>Blank draft</td><td>Shaft (Shaft height only) · Wear · Thread · Lines &amp; text (Line thickness, Output font, Fractions) · Shade in Components (no Explicit bodies only) · Units</td></tr>
@@ -1324,6 +1330,7 @@
       <tr><td>Undercut Drawing</td><td>…PORT_undercuts.pdf</td></tr>
       <tr><td>Consolidated Sheet</td><td>…PORT_consolidated.pdf</td></tr>
       <tr><td>Original + Final sheet</td><td>…PORT_Final_BeforeAfter.pdf</td></tr>
+      <tr><td>Full length sheet</td><td>…PORT_Final_FullLength.pdf</td></tr>
       <tr><td>Final schematic (Original + Final turned off)</td><td>…PORT_Final.pdf</td></tr>
       <tr><td>Final schematic with Runout bubbles</td><td>…PORT_Final_Runout.pdf</td></tr>
       <tr><td>Final runout sheet (Final banner)</td><td>…PORT_Final_RunoutSheet.pdf</td></tr>
@@ -1451,6 +1458,7 @@
     <tbody>
       <tr><td>Original + Final sheet</td><td><span class="ui">PDF preview</span> icon → <span class="ui">Final PDF Preview</span> → <span class="ui">Print</span> or <span class="ui">Export PDF</span></td><td>The default. The original shaft on the top half of the page, labelled ORIGINAL, and the Final on the bottom half, labelled FINAL, each with its own dimensions, callouts and names, under one footer for the Final. See below.</td></tr>
       <tr><td>Final schematic</td><td>Same preview; untick the <span class="ui">Original + Final</span> chip in its options panel</td><td>The Final alone: the welding and machining copy, with the liner positions updated.</td></tr>
+      <tr><td>Full length sheet</td><td>Same preview; tick the <span class="ui">Full length</span> chip in its options panel</td><td>The whole shaft at its true length with no breaks, fiberglass sections coloured and labelled, above the Final schematic. See below.</td></tr>
       <tr><td>Final schematic with <span class="ui">Runout bubbles</span></td><td>Same preview; tick the <span class="ui">Runout bubbles</span> chip in its options panel</td><td>The pre-ship measurement sheet: a Schematic + Runout sheet over the Final geometry, with empty bubbles at the default station counts. <span class="ui">Ø callouts</span> and Template mode don't apply to it. The chip is off each time the app starts, and it takes over from <span class="ui">Original + Final</span> while it is on.</td></tr>
       <tr><td>Final runout sheet</td><td>Banner ⋮ → <span class="ui">Print final runout sheet</span> or <span class="ui">Export final runout sheet…</span></td><td>A blank classic runout sheet over the Final geometry, with no readings and default stations, for taking the final runouts before the job ships. It follows the job's Shaft height and compression settings. It has no preview.</td></tr>
     </tbody>
@@ -1458,7 +1466,10 @@
   <h3>The Original + Final sheet</h3>
   <p>The Final preview opens on one sheet that shows both drawings: the original shaft in the top half, the Final in the bottom half, with a thin grey line between them. Each half is drawn exactly as its own schematic would be, with its rails, diameter callouts and component names, and carries its label (ORIGINAL or FINAL) at its top left. The footer is the Final's, so the sheet still reads “Drawing: Final”. Both halves are drawn at one scale and follow the same <span class="ui">Shaft height</span> and compression settings, so the before and the after can be compared directly; on this sheet the shafts draw smaller than on a single-shaft sheet, and the <span class="ui">Shaft height</span> slider can only make them smaller still.</p>
   <p  class="keep">To print the Final on its own, open the options panel in the Final preview and untick <span class="ui">Original + Final</span>. The chip is on each time the app starts. It is greyed out while <span class="ui">Runout bubbles</span> is ticked, because that sheet replaces it.</p>
-  <p  class="keep">Every Final sheet is marked so it can never be handed out as the original: “Drawing: Final” in the footer job block (or the runout sheet's header), a bold FINAL stamp beside the side stamp, and _Final, _Final_BeforeAfter, _Final_Runout or _Final_RunoutSheet in the file and print job name (see <a href="#reading-final">Reading the Printed Sheets</a>).</p>
+  <h3>The Full length sheet</h3>
+  <p  class="keep">Tick <span class="ui">Full length</span> in the Final preview's options panel for a sheet that shows where the fiberglass goes. Across the top of the page the whole shaft is drawn at its true length with no breaks, like the wear drawing, under the heading FULL LENGTH. The diameters are drawn larger than true so the steps between liners and bare shaft can be seen, so nothing on this drawing is measured; it carries no dimensions. Under it is the Final schematic with its breaks, dimensions and footer, exactly as it prints on its own.</p>
+  <p>Every section ticked <span class="ui">Fiberglass wrap</span> on its body card is filled in a pale fiberglass green with crossed winding lines, and carries the word FIBERGLASS, inside the section when it fits and above it on a short leader when it does not. A legend at the top right repeats the colour. On a black-and-white printer the colour prints as a mid grey, darker than the light component shade, and the word is still there, so the sheet reads the same. The chip is off each time the app starts; while it is on, <span class="ui">Original + Final</span> is greyed out.</p>
+  <p  class="keep">Every Final sheet is marked so it can never be handed out as the original: “Drawing: Final” in the footer job block (or the runout sheet's header), a bold FINAL stamp beside the side stamp, and _Final, _Final_BeforeAfter, _Final_FullLength, _Final_Runout or _Final_RunoutSheet in the file and print job name (see <a href="#reading-final">Reading the Printed Sheets</a>).</p>
   <figure class="wide">
     <img src="figures/schematic-final.webp" alt="A Final schematic: the same shaft with the seal liner now 18 inches long, Drawing: Final in the footer job block, and a bold PORT FINAL stamp.">
     <figcaption>A Final schematic. The seal liner was lengthened to 18″ after the repair; the footer reads “Drawing: Final” and the stamp reads PORT FINAL.</figcaption>

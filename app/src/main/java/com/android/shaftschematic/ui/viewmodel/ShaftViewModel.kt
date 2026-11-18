@@ -571,6 +571,13 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _finalBeforeAfter = MutableStateFlow(true)
     val finalBeforeAfter: StateFlow<Boolean> = _finalBeforeAfter.asStateFlow()
 
+    // Whether the FINAL drawing's schematic sheet is the Full length sheet — the whole shaft at
+    // true length, unbroken, fiberglass sections coloured, above the final schematic. Session-only
+    // and default OFF (an election for the jobs that carry fiberglass); wins over the before/after
+    // sheet, and runout bubbles win over it (`finalSheetKind`).
+    internal val _finalFullLength = MutableStateFlow(false)
+    val finalFullLength: StateFlow<Boolean> = _finalFullLength.asStateFlow()
+
     internal val _previewBlackWhiteOnly = MutableStateFlow(false)
     val previewBlackWhiteOnly: StateFlow<Boolean> = _previewBlackWhiteOnly.asStateFlow()
 

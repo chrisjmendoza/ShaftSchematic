@@ -58,6 +58,8 @@ import com.android.shaftschematic.ui.viewmodel.setKeyways180Apart
 import com.android.shaftschematic.ui.viewmodel.setKeyways90Apart
 import com.android.shaftschematic.ui.viewmodel.setKeyways90Cw
 import com.android.shaftschematic.ui.viewmodel.setAutoSectionShowDia
+import com.android.shaftschematic.ui.viewmodel.setAutoSectionFiberglass
+import com.android.shaftschematic.ui.viewmodel.setBodyFiberglass
 import com.android.shaftschematic.ui.viewmodel.setThreadEndPosition
 import com.android.shaftschematic.ui.viewmodel.setThreadExcludeFromOal
 import com.android.shaftschematic.ui.viewmodel.setThreadRelief
@@ -428,13 +430,14 @@ fun ShaftRoute(
         onSetEndHoles = { end, holes -> vm.setEndHoles(end, holes, target) },
         onSelectComponentById = vm::selectComponentById,
 
-        onAddBody   = { s, l, d, ref, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd, bAngles ->
+        onAddBody   = { s, l, d, ref, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd, bAngles, bFiberglass ->
             vm.addBodyAt(
                 s, l, d, ref, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd,
                 blendAftAngleDeg = bAngles.aftAngleDeg,
                 blendFwdAngleDeg = bAngles.fwdAngleDeg,
                 blendAftRadiusMm = bAngles.aftRadiusMm,
                 blendFwdRadiusMm = bAngles.fwdRadiusMm,
+                fiberglass = bFiberglass,
                 target = target,
             )
         },
@@ -443,6 +446,8 @@ fun ShaftRoute(
         onSetAutoBlend = { s0, s1, end, len, prof, seal, sealLen, toOd -> vm.setAutoBlend(s0, s1, end, len, prof, seal, sealLen, toOd, target) },
         onSetAutoBlendAngle = { s0, s1, end, deg, r -> vm.setAutoBlendAngle(s0, s1, end, deg, r, target) },
         onSetAutoSectionShowDia = { s0, s1, show -> vm.setAutoSectionShowDia(s0, s1, show, target) },
+        onSetAutoFiberglass = { s0, s1, on, aftLen, fwdLen -> vm.setAutoSectionFiberglass(s0, s1, on, aftLen, fwdLen, target) },
+        onSetBodyFiberglass = { i, on, aftLen, fwdLen -> vm.setBodyFiberglass(i, on, aftLen, fwdLen, target) },
         onAddTaper  = { s, l, sd, ed, rate, ref, kwW, kwD, kwL, kwO, kwS, kwUnit, rateManual ->
             vm.addTaperAt(s, l, sd, ed, rate, ref, kwW, kwD, kwL, kwO, kwS, kwUnit, target, rateManual)
         },

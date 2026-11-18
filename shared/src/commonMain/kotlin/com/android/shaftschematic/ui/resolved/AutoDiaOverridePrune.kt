@@ -4,6 +4,8 @@ import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.showsAutoSectionDia
 import com.android.shaftschematic.model.withAutoSectionShowDia
+import com.android.shaftschematic.model.autoSectionFiberglass
+import com.android.shaftschematic.model.withAutoSectionFiberglass
 import kotlin.math.abs
 
 /** Slop on the span-start comparison — the resolve layer's own body epsilon. */
@@ -104,4 +106,28 @@ fun ShaftSpec.withDemotedBodyDiaCallout(removed: Body): ShaftSpec {
     val run = autoRunOn(removed.startFromAftMm, removed.startFromAftMm + removed.lengthMm)
         ?: return this
     return withAutoSectionShowDia(run.startMmPhysical, run.endMmPhysical, removed.showDiaOnDrawing)
+}
+
+/**
+ * Whether a bare-shaft section lies on exactly `[startMm, endMm]` AND is wrapped in fiberglass —
+ * the [autoSectionShowsDiaOn] question for the wrap, so promoting a wrapped section ("Explicit
+ * body") keeps it wrapped. The section's own anchor goes dormant under the new body; it is not
+ * pruned (the [com.android.shaftschematic.model.AutoFiberglass] posture).
+ */
+fun ShaftSpec.autoSectionFiberglassOn(startMm: Float, endMm: Float): Boolean {
+    if (autoFiberglass.isEmpty()) return false
+    val run = autoRunOn(startMm, endMm) ?: return false
+    return autoSectionFiberglass(run.startMmPhysical, run.endMmPhysical)
+}
+
+/**
+ * The inverse carry: this spec is the result of removing [removed], and when a bare-shaft section
+ * now fills exactly the body's stored span (a demotion) that section takes the body's wrap — the
+ * [withDemotedBodyDiaCallout] rule. A removal whose gap merges into a neighbouring section carries
+ * nothing.
+ */
+fun ShaftSpec.withDemotedBodyFiberglass(removed: Body): ShaftSpec {
+    val run = autoRunOn(removed.startFromAftMm, removed.startFromAftMm + removed.lengthMm)
+        ?: return this
+    return withAutoSectionFiberglass(run.startMmPhysical, run.endMmPhysical, removed.fiberglass)
 }

@@ -101,6 +101,28 @@ chip greys out while bubbles are elected); else FINAL with before/after → `BEF
 `BEFORE_AFTER` (that sheet draws two geometries; a field the record cannot express is a
 stale-preview bug).
 
+The **"Full length"** election is the third session flag (`ShaftViewModel.finalFullLength`,
+`setFinalFullLength`), default **OFF** (on-device request: the whole shaft with its fiberglass
+represented, unbroken like the wear drawing, with the schematic and its measurements under it). It
+selects `FinalSheetKind.FULL_LENGTH` — `composeFullLengthPdfOnCanvas`
+(`pdf/FullLengthPdfComposer.kt`): a `FULL_LENGTH_BAND_PT` band across the top of the page drawing
+the whole FINAL shaft through the ONE simple profile (`drawSimpleShaftProfile(breakLongRuns = false)`)
+at a LINEAR x map — lengths to scale, no S-break — with diameters enlarged to a readable height
+(`fullLengthDrawnDiaPt`: true scale when ≥ `FULL_LENGTH_SHAFT_MIN_PT`, else enlarged to it, capped
+at `FULL_LENGTH_SHAFT_MAX_PT`; it carries no values, so nothing is measured off it), and under it
+the final schematic through the ONE schematic composer in a `SheetBand` hosting the footer (the
+before/after mechanism, its text caps included). Every wrapped body run (`fiberglassBodyRuns` —
+`Body.fiberglass` by fragment-stripped id, `AutoFiberglass` for a bare-shaft run) is filled
+`FIBERGLASS_FILL_COLOR` (the pale sage of the shop photographs; ≈ 70% grey in black-and-white,
+darker than the 16% component shade) under crossed winding lines, and carries the word
+**FIBERGLASS** — inside the section when it fits, else above it on a leader
+(`planFiberglassLabels`, two rows, never dropped) — plus a legend swatch, so a black-and-white
+printer loses nothing. The schematic band is unchanged by the wrap. Precedence: bubbles →
+`WITH_BUBBLES`; else full length → `FULL_LENGTH`; else before/after → `BEFORE_AFTER`; else `PLAIN`;
+a section sheet is always `PLAIN`. The "Original + Final" chip greys out while Full length is on
+(one band above the final per page). Filename suffix `_Final_FullLength`
+(`FINAL_FULL_LENGTH_FILENAME_SUFFIX`).
+
 Marking — a final sheet must never pass for the original:
 
 - `ProjectInfo.drawingLabel` (blank on every existing caller → byte-identical output).
@@ -114,9 +136,9 @@ Marking — a final sheet must never pass for the original:
   (`exportPdfFilename(base, drawingSuffix, blankDraft)` → `<base><suffix>[_BlankDraft].pdf`,
   so `…_Final.pdf` for the final alone, `…_Final_BeforeAfter.pdf` for the Original + Final
   sheet, `…_Final_BlankDraft.pdf`, `…_Final_Runout.pdf` with bubbles elected, and
-  `…_Final_RunoutSheet.pdf` for the banner's blank classic sheet — FOUR distinct documents, never
-  collapsed onto one name; `finalDrawingSuffix(runoutBubbles, beforeAfter)` applies the kind's
-  precedence). The label and the suffix
+  `…_Final_RunoutSheet.pdf` for the banner's blank classic sheet, `…_Final_FullLength.pdf` for the
+  Full length sheet — FIVE distinct documents, never collapsed onto one name;
+  `finalDrawingSuffix(runoutBubbles, beforeAfter, fullLength)` applies the kind's precedence). The label and the suffix
   are one internal pair, `FINAL_DRAWING_LABEL` / `FINAL_FILENAME_SUFFIX`
   (`ui/nav/PdfExportRoute.kt`), read by the preview, the export and the Final tab, so a
   sheet and its filename cannot disagree about which drawing they are. The preview titles

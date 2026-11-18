@@ -102,6 +102,15 @@ Specifically:
   three curves differ by less than a line width at the size a blend prints). A Length face draws
   the S-curve; a stored `blendProfile` of another shape still draws. Do not reintroduce the
   chips without asking.
+- **Fiberglass wrap**: `AddBodyDialog`, the explicit-body card and the auto-body card all carry the
+  "Fiberglass wrap" checkbox (`body_fiberglass`) above "Seal areas", from the ONE `BlendSection`.
+  Ticking it marks the section wrapped (`Body.fiberglass`; a bare-shaft section's `AutoFiberglass`
+  anchor — the `AutoBlend` posture, never pruned, dormant under a component) AND, in the same edit,
+  switches on a seal area at each face that has none (`Body.withFiberglass` /
+  `withAutoSectionFiberglassAndSeals`, the seal box's own length seed); unticking touches only the
+  flag. Promotion/demotion carry it (`autoSectionFiberglassOn` / `withDemotedBodyFiberglass`), split and
+  merge fragments keep it (`carryBodyDisplay`). Draw-only: it prints on the Final tab's Full length
+  sheet (see the Final-schematic invariant) and nowhere else.
 - **Body AFT/FWD reference**: `AddBodyDialog` and the explicit-body card both show "Measure
   From: AFT | FWD" (`Body.authoredReference`; a switch never moves the body, a FWD body keeps its
   FWD distance through an OAL change); the auto-body card omits it (its span is derived).
@@ -431,8 +440,10 @@ other run** (on-device direction: a 95%-shaft body must keep its break or a long
 render). The protected window — the slot span padded by one keyway width, clamped to the body
 (`bodyKeywayProtectedSpansMm`, STORED spec) — pins at true scale
 (`keywayPinnedBodySpans`), the break gap steers clear of it (`breakGapCenter`, both body
-passes — THREE avoid sources: keyway windows, seal areas, bolt-row windows; a run with no
-clear placement prints plain), and the slot draw derives pt/mm from
+passes — THREE avoid sources: keyway windows, seal areas, bolt-row windows, each kept clear of
+the glyph's LOBES as well as the gap — `breakEdgeReachPt`, the return sweep's reach + stroke +
+daylight (on-device report: the S lobes lay over a short fiberglass section's seal dashes); a run
+with no clear placement prints plain), and the slot draw derives pt/mm from
 its OWN mapped span so it stays true-size inside a compressed body
 (`drawKeywayNotchBodyPdf`). Pinning the whole host body BECAUSE of its keyway, or suppressing
 its break outright, would be a regression on both sides. Separately, **an explicit body can
@@ -932,7 +943,16 @@ ONE builder `buildOutputFilename` (`ui/screen/OutputDoc.kt`): `DocumentNaming`'s
 its own tab and from Export all, and a `/`, `:` or `*` in a customer name never reaches the
 filename (two schemes had drifted apart and one of them did not sanitize — manual-figure
 report). `PdfPreviewScreen`/`PdfExportRoute` take the target from the NAV ROUTE ARGUMENT
-(`?target=final`), never from ViewModel state. See `docs/contracts/FinalSchematic.md`.
+(`?target=final`), never from ViewModel state. A third session election, **"Full length"**
+(`finalFullLength`, default OFF; bubbles win over it, it wins over Original + Final, whose chip greys
+out while it is on), prints `FinalSheetKind.FULL_LENGTH` (`pdf/FullLengthPdfComposer.kt`, suffix
+`_Final_FullLength`): the whole FINAL shaft in a top band at a LINEAR x map — lengths to scale, NO
+S-break (`drawSimpleShaftProfile(breakLongRuns = false)`), diameters enlarged to a readable height and
+carrying no values — over the final schematic in a `SheetBand` hosting the footer. Every wrapped body
+run (`fiberglassBodyRuns`) fills `FIBERGLASS_FILL_COLOR` (pale sage from the shop photos; a mid grey
+in black-and-white) under crossed winding lines AND carries the word FIBERGLASS (inside, else above on
+a leader — `planFiberglassLabels`, never dropped) plus a legend, so a black-and-white printer loses
+nothing (on-device request). See `docs/contracts/FinalSchematic.md`.
 
 ### Section sheets are a window on the drawing, never a copy of it
 A section sheet (`SchematicSection`, envelope `sheet_sections` — a name, the STORED component ids

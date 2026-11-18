@@ -242,6 +242,9 @@ fun PdfPreviewScreen(
     // The final drawing's before/after election — the original above the final on one sheet.
     // Session-only and ON by default; consulted only on the FINAL target, and bubbles win.
     val finalBeforeAfter by vm.finalBeforeAfter.collectAsState()
+    // The final drawing's Full length election — off by default; bubbles win over it, and it wins
+    // over the before/after sheet.
+    val finalFullLength by vm.finalFullLength.collectAsState()
 
     // A final sheet is marked so it can never be mistaken for the original — the label
     // prints in the footer job block and as a badge beside the Side badge.
@@ -287,7 +290,7 @@ fun PdfPreviewScreen(
         snapshotFlow {
             val config = tunedRunoutConfig(runoutConfig, tuning.heightScale, tuning.linerCompression)
             val section = currentSection()
-            val kind = sectionSheetKind(section != null, target, finalRunoutBubbles, finalBeforeAfter)
+            val kind = sectionSheetKind(section != null, target, finalRunoutBubbles, finalBeforeAfter, finalFullLength)
             SchematicRenderInputs(
                 spec = spec,
                 unit = unit,
@@ -493,13 +496,13 @@ fun PdfPreviewScreen(
                             sectionSnapshot != null ->
                                 suggested + (if (isFinal) FINAL_FILENAME_SUFFIX else "") +
                                     " " + sectionSnapshot.title.ifBlank { "section" }
-                            isFinal -> suggested + finalDrawingSuffix(finalRunoutBubbles, finalBeforeAfter)
+                            isFinal -> suggested + finalDrawingSuffix(finalRunoutBubbles, finalBeforeAfter, finalFullLength)
                             else -> suggested
                         }
                         val jobName = if (pdfBlankDraft) "$baseName (blank draft)" else baseName
                         // Snapshot state on the UI thread; onWrite runs on a binder thread.
                         val kindSnapshot =
-                            sectionSheetKind(sectionSnapshot != null, target, finalRunoutBubbles, finalBeforeAfter)
+                            sectionSheetKind(sectionSnapshot != null, target, finalRunoutBubbles, finalBeforeAfter, finalFullLength)
                         val specSnapshot = spec
                         // The before/after sheet's top band — the ORIGINAL drawing, read only for it.
                         val beforeAfter = kindSnapshot == FinalSheetKind.BEFORE_AFTER
@@ -761,6 +764,7 @@ fun PdfPreviewScreen(
                         showFinalRunoutBubbles = isFinal && sectionId == null,
                         finalRunoutBubbles = finalRunoutBubbles,
                         finalBeforeAfter = finalBeforeAfter,
+                        finalFullLength = finalFullLength,
                         tuning = tuning,
                     )
                 }
@@ -936,6 +940,11 @@ internal fun PdfOptionsSheet(
      */
     finalBeforeAfter: Boolean = false,
     /**
+     * The Full length election, offered under the same FINAL-only rule. Inert while bubbles are
+     * elected; while it is on, the before/after election is inert.
+     */
+    finalFullLength: Boolean = false,
+    /**
      * Live-tuning sink: every slider here reports its in-progress value so the preview
      * above the panel reshapes under the finger. Visual only — the commit path is
      * unchanged and nothing persists on a drag frame.
@@ -1026,9 +1035,18 @@ internal fun PdfOptionsSheet(
                 ContentChip(
                     label = "Original + Final",
                     selected = finalBeforeAfter,
-                    enabled = !finalRunoutBubbles,
+                    enabled = !finalRunoutBubbles && !finalFullLength,
                     onClick = { vm.setFinalBeforeAfter(!finalBeforeAfter) },
                     modifier = Modifier.testTag("final_before_after_toggle"),
+                )
+                // The whole shaft unbroken, fiberglass coloured, above the final schematic. It
+                // takes the band the original would, so Original + Final greys out while it is on.
+                ContentChip(
+                    label = "Full length",
+                    selected = finalFullLength,
+                    enabled = !finalRunoutBubbles,
+                    onClick = { vm.setFinalFullLength(!finalFullLength) },
+                    modifier = Modifier.testTag("final_full_length_toggle"),
                 )
             }
         }
@@ -1052,7 +1070,9 @@ internal fun PdfOptionsSheet(
             Text(
                 "Original + Final prints the original shaft above the final one, each with its " +
                     "own dimensions, under one footer for the final — turn it off for the final " +
-                    "drawing alone. Runout bubbles adds runout stations to the final drawing " +
+                    "drawing alone. Full length prints the whole shaft unbroken, lengths to scale, " +
+                    "with its fiberglass sections coloured and labelled, above the final drawing " +
+                    "(it takes the place of Original + Final). Runout bubbles adds runout stations to the final drawing " +
                     "instead: on for the pre-ship measurement sheet, which prints as the " +
                     "consolidated sheet — Ø callouts, Template mode and Original + Final do not " +
                     "apply to it.",

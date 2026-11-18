@@ -269,13 +269,15 @@ fun ShaftScreen(
                 blendAftSeal: Boolean, blendFwdSeal: Boolean,
                 blendAftSealLenMm: Float, blendFwdSealLenMm: Float,
                 blendAftToLinerOd: Boolean, blendFwdToLinerOd: Boolean,
-                blendAngles: BlendAngleDraft) -> Unit,
+                blendAngles: BlendAngleDraft, fiberglass: Boolean) -> Unit,
     onSetAutoSectionDia: (spanStartMm: Float, spanEndMm: Float, diaMm: Float) -> Unit,
     /** Sets the bare-shaft Ø of EVERY auto section together (the card's "All auto sections"). */
     onSetAllAutoSectionsDia: (diaMm: Float) -> Unit,
     onSetAutoBlend: (spanStartMm: Float, spanEndMm: Float, end: LinerAuthoredReference, lengthMm: Float, profile: BlendProfile, seal: Boolean, sealLenMm: Float, toLinerOd: Boolean) -> Unit,
     onSetAutoBlendAngle: (spanStartMm: Float, spanEndMm: Float, end: LinerAuthoredReference, angleDeg: Float?, radiusMm: Float) -> Unit = { _, _, _, _, _ -> },
     onSetAutoSectionShowDia: (startMm: Float, endMm: Float, show: Boolean) -> Unit,
+    onSetAutoFiberglass: (startMm: Float, endMm: Float, on: Boolean, aftSealLenMm: Float, fwdSealLenMm: Float) -> Unit = { _, _, _, _, _ -> },
+    onSetBodyFiberglass: (index: Int, on: Boolean, aftSealLenMm: Float, fwdSealLenMm: Float) -> Unit = { _, _, _, _ -> },
     onAddTaper: (startMm: Float, lengthMm: Float, startDiaMm: Float, endDiaMm: Float,
                  rateText: String, reference: LinerAuthoredReference,
                  keywayWidthMm: Float, keywayDepthMm: Float, keywayLengthMm: Float,
@@ -763,6 +765,7 @@ fun ShaftScreen(
                     onAddBody(
                         s, l, d, LinerAuthoredReference.AFT, 0f, 0f, 0f, 0f, LinerAuthoredReference.AFT, false, null,
                         0f, 0f, BlendProfile.OGEE, false, false, 0f, 0f, false, false, BlendAngleDraft(),
+                        false,
                     )
                 },
                 onSetAutoSectionDia = onSetAutoSectionDia,
@@ -770,6 +773,8 @@ fun ShaftScreen(
                 onSetAutoBlend = onSetAutoBlend,
                 onSetAutoBlendAngle = onSetAutoBlendAngle,
                 onSetAutoSectionShowDia = onSetAutoSectionShowDia,
+                onSetAutoFiberglass = onSetAutoFiberglass,
+                onSetBodyFiberglass = onSetBodyFiberglass,
                 onUpdateBody = onUpdateBody,
                 onUpdateBodyReference = onUpdateBodyReference,
                 onUpdateBodyShowDia = onUpdateBodyShowDia,
@@ -929,9 +934,9 @@ fun ShaftScreen(
                     initialLengthMm = addLengthMm,
                     perComponentUnitsEnabled = perComponentUnitsEnabled,
                     dialogUnitConverterEnabled = dialogUnitConverterEnabled,
-                    onSubmit = { s, l, d, ref, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, k180, k90, cw90, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd, bAngles ->
+                    onSubmit = { s, l, d, ref, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, k180, k90, cw90, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd, bAngles, bFiberglass ->
                         addBodyOpen = false
-                        onAddBody(s, l, d, ref, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd, bAngles)
+                        onAddBody(s, l, d, ref, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd, bAngles, bFiberglass)
                         onSetKeyways180Apart(k180)
                         onSetKeyways90Apart(k90)
                         if (k90) onSetKeyways90Cw(cw90)
