@@ -246,19 +246,19 @@
     <li>On an explicit body, unticking a seal area stops drawing it but keeps the typed length; ticking it again brings it back.</li>
   </ul>
   <figure class="detail">
-    <img src="figures/feature-blend-seal.png" alt="Close-up of a body end on the schematic with a curved blend into the neighboring diameter and three dashed vertical lines across the body near the face.">
-    <figcaption>A blended face and a seal area: the curve eases into the neighboring diameter, and three dashed lines mark the seal grooves.</figcaption>
+    <img src="figures/feature-blend-seal.png" alt="Close-up of a body end on the schematic with a curved blend into the neighboring diameter and three thin grey vertical lines across the body near the face.">
+    <figcaption>A blended face and a seal area: the curve eases into the neighboring diameter, and three thin grey lines mark the seal grooves.</figcaption>
   </figure>
 
   <h3>What prints for a body</h3>
   <ul>
     <li>The body outline, at its own diameter, with any blends curved in.</li>
-    <li>Seal areas as three evenly spaced <strong>dashed</strong> lines across the body, outline to outline. The silhouette stays flat through the seal area.</li>
+    <li>Seal areas as three evenly spaced <strong>thin grey</strong> lines across the body, outline to outline, when <span class="ui">Seal areas</span> is switched on in the sheet's options (off by default). The silhouette stays flat through the seal area.</li>
     <li>A Ø callout below the shaft only if <span class="ui">Show Ø on drawing</span> is on (off by default). That callout is the only place a body's Ø prints; the footer carries no body Ø line.</li>
     <li>No dimension rail for a body, a blend or a seal area. The rails always dimension the stored body ends as if they were square.</li>
     <li>For a face blended by Angle, the angle below the shaft with a leader to the chamfer, followed by the corner radius when there is one (for example <span class="ui">45°, 3/8″ R</span>), on the schematic and the Final schematic. A face blended by Length prints no number.</li>
   </ul>
-  <aside class="shop"><p>The three dashed lines are an indication that the seal area is grooved, not a count to machine: cut the number of grooves your seat calls for. They are dashed so they are not mistaken for a component face, which is a solid line. A short blend is drawn wider than scale so it can be seen at all. The only numbers a blend prints are the angle and radius you typed, never anything measured off the drawing, so the drawn slope can look steeper or flatter than the angle printed beside it. The wear document draws body ends square.</p></aside>
+  <aside class="shop"><p>The three grey lines are an indication that the seal area is grooved, not a count to machine: cut the number of grooves your seat calls for. They are thin and grey so they are not mistaken for a component face, which is a full black line, and solid because a dashed line means something hidden. A short blend is drawn wider than scale so it can be seen at all. The only numbers a blend prints are the angle and radius you typed, never anything measured off the drawing, so the drawn slope can look steeper or flatter than the angle printed beside it. The wear document draws body ends square.</p></aside>
 
   <h2 id="components-keyways">Keyways (bodies and tapers)</h2>
   <p>Tapers and explicit bodies can each carry one keyway. The controls are the same on both, with two differences: a body keyway chooses which end it runs from, and a taper keyway always runs from the S.E.T.</p>

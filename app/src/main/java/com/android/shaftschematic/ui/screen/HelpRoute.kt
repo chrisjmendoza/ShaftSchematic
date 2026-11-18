@@ -566,7 +566,9 @@ internal val helpSections: List<HelpSection> = listOf(
                     "A seal area is the stretch at a body end the fiberglass seats into. Tick " +
                     "AFT or FWD under \"Seal areas\" and give it a length; it is measured from " +
                     "the face, whether that face is square or blended, and draws as three " +
-                    "dashed cuts across the body.\n\n" +
+                    "thin grey lines across the body. Printed sheets show them only while \"Seal " +
+                    "areas\" is on in the sheet's options (off by default); the preview always " +
+                    "shows them.\n\n" +
                     "Neither prints a dimension or a footer line — the rails still dimension the " +
                     "body ends as if they were square — so a short blend is drawn wider than " +
                     "scale just so it can be seen. The one exception: an Angle blend prints the " +

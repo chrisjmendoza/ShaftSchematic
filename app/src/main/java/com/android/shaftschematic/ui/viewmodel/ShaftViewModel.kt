@@ -553,7 +553,7 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _pdfFooterBoltHoleDia = MutableStateFlow(PdfPrefs().footerBoltHoleDia)
     val pdfFooterBoltHoleDia: StateFlow<Boolean> = _pdfFooterBoltHoleDia.asStateFlow()
 
-    // Settings → Drawing → "Seal areas on inspection sheets" (`PdfPrefs.inspectionSealAreas`).
+    // Settings → Drawing → "Seal areas on printed sheets" (`PdfPrefs.inspectionSealAreas`).
     internal val _pdfInspectionSealAreas = MutableStateFlow(PdfPrefs().inspectionSealAreas)
     val pdfInspectionSealAreas: StateFlow<Boolean> = _pdfInspectionSealAreas.asStateFlow()
 

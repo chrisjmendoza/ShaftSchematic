@@ -8,6 +8,19 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-18
 
+### feat(pdf): seal areas draw as thin grey lines, and are a toggle on every printed sheet
+
+Seal-area grooves now draw as thin solid grey lines instead of dashed black ones, on every sheet
+and in the editor preview (on-device ruling: a dashed line means hidden, and a seal groove is a
+visible rough-cut surface). They stay thin and grey so they are not taken for a component face.
+
+Seal areas now print only while "Seal areas" is switched on — on the schematic and every Final
+sheet as well as the runout and consolidated sheets, which already worked this way (on-device
+request: they are usually noise, and even a Final sheet may go out without them). The switch is in
+each of those sheets' PDF options and in Settings → Drawing, renamed "Seal areas on printed
+sheets". The Final sheets no longer force them on. The editor preview always shows them. A
+schematic that printed seal areas before prints without them until the switch is turned on.
+
 ### feat(undercut): the body beside a liner keeps its outline under a cut; "Drawn depth" on the options panel
 
 - A cut that runs over a liner's edge onto a body whose face is square (no blend — the liner and

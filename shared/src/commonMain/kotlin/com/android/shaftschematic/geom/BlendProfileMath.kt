@@ -322,14 +322,17 @@ const val SEAL_GROOVE_COUNT = 3
 fun sealGrooveFracs(count: Int = SEAL_GROOVE_COUNT): List<Float> =
     if (count < 1) emptyList() else (1..count).map { it.toFloat() / (count + 1) }
 
-// Dash pattern for a seal cut's line. Each cut draws as ONE full-height line across the body,
-// silhouette to silhouette, over a flat outline. Dashed on purpose: a solid full-height vertical
-// is the glyph for a component face, and three solid lines made the shaft read as 3-4 segments
-// when it is one whole unit (on-device report). Deliberately FINER than the hidden-keyway 6/4
-// dash — that pattern means "far-side feature", and a seal cut is a near-side cut, so the two
-// must never read alike. Shared verbatim by both draw sites and the SVG preview.
-const val SEAL_DASH_ON_PT = 2.5f
-const val SEAL_DASH_OFF_PT = 2f
+// How a seal cut's line is inked. Each cut draws as ONE full-height line across the body,
+// silhouette to silhouette, over a flat outline — SOLID, THIN and GREY. Not dashed: a dashed line
+// means hidden, and a seal groove is a visible rough-cut surface (on-device ruling). Not a
+// full-weight black solid either: a solid full-height vertical at outline weight is the glyph for
+// a component face, and three of them made one shaft read as 3-4 segments (on-device report). The
+// grey is a mid grey, not a faint one, so it survives a black-and-white laser copy. Shared by both
+// draw sites and the SVG preview: the PDF strokes [SEAL_LINE_GREY]; the editor canvas strokes its
+// theme outline colour at [SEAL_LINE_ALPHA], the same mid grey on the white sheet.
+const val SEAL_LINE_WIDTH_FRAC = 0.5f
+const val SEAL_LINE_GREY = 0xFF808080.toInt()
+const val SEAL_LINE_ALPHA = 0.5f
 
 /** A blend never eats more than this fraction of the drawn run it is machined into. */
 const val MAX_BLEND_FRAC_OF_HOST = 0.4f

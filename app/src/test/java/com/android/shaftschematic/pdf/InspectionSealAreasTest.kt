@@ -19,9 +19,9 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * "Seal areas" on the inspection sheets (`PdfPrefs.inspectionSealAreas`, on-device request): the
- * classic runout sheet and the consolidated sheet draw a body's seal-area lines only while the
- * switch is on — off by default — and a Final sheet draws them either way.
+ * "Seal areas" on the printed sheets (`PdfPrefs.inspectionSealAreas`, on-device request): the
+ * schematic, the classic runout sheet and the consolidated sheet draw a body's seal-area lines
+ * only while the switch is on — off by default — and a Final sheet follows the same switch.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -59,12 +59,31 @@ class InspectionSealAreasTest {
         }.lines.size
     }
 
+    private fun schematicLineCount(seal: Boolean, prefs: PdfPrefs = PdfPrefs(), project: ProjectInfo = ProjectInfo()): Int {
+        val s = spec(seal)
+        return SheetTextRecorder(pageW, pageH).also { c ->
+            composeShaftPdfOnCanvas(
+                c, pageW, pageH, s, UnitSystem.INCHES, project, appVersion = "", filename = "",
+                pdfPrefs = prefs, resolvedComponents = resolveComponents(s),
+            )
+        }.lines.size
+    }
+
     @Test
-    fun `off by default, and a final sheet shows them either way`() {
+    fun `off by default`() {
         assertFalse(PdfPrefs().inspectionSealAreas)
-        assertFalse(inspectionSheetShowsSealAreas(PdfPrefs(), ProjectInfo()))
-        assertTrue(inspectionSheetShowsSealAreas(PdfPrefs(inspectionSealAreas = true), ProjectInfo()))
-        assertTrue(inspectionSheetShowsSealAreas(PdfPrefs(), ProjectInfo(drawingLabel = "Final")))
+        assertFalse(sheetShowsSealAreas(PdfPrefs()))
+        assertTrue(sheetShowsSealAreas(PdfPrefs(inspectionSealAreas = true)))
+    }
+
+    @Test
+    fun `the schematic draws the seal lines only while the switch is on`() {
+        val plain = schematicLineCount(seal = false)
+        assertEquals("off: as a shaft with no seal areas", plain, schematicLineCount(seal = true))
+        assertTrue(
+            "on: the seal lines draw",
+            schematicLineCount(seal = true, prefs = PdfPrefs(inspectionSealAreas = true)) > plain,
+        )
     }
 
     @Test
@@ -78,11 +97,20 @@ class InspectionSealAreasTest {
     }
 
     @Test
-    fun `a final sheet draws them with the switch off`() {
+    fun `a final sheet follows the same switch`() {
         val final = ProjectInfo(drawingLabel = "Final")
+        assertEquals(
+            lineCount(seal = false, project = final, consolidated = true),
+            lineCount(seal = true, project = final, consolidated = true),
+        )
+        assertEquals(
+            schematicLineCount(seal = false, project = final),
+            schematicLineCount(seal = true, project = final),
+        )
+        val on = PdfPrefs(inspectionSealAreas = true)
         assertTrue(
-            lineCount(seal = true, project = final, consolidated = true) >
-                lineCount(seal = false, project = final, consolidated = true),
+            schematicLineCount(seal = true, prefs = on, project = final) >
+                schematicLineCount(seal = false, prefs = on, project = final),
         )
     }
 }
