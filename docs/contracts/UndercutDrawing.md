@@ -821,9 +821,13 @@ data class UndercutRecord(
   top is one polyline — AFT ramp, flat run, FWD ramp (`blendedBodyTop`) — and its face line stands
   to the height the ramp reaches. A cut across the ramp erases it like any surface stroke, so the
   solid ramp stops at the cut's edge; the part the cut removed is retraced, in the liner outline's
-  dotted ink, from that edge up to the face, where it meets the liner's dotted face
+  phantom line, from that edge up to the face, where it meets the liner's retraced face
   (`erasedBlendTraces` — read off the notches' drawn regions, so a stretch of ramp the cut's floor
-  stands above keeps its solid line and is not doubled). The retrace follows
+  stands above keeps its solid line and is not doubled). When the cut runs on past the ramp's foot
+  the retrace follows the body's flat surface to the cut's edge (`UndercutBlendCurve.flatToMm`: to
+  the body's far face, or the middle of the flat when both faces are blended — on-device request);
+  a cut lying wholly on the flat body, clear of the ramp, is not retraced. Each side of a trace is
+  stroked as one path, so the phantom pattern carries through instead of restarting on each piece. The retrace follows
   `PdfPrefs.undercutLinerOutline`. Pure geometry in `geom/UndercutBlendMath.kt`
   (`UndercutBlendMathTest`); drawn identically by the printed strip (`drawUndercutWindowProfile`,
   `drawErasedBlendTracesPdf` — `UndercutBlendPdfTest`) and the detail canvas

@@ -97,14 +97,15 @@ escapes a `launch`, so every such surface has to hold its own.
   repo. `app/build.gradle.kts` applies the `google-services` + `firebase-crashlytics` plugins
   **only when the file exists**; the Crashlytics SDK itself is an unconditional dependency so
   the classes always compile. CI (`distribute.yml`) materializes the json from the
-  `GOOGLE_SERVICES_JSON` secret before `assembleDebug`; an unset secret builds green with
+  `GOOGLE_SERVICES_JSON` secret before `assembleRelease`; an unset secret builds green with
   reporting inactive.
 - `CrashReporter` is the **one seam**: `isActive` resolved once at Application init
   (`FirebaseApp.getApps` non-empty — the auto-init ContentProvider has run or had no config),
   `log`/`recordNonFatal` no-op when inactive. Nothing outside that file may call Firebase
   directly; a direct `FirebaseCrashlytics` call throws on exactly the builds with no json.
-- **Collection stays ON in debug builds.** CI distributes the debug variant to testers; a
-  debug opt-out would silence the only crashes anyone will ever see.
+- **Collection is ON in every build type.** CI distributes the release variant to testers
+  (`assembleRelease` — faster than debug on device, same signing key and applicationId); a
+  debug opt-out would still silence the crashes from Android Studio runs, so there is none.
 - `recordNonFatal` is for failures the code recovered from and would otherwise be invisible —
   the canonical site is `PdfSafExport`'s composer catch (the user sees an error page; the
   throwable behind it goes to AppLog with its stack and to Crashlytics as a non-fatal).

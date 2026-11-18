@@ -923,7 +923,12 @@ face line at the height the ramp reaches. A cut across the ramp erases it like a
 stroke, so the solid line stops at the cut's edge (where the machined blend now really ends),
 and the part the cut removed is retraced up to the face in the liner outline's phantom-line ink, where
 it meets the liner's outlined face (`erasedBlendTraces`, read off the notches' drawn REGIONS so a
-ramp the cut's floor stands above is never doubled; follows `PdfPrefs.undercutLinerOutline`).
+ramp the cut's floor stands above is never doubled; follows `PdfPrefs.undercutLinerOutline`). A
+removed stretch that takes in part of the ramp runs on along the body's FLAT surface past the
+ramp's foot to the cut's edge (`UndercutBlendCurve.flatToMm` — to the body's far face, or the
+middle of the flat when both faces are blended; on-device request); a cut wholly on the flat body,
+clear of the ramp, is not retraced. Each side of a trace is ONE stroked path — a dash pattern
+restarts on every separately stroked piece, and short pieces read as a solid line.
 Pure geometry in `geom/UndercutBlendMath.kt`, drawn identically on the printed strip
 (`drawUndercutWindowProfile` + `drawErasedBlendTracesPdf`) and the detail canvas
 (`drawErasedBlendTraces`, `ui/screen/UndercutSharedDraw.kt`). No drawn-width floor here — the
@@ -1444,7 +1449,7 @@ typed into a drawing (document NAMES are allowed — the sharer owns them). `uti
 is the ONE seam to Crashlytics: Firebase is optional configuration (`app/google-services.json`
 gitignored, plugins applied conditionally, CI materializes it from a secret), so nothing
 outside that file may call Firebase directly — a direct call throws on every build without the
-json. Collection stays ON in debug builds; the debug variant is what testers install.
+json. Collection stays ON in every build type; CI distributes the RELEASE variant to testers.
 See `docs/contracts/Diagnostics.md`.
 
 ### Drawing profiles are app-wide, never per-document

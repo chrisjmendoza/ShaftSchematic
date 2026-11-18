@@ -72,11 +72,15 @@ jobs:
             echo "GOOGLE_SERVICES_JSON is unset — building without Crashlytics"
           fi
 
-      - name: Build debug APK
+      - name: Build release APK
         if: steps.merged.outputs.skip != 'true'
-        # The shared debug.keystore is committed to the repo so the APK is
-        # signed consistently — Android treats each CI build as an update, not a reinstall.
-        run: ./gradlew assembleDebug --no-daemon
+        # Release, not debug: a debug build runs unoptimised so a debugger can attach, and the
+        # Compose screens ran visibly slower on testers' phones (on-device report). Both build
+        # types sign with the shared debug.keystore committed to the repo and share one
+        # applicationId, so a release install updates a debug one in place — no reinstall.
+        # Builds the release variant's lint-vital check too, the same gate an Android Studio
+        # release run passes.
+        run: ./gradlew assembleRelease --no-daemon
 
       - name: Re-check main before uploading
         # The merge can land while this branch build is still testing: look again, so a build
@@ -100,7 +104,7 @@ jobs:
           npm install -g firebase-tools
           echo "$FIREBASE_SA_JSON" > /tmp/sa.json
           GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa.json firebase appdistribution:distribute \
-            app/build/outputs/apk/debug/app-debug.apk \
+            app/build/outputs/apk/release/app-release.apk \
             --app "$FIREBASE_APP_ID" \
             --testers "chrisjmendoza@gmail.com" \
             --release-notes "$RELEASE_NOTES"

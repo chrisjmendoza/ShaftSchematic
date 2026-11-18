@@ -8,7 +8,7 @@ import org.junit.Test
 
 /**
  * Body-face blends on the undercut drawings: the solid ramp stops at a cut's edge and only the
- * part the cut took away is retraced dotted, up to the face.
+ * part the cut took away is retraced, up to the face and on along the body's flat surface.
  */
 class UndercutBlendMathTest {
 
@@ -55,6 +55,36 @@ class UndercutBlendMathTest {
         assertEquals(1, traces.size)
         assertEquals(100f, traces.single().first().xMm, 1e-4f)
         assertEquals(106f, traces.single().last().xMm, 1e-4f)
+    }
+
+    /** The same ramp on a body whose flat surface runs on to 300 mm. */
+    private val rampOnBody = ramp.copy(flatToMm = 300f)
+
+    @Test
+    fun `a cut past the ramp's foot retraces the body's flat surface on to the cut's edge`() {
+        val t = erasedBlendTraces(rampOnBody, listOf(cut(60f, 130f))).single()
+        assertEquals(100f, t.first().xMm, 1e-4f)
+        assertEquals(listOf(110f, 130f), t.drop(1).map { it.xMm })
+        assertEquals(200f, t.last().diaMm, 1e-4f) // the body's own Ø along the flat
+        // A cut that stops on the ramp is unchanged by the flat run beyond it.
+        assertEquals(104f, erasedBlendTraces(rampOnBody, listOf(cut(60f, 104f))).single().last().xMm, 1e-4f)
+    }
+
+    @Test
+    fun `a cut wholly on the flat body, clear of the ramp, is not retraced`() {
+        assertTrue(erasedBlendTraces(rampOnBody, listOf(cut(150f, 180f))).isEmpty())
+    }
+
+    @Test
+    fun `a FWD-face ramp retraces the flat AFT of its foot`() {
+        val fwd = UndercutBlendCurve(
+            atAftFace = false,
+            points = listOf(SurfacePoint(290f, 200f), SurfacePoint(300f, 220f)),
+            flatToMm = 100f,
+        )
+        val t = erasedBlendTraces(fwd, listOf(cut(270f, 340f))).single()
+        assertEquals(listOf(270f, 290f, 300f), t.map { it.xMm })
+        assertEquals(200f, t.first().diaMm, 1e-4f)
     }
 
     @Test

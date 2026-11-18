@@ -8,6 +8,20 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-18
 
+### fix(undercut): the retrace runs on along the body's flat surface to the cut's edge
+
+Where a cut runs across a body blend and on past the foot of the ramp, the part of the body's
+flat surface the cut took away is now retraced too, so the phantom line reaches the cut's edge
+instead of stopping where the ramp meets the flat (on-device request). A cut lying wholly on
+plain body, clear of the blend, still draws as before. Printed undercut sheet and detail screen.
+
+### chore(ci): Firebase gets the release build
+
+The distribute workflow builds and uploads `assembleRelease` instead of `assembleDebug`. A debug
+build runs unoptimised for the debugger, and testers' phones felt it (on-device report). Both
+build types sign with the same shared key and share one application id, so the release build
+installs over a debug one in place. Crash reporting is unchanged.
+
 ### fix(undercut): a blend a cut has taken away is retraced in the liner outline's line pattern
 
 On-device request: a body blend inside an undercut area printed its retrace as a fine solid line
