@@ -28,14 +28,14 @@ import com.android.shaftschematic.util.setsStacked
 const val UNDERCUT_RAIL_WITNESS_GAP_PT = 3f
 
 /** Rail arrowheads ([UNDERCUT_RAIL_LABEL_CLEAR_ARROW_PT]) → a fallback label's nearest edge, points. */
-internal const val UNDERCUT_RAIL_LABEL_GAP_PT = 5f
+const val UNDERCUT_RAIL_LABEL_GAP_PT = 5f
 
 /** How far a witness line runs past its rail line, points. */
 private const val UNDERCUT_RAIL_WITNESS_EXT_PT = 3f
 
 /** Horizontal / vertical pad of the page-colour halo behind a fallback value, points. */
 private const val UNDERCUT_RAIL_HALO_PAD_X_PT = 1.5f
-private const val UNDERCUT_RAIL_HALO_PAD_Y_PT = 0.5f
+const val UNDERCUT_RAIL_HALO_PAD_Y_PT = 0.5f
 
 /**
  * Draws one undercut dimension rail — the ONE draw routine behind the printed strip

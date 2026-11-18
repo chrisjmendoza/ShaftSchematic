@@ -8,6 +8,15 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-17
 
+### fix(undercut): the section page shows the "S.E.T. to liner end" caption, and drags at any zoom
+
+On-device report, AFT liner page: the caption over the overall dimension was cut off by the top of
+the drawing, and a one-finger drag could not move the drawing down to read it until a pinch had
+zoomed in. Where the liner end is at the drawing's edge the caption stands above its line, and the
+drawing now leaves room for it at the top. The drawing also moves under a one-finger drag at any
+zoom, as the PDF previews and the Runout canvas do; double-tap it, or tap the corner button, to put
+it back.
+
 ### feat(final): a Full length sheet with the fiberglass sections coloured
 
 On-device request, with the shop's CAD drawings that mark the "(FIBERGLASS)" sections between the
