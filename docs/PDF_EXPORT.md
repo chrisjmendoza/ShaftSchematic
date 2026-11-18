@@ -157,6 +157,18 @@ typed; the bolt circle prints in the document unit, dual
 when the document is. A blank draft keeps the label and rules the value. A reference
 feature: nothing draws on the shaft and nothing reaches OAL, resolve or collision.
 
+**Side.** The shaft's side (PORT / STBD / CENTER) prints once on every sheet, large and bold, so
+two shafts' sheets can be told apart at a glance (on-device request). Footer sheets (schematic,
+consolidated, the Final tab's sheets): the Side badge under the job block, at
+`FOOTER_SIDE_BADGE_SCALE` (2.4) footer text sizes, taking `FOOTER_SIDE_BADGE_ROWS` (2) rows of
+the middle column — counted in the footer plan, so the band grows when the middle column is the
+tallest — and set smaller only when a long badge (`CENTER  FINAL`) would run past its column, or the
+footer is squeezed to a tighter line pitch (it stands centred in its rows, never touching the row
+above or below).
+Header sheets (classic runout, wear, undercut): `drawHeaderSideBadge` in the upper right corner,
+sized off the header block, with the job line (`jobInfoHeaderLine`, which carries no side) kept
+clear of it. No side prints no badge; blank drafts rule a "Side:" line instead.
+
 **Notes.** The job's notes (start card) print under the middle column's Side badge — the first
 typed line led by `Notes:`, each typed line its own row, wrapped to the column — on a sheet whose
 per-job **"Notes on this sheet"** switch is on (envelope `sheet_notes_sheets`, `SheetDateSheet`

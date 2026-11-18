@@ -1646,7 +1646,10 @@ private fun drawRunoutHeader(
         }
     } else {
         val headerText = jobInfoHeaderLine(project, project.printedDateOrNull(sheetTodayDate()))
-        c.drawText(ellipsizeToWidth(headerText, text, right - left), left, y, text)
+        // The side stands alone in the upper right corner; the job line stays clear of it.
+        val badgeLeft = drawHeaderSideBadge(c, text, right, top, height, project)
+        val textRight = if (badgeLeft < right) badgeLeft - HEADER_SIDE_BADGE_GAP_PT else right
+        c.drawText(ellipsizeToWidth(headerText, text, textRight - left), left, y, text)
     }
 
     // Thin rule below header

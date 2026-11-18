@@ -105,7 +105,7 @@ class ItemFieldPrintTest {
 
         assertFalse(line.contains("Item"))
         assertEquals(
-            "Customer: NorthSound Marine   Vessel: FV Tern Point   Job #: 814201   Date: $date  PORT",
+            "Customer: NorthSound Marine   Vessel: FV Tern Point   Job #: 814201   Date: $date",
             line,
         )
     }

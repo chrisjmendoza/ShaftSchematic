@@ -1981,6 +1981,14 @@ by the same `ProjectInfo.forSheet(sheet, dateOverrides, notesOverrides)` that bl
 none. Row `SheetNotesOnSheetRow` beside the date row; in the snapshot builder AND combine, not in
 `EditState`; a mate carries the choices, a template and New reset them. Blank drafts print none.
 
+**The shaft's side prints ONCE per sheet, large** (on-device request: two shafts' sheets side by
+side, the side had to be searched for). Header sheets (classic runout, wear, undercut) print it in
+bold capitals in the header's upper right corner through the ONE `drawHeaderSideBadge`
+(`pdf/SheetHeader.kt`, sized off the header block — no height cost), and `jobInfoHeaderLine`
+carries no side; footer sheets print the footer's Side badge at `FOOTER_SIDE_BADGE_SCALE` over
+`FOOTER_SIDE_BADGE_ROWS` rows, counted in `planFooter`. Blank drafts rule "Side:" instead. Do not
+put the side back in a line of job text.
+
 **"Date on sheets"** (project information on the start card; on-device request — the work is not
 always done the day the sheet prints) is per document: `ProjectInfo.dateMode` (`SheetDateMode`
 TODAY | CUSTOM | NONE, by name, unknown → TODAY) + `dateText`, envelope `sheet_date_mode` /
