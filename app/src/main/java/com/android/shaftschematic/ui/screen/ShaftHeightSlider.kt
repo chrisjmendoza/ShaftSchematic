@@ -1548,7 +1548,7 @@ internal fun ShadeInPdfCheckRows(
 
 /** The liner-outline row's caption — the options sheet and Settings say the same thing. */
 internal const val UNDERCUT_LINER_OUTLINE_CAPTION =
-    "Dotted outline of each liner's original edges and OD over the cuts"
+    "Outline of each liner's original edges and OD over the cuts, drawn long dash, two short"
 
 /** The inside-diameters row's label — the options sheet and the Undercut tab say the same thing. */
 internal const val UNDERCUT_DIA_INSIDE_LABEL = "Diameters inside the shaft"

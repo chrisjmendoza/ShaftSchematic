@@ -690,8 +690,11 @@ liner's page that its strip does NOT hold (typed onto bare shaft clear of the li
 FOLLOWED: `UndercutRoute.followedCutId` moves the open page onto the section that holds it under the
 same overlay identity, instead of the cut vanishing from the page (on-device report) — and `withUndercutBreakRoom`
 also clears cut shoulders. `PdfPrefs.undercutLinerOutline` (app-wide look pref, default on)
-draws each liner's ERASED edges/OD as a dotted outline over the cuts from the ONE pure
-`geom/LinerOutlineMath.kt`, identically on canvas and PDF. **The chain rail prints each cut's FULL
+draws each liner's ERASED edges/OD as a PHANTOM line (long dash, two short —
+`LINER_OUTLINE_PHANTOM_PT`, the drafting line for material machined away; never dotted, which on a
+schematic means a hidden edge — on-device direction) over the cuts from the ONE pure
+`geom/LinerOutlineMath.kt`, identically on canvas and PDF, and a printed sheet that draws one names
+it in a key centred on the AFT / FWD row (`LINER_OUTLINE_LEGEND`; no key when nothing is retraced). **The chain rail prints each cut's FULL
 length** (the shop measures cut lengths — on-device ruling); a buried liner edge becomes a chain node
 only under `PdfPrefs.undercutSplitAtLinerEdge` (app-wide look pref, default OFF). The TOTAL rail is
 optional: per-job `UndercutRecord.showTotalRail` (`null` = follow `PdfPrefs.undercutTotalRail`, default ON),
@@ -905,8 +908,8 @@ span — the very points the surface envelope samples, ONE sampling `bodyBlendCu
 ramp is the surface the notches are cut against — as one top polyline (`blendedBodyTop`), its
 face line at the height the ramp reaches. A cut across the ramp erases it like any surface
 stroke, so the solid line stops at the cut's edge (where the machined blend now really ends),
-and the part the cut removed is retraced up to the face in the liner outline's dotted ink, where
-it meets the liner's dotted face (`erasedBlendTraces`, read off the notches' drawn REGIONS so a
+and the part the cut removed is retraced up to the face in the liner outline's phantom-line ink, where
+it meets the liner's outlined face (`erasedBlendTraces`, read off the notches' drawn REGIONS so a
 ramp the cut's floor stands above is never doubled; follows `PdfPrefs.undercutLinerOutline`).
 Pure geometry in `geom/UndercutBlendMath.kt`, drawn identically on the printed strip
 (`drawUndercutWindowProfile` + `drawErasedBlendTracesPdf`) and the detail canvas

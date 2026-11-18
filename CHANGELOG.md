@@ -8,6 +8,15 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-17
 
+### feat(undercut): the liner outline is a phantom line, with a key on the sheet
+
+On-device direction: on a schematic a dotted line already means an edge hidden from view, so the
+dotted liner outline over the cuts read as the wrong thing. It is now drawn as a phantom line —
+one long dash, two short, the drafting line for material that has been machined away — a little
+darker than before, on the printed sheet and on the Undercut screens. A printed sheet that draws
+the outline carries a small key between the AFT and FWD labels: a sample of the line and
+"Original liner surface". The retraced part of a body blend uses the same line.
+
 ### feat(undercut): a liner section far from the shaft end prints the taper across an S-break
 
 On-device request, from a shop sketch that drew the FWD taper 47" from the first cut of the FWD

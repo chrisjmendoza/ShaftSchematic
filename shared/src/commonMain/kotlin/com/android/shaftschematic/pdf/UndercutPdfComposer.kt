@@ -36,6 +36,8 @@ import com.android.shaftschematic.geom.buildUndercutNotches
 import com.android.shaftschematic.geom.LinerOutlineEdge
 import com.android.shaftschematic.geom.UndercutLinerOd
 import com.android.shaftschematic.geom.linerOutlineSegments
+import com.android.shaftschematic.geom.linerOutlinePattern
+import com.android.shaftschematic.geom.LINER_OUTLINE_LEGEND
 import com.android.shaftschematic.geom.erasedBlendTraces
 import com.android.shaftschematic.geom.clipSurfacePolyline
 import com.android.shaftschematic.geom.UndercutBlendCurve
@@ -325,12 +327,13 @@ private fun drawUndercutSheet(
     fun shadeFill() = Paint(ANTI_ALIAS_FLAG).apply {
         style = PaintStyle.FILL; color = Color.argb(40, 0, 0, 0)
     }
-    // The liner outline (`PdfPrefs.undercutLinerOutline`): a fine grey dotted retrace of each
-    // liner's original edges over its cuts, at the dimension weight. Null = not drawn.
+    // The liner outline (`PdfPrefs.undercutLinerOutline`): a fine phantom-line retrace (long
+    // dash, two short) of each liner's original edges over its cuts, at the dimension weight —
+    // never dotted, which on a schematic means a hidden edge. Null = not drawn.
     val linerOutlinePaint: Paint? = if (pdfPrefs.undercutLinerOutline) {
         Paint(dim).apply {
-            color = Color.argb(150, 0, 0, 0)
-            pathEffect = DashPathEffect(floatArrayOf(1.5f, 3f), 0f)
+            color = Color.argb(200, 0, 0, 0)
+            pathEffect = DashPathEffect(linerOutlinePattern(), 0f)
         }
     } else {
         null
@@ -525,7 +528,15 @@ private fun drawUndercutSheet(
     )
 
     if (stripsOwnPage) {
-        drawUndercutDirectionRow(c, text, contentLeft, contentRight, midTopFull + text.textSize)
+        drawUndercutDirectionRow(
+            c, text, contentLeft, contentRight, midTopFull + text.textSize,
+            // The key to the liner outline, only on a sheet that draws one.
+            legendPaint = linerOutlinePaint?.takeIf {
+                val printed = onPage.flatMapTo(HashSet()) { it.undercutIds }
+                val notches = sheetNotches.filter { it.id in printed }
+                docSpec.liners.any { linerOutlineSegments(it.toOutlineOd(), notches).isNotEmpty() }
+            },
+        )
         // Zeroing the profile params hands the whole band to the strips; the banding functions
         // are otherwise the wear sheet's, unchanged (count-driven, content-agnostic). Per-strip
         // growth is deliberately UNCAPPED here — the reclaimed height is the point — with
@@ -1009,12 +1020,38 @@ private fun drawUndercutOalLine(
  */
 private fun drawUndercutDirectionRow(
     c: Canvas, text: Paint, left: Float, right: Float, baselineY: Float,
+    /**
+     * The liner outline's paint when the sheet draws one: the row then carries the legend — a
+     * sample of the line and [LINER_OUTLINE_LEGEND] — centred between the two labels. Null prints
+     * the row as it always has.
+     */
+    legendPaint: Paint? = null,
 ) {
     val p = Paint(text)
     p.textAlign = PaintAlign.LEFT
     c.drawText("← AFT", left, baselineY, p)
     p.textAlign = PaintAlign.RIGHT
     c.drawText("FWD →", right, baselineY, p)
+    if (legendPaint != null) {
+        val label = Paint(text).apply { textAlign = PaintAlign.LEFT; textSize = (text.textSize - 2f).coerceAtLeast(7f) }
+        val labelW = label.measureText(LINER_OUTLINE_LEGEND)
+        val x = (left + right - UC_LEGEND_SAMPLE_PT - UC_LEGEND_GAP_PT - labelW) * 0.5f
+        val lineY = baselineY - label.textSize * 0.35f
+        c.drawLine(x, lineY, x + UC_LEGEND_SAMPLE_PT, lineY, legendPaint)
+        c.drawText(LINER_OUTLINE_LEGEND, x + UC_LEGEND_SAMPLE_PT + UC_LEGEND_GAP_PT, baselineY, label)
+    }
+}
+
+/** This liner as the outline builder reads it — its span, OD and shouldered surface. */
+private fun Liner.toOutlineOd(): UndercutLinerOd {
+    val endMm = startFromAftMm + lengthMm
+    return UndercutLinerOd(
+        id, startFromAftMm, endMm, odMm,
+        surface = linerSurfaceSegs(
+            startFromAftMm, endMm, odMm,
+            shoulderOn(LinerAuthoredReference.AFT), shoulderOn(LinerAuthoredReference.FWD),
+        ),
+    )
 }
 
 /**
@@ -1088,15 +1125,7 @@ private fun drawLinerOutlinesPdf(
 ) {
     if (paint == null || notches.isEmpty()) return
     docSpec.liners.forEach { ln ->
-        val endMm = ln.startFromAftMm + ln.lengthMm
-        val liner = UndercutLinerOd(
-            ln.id, ln.startFromAftMm, endMm, ln.odMm,
-            surface = linerSurfaceSegs(
-                ln.startFromAftMm, endMm, ln.odMm,
-                ln.shoulderOn(LinerAuthoredReference.AFT), ln.shoulderOn(LinerAuthoredReference.FWD),
-            ),
-        )
-        linerOutlineSegments(liner, notches).forEach { seg ->
+        linerOutlineSegments(ln.toOutlineOd(), notches).forEach { seg ->
             val r0 = rAt(seg.dia0Mm)
             val r1 = rAt(seg.dia1Mm)
             when (seg.edge) {
@@ -2578,6 +2607,8 @@ private const val UC_OAL_ABOVE_SHAFT_PT = 44f        // shaft top edge → OAL l
 private const val UC_PROFILE_NAMES_ROW_PT = 26f      // direction row under the shaft bottom
 private const val UC_PROFILE_BOTTOM_PAD_PT = 6f      // air under the direction row before the strips gap
 private const val UC_OAL_TOP_REGION_PT = 18f         // OAL label + air above the dimension line
+private const val UC_LEGEND_SAMPLE_PT = 46f           // the legend's sample of the liner-outline line: nearly three cycles
+private const val UC_LEGEND_GAP_PT = 6f               // legend sample → its label
 private const val UC_DIRECTION_ROW_PT = 22f          // orientation row band above the strips (strips-own-page)
 private const val UC_NOTES_BOTTOM_OFFSET_PT = 24f    // notes baseline above contentBot
 private const val UC_NOTES_GAP_PT = 28f              // drawing area bottom → notes

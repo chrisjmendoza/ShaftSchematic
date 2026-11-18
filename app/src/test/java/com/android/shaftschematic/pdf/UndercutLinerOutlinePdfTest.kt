@@ -30,7 +30,7 @@ class UndercutLinerOutlinePdfTest {
     private class OutlineCountingCanvas(bmp: Bitmap) : Canvas(bmp) {
         var outlineStrokes = 0
         override fun drawLine(startX: Float, startY: Float, stopX: Float, stopY: Float, paint: Paint) {
-            if (paint.pathEffect is DashPathEffect && paint.color == android.graphics.Color.argb(150, 0, 0, 0)) {
+            if (paint.pathEffect is DashPathEffect && paint.color == android.graphics.Color.argb(200, 0, 0, 0)) {
                 outlineStrokes++
             }
             super.drawLine(startX, startY, stopX, stopY, paint)

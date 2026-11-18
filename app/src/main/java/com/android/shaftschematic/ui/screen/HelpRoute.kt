@@ -1274,10 +1274,10 @@ internal val helpSections: List<HelpSection> = listOf(
                     "and the cut sections read from their faces and floor lines. It changes " +
                     "that one document, and it is separate from the on-screen Undercut Drawing " +
                     "line-art style in Preview Colors.\n" +
-                    "• \"Liner outline\" — default on, beside the line-art row. A faint dotted " +
+                    "• \"Liner outline\" — default on, beside the line-art row. A fine long-dash, two-short " +
                     "outline of each liner's original edges and outside diameter is drawn over " +
                     "the cuts, so a cut that runs from the liner into the body still shows " +
-                    "where the liner was. It applies to the printed undercut sheet and the " +
+                    "where the liner was. The printed sheet names the line in a small key. It applies to the printed undercut sheet and the " +
                     "Undercut Drawing screens.\n" +
                     "• \"Undercut drawing: split cuts at liner edges\" — default off. The " +
                     "chain of dimensions prints each cut's full length, because the shop " +

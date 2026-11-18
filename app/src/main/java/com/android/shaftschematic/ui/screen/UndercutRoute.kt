@@ -280,7 +280,7 @@ fun UndercutRoute(
     // Print line art for THIS document: it suppresses every fill on the sheet, so it is both an
     // options-sheet control and a preview re-render key.
     val pdfUndercutLineArt by vm.pdfUndercutLineArt.collectAsState()
-    // The dotted liner outline over the cuts: a preview re-render key, an options-sheet control,
+    // The liner outline over the cuts: a preview re-render key, an options-sheet control,
     // and read by the overview canvas and the detail overlay alike.
     val pdfUndercutLinerOutline by vm.pdfUndercutLinerOutline.collectAsState()
     // Section cores shaded by depth: a preview re-render key, an options-sheet control, and read by
