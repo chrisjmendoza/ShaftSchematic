@@ -1,5 +1,10 @@
 package com.android.shaftschematic.geom
 
+import com.android.shaftschematic.ui.resolved.ResolvedBody
+import com.android.shaftschematic.ui.resolved.ResolvedComponentSource
+import com.android.shaftschematic.ui.resolved.ResolvedComponentType
+import com.android.shaftschematic.ui.resolved.ResolvedLiner
+import com.android.shaftschematic.ui.resolved.undercutBlendCurves
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -85,6 +90,36 @@ class UndercutBlendMathTest {
         val t = erasedBlendTraces(fwd, listOf(cut(270f, 340f))).single()
         assertEquals(listOf(270f, 290f, 300f), t.map { it.xMm })
         assertEquals(200f, t.first().diaMm, 1e-4f)
+    }
+
+    /** A liner 0–100 mm, Ø 228, with a square body 100–300 mm, Ø 228, butted to its FWD end. */
+    private val liner = ResolvedLiner(id = "L", startMmPhysical = 0f, endMmPhysical = 100f, odMm = 228f)
+    private val body = ResolvedBody("B", ResolvedComponentType.BODY, ResolvedComponentSource.AUTO, 100f, 300f, 228f)
+
+    @Test
+    fun `a square body face beside a liner retraces the body's surface a cut over the liner edge took`() {
+        val face = undercutBlendCurves(listOf(liner, body), emptyList()).single()
+        assertTrue(face.square)
+        assertTrue(face.atAftFace)
+        assertEquals(300f, face.flatToMm!!, 1e-4f)
+        val t = erasedBlendTraces(face, listOf(cut(60f, 130f))).single()
+        assertEquals(100f, t.first().xMm, 1e-4f)
+        assertEquals(130f, t.last().xMm, 1e-4f)
+        assertEquals(228f, t.last().diaMm, 1e-4f)
+        // A cut on the body clear of the liner's edge, and one that stops at the edge, retrace nothing.
+        assertTrue(erasedBlendTraces(face, listOf(cut(150f, 180f))).isEmpty())
+        assertTrue(erasedBlendTraces(face, listOf(cut(60f, 100f))).isEmpty())
+        // It draws nothing: the body's top stays square.
+        assertNull(blendedBodyTop(listOf(face), startMm = 100f, endMm = 300f, diaMm = 228f))
+    }
+
+    @Test
+    fun `a body face with no liner beside it is no retrace source, and two sources split the flat`() {
+        assertTrue(undercutBlendCurves(listOf(body), emptyList()).isEmpty())
+        val fwdLiner = ResolvedLiner(id = "L2", startMmPhysical = 300f, endMmPhysical = 400f, odMm = 228f)
+        val faces = undercutBlendCurves(listOf(liner, body, fwdLiner), emptyList())
+        assertEquals(2, faces.size)
+        faces.forEach { assertEquals(200f, it.flatToMm!!, 1e-4f) }
     }
 
     @Test

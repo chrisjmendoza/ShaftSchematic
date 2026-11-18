@@ -101,10 +101,14 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   layout.
 - **"Drawn depth" slider** (the fifth row of Drawing settings; label formerly "Cut depth
   exaggeration", caption "Makes shallow cuts easier to see — 0% is true scale. Printed Ø values
-  never change. Saved with this job."): 0 – `UNDERCUT_EXAGGERATION_MAX_FRAC` with a live "%" readout,
-  committing continuously through `ShaftViewModel.setUndercutExaggeration` — a slider's
-  live-update posture, not commit-on-blur (it is a `Slider`, not a `NumericInputField`). It
-  drives `UndercutRecord.exaggerationFrac`; see "Drawn depth exaggeration" below.
+  never change. Saved with this job."): 0 – `UNDERCUT_EXAGGERATION_MAX_FRAC` with a live "%" readout.
+  ONE composable, `UndercutDrawnDepthRow`, on the tab and in the undercut options panel (the PDF
+  preview's and a section page's — `pdf_undercut_exaggeration_slider`; on-device request: it was
+  only on the tab). The value follows the finger from local state and commits ONCE on release
+  through `ShaftViewModel.setUndercutExaggeration` (`PreviewTuning` doctrine): the tab's canvas
+  restyles live off the drag, and the PDF preview's page redraws live through
+  `PreviewTuning.undercutExaggeration`; a section page's canvas restyles on release. It drives
+  `UndercutRecord.exaggerationFrac`; see "Drawn depth exaggeration" below.
 - **"Draw to the shaft end" switch** (directly under the Drawn depth slider, same visibility;
   testTag `undercut_draw_to_set_switch`, caption "A liner strip within 24" of its S.E.T. draws
   out to the shaft end and dimensions the run to it. Saved with this job." — the reach is formatted
@@ -576,8 +580,8 @@ data class UndercutRecord(
   deepens the drawn floor (the hand-sheet convention: depth exaggerated, the printed Ø carries
   the real number). The exaggeration is **per sheet**, stored as
   `UndercutRecord.exaggerationFrac` and driven by the "Drawn depth" slider (under the collapsed "Drawing settings" below the list) on the
-  Undercut Drawing tab (0 – `UNDERCUT_EXAGGERATION_MAX_FRAC` = 0.25, live-committing through
-  `ShaftViewModel.setUndercutExaggeration`; it lives in the record, not app prefs, so a
+  Undercut Drawing tab and in the undercut options panel (0 – `UNDERCUT_EXAGGERATION_MAX_FRAC` =
+  0.25, committing on release through `ShaftViewModel.setUndercutExaggeration`; it lives in the record, not app prefs, so a
   document keeps the look it was authored with).
 
   The model is **normalized to the sheet's deepest cut**, computed once per compose by
@@ -826,7 +830,11 @@ data class UndercutRecord(
   stands above keeps its solid line and is not doubled). When the cut runs on past the ramp's foot
   the retrace follows the body's flat surface to the cut's edge (`UndercutBlendCurve.flatToMm`: to
   the body's far face, or the middle of the flat when both faces are blended — on-device request);
-  a cut lying wholly on the flat body, clear of the ramp, is not retraced. Each side of a trace is
+  a cut lying wholly on the flat body, clear of the ramp, is not retraced. A SQUARE body face that
+  butts a liner (no blend — the liner and body machined to one size) gets the same retrace of the
+  body's flat surface when a cut runs over the liner's edge onto it (`UndercutBlendCurve.square`,
+  built by `undercutBlendCurves`; it draws no ramp and `blendedBodyTop` skips it — on-device
+  request: keep the drafting consistent). Each side of a trace is
   stroked as one path, so the phantom pattern carries through instead of restarting on each piece. The retrace follows
   `PdfPrefs.undercutLinerOutline`. Pure geometry in `geom/UndercutBlendMath.kt`
   (`UndercutBlendMathTest`); drawn identically by the printed strip (`drawUndercutWindowProfile`,

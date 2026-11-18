@@ -1,12 +1,15 @@
 // file: shared/src/commonMain/kotlin/com/android/shaftschematic/ui/resolved/SurfaceSegs.kt
 package com.android.shaftschematic.ui.resolved
 
+import com.android.shaftschematic.geom.SurfacePoint
 import com.android.shaftschematic.geom.SurfaceSeg
+import com.android.shaftschematic.geom.UNDERCUT_TOUCH_EPS_MM
 import com.android.shaftschematic.geom.UndercutBlendCurve
 import com.android.shaftschematic.geom.blendPolyline
 import com.android.shaftschematic.geom.threadSurfaceSegs
 import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.LinerShoulder
+import kotlin.math.abs
 
 /**
  * Map resolved components to their outer-surface contributions
@@ -148,11 +151,41 @@ private fun bodyBlendCurves(b: ResolvedBody, blends: List<BodyBlend>): List<Unde
     )
 }
 
-/** Every blended body face's ramp, aft → fwd — the undercut drawings' blend input. */
+/**
+ * Every blended body face's ramp, aft → fwd — the undercut drawings' blend input — plus a square
+ * source ([UndercutBlendCurve.square]) for each unblended body face that butts a liner, so a cut
+ * over the liner's edge retraces the body's surface beside it too (on-device request). The flat
+ * run between a body's two sources splits at its middle, so no stretch is retraced twice.
+ */
 fun undercutBlendCurves(
     components: List<ResolvedComponent>,
     blends: List<BodyBlend>,
-): List<UndercutBlendCurve> =
-    components.filterIsInstance<ResolvedBody>()
+    epsMm: Float = UNDERCUT_TOUCH_EPS_MM,
+): List<UndercutBlendCurve> {
+    val liners = components.filterIsInstance<ResolvedLiner>()
+    return components.filterIsInstance<ResolvedBody>()
         .sortedBy { it.startMmPhysical }
-        .flatMap { bodyBlendCurves(it, blends) }
+        .flatMap { b ->
+            val ramps = bodyBlendCurves(b, blends)
+            val aftRamp = ramps.firstOrNull { it.atAftFace }
+            val fwdRamp = ramps.firstOrNull { !it.atAftFace }
+            val s = b.startMmPhysical
+            val e = b.endMmPhysical
+            fun squareAt(x: Float, atAft: Boolean) = UndercutBlendCurve(
+                atAftFace = atAft,
+                points = listOf(SurfacePoint(x, b.diaMm), SurfacePoint(x, b.diaMm)),
+                square = true,
+            )
+            val aft = aftRamp ?: squareAt(s, true)
+                .takeIf { liners.any { l -> abs(l.endMmPhysical - s) <= epsMm } }
+            val fwd = fwdRamp ?: squareAt(e, false)
+                .takeIf { liners.any { l -> abs(l.startMmPhysical - e) <= epsMm } }
+            val flat0 = aftRamp?.endMm ?: s
+            val flat1 = fwdRamp?.startMm ?: e
+            val mid = if (aft != null && fwd != null) (flat0 + flat1) / 2f else null
+            listOfNotNull(
+                aft?.copy(flatToMm = mid ?: flat1),
+                fwd?.copy(flatToMm = mid ?: flat0),
+            )
+        }
+}

@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import com.android.shaftschematic.geom.UNDERCUT_EXAGGERATION_MAX_FRAC
 import com.android.shaftschematic.geom.UndercutSpanMm
 import com.android.shaftschematic.geom.UndercutStrip
 import com.android.shaftschematic.model.ShaftSpec
@@ -211,6 +212,60 @@ internal fun UndercutLongCompressRow(
         )
         Text(
             UNDERCUT_LONG_COMPRESS_CAPTION,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * "Drawn depth" — the per-job `UndercutRecord.exaggerationFrac`, how much deeper than true a
+ * shallow cut draws (0% is true scale; printed Ø values never change). ONE row on the Undercut
+ * tab's Drawing settings and the undercut options panel — the PDF preview's and a section page's
+ * (on-device request: it was only on the tab). The value follows the finger from local state and
+ * commits once on release; [onDrag] carries the in-progress value to whatever redraws under the
+ * finger (the tab's canvas, the PDF preview's page), null when the drag ends — never a write.
+ */
+@Composable
+internal fun UndercutDrawnDepthRow(
+    frac: Float,
+    onCommit: (Float) -> Unit,
+    testTag: String,
+    modifier: Modifier = Modifier,
+    onDrag: ((Float?) -> Unit)? = null,
+) {
+    var drag by remember { mutableStateOf<Float?>(null) }
+    val shown = drag ?: frac
+    Column(modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Drawn depth", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                "${Math.round(shown * 100f)}%",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Slider(
+            value = shown,
+            onValueChange = {
+                drag = it
+                onDrag?.invoke(it)
+            },
+            onValueChangeFinished = {
+                drag?.let { onCommit(it) }
+                drag = null
+                onDrag?.invoke(null)
+            },
+            valueRange = 0f..UNDERCUT_EXAGGERATION_MAX_FRAC,
+            modifier = Modifier.fillMaxWidth().testTag(testTag),
+        )
+        Text(
+            "Makes shallow cuts easier to see — 0% is true scale. Printed Ø values " +
+                "never change. Saved with this job.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

@@ -1393,7 +1393,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "• \"Sections to print\" — on the Undercut Drawing above the Print buttons, " +
                     "and in its PDF options, when the sheet has two or more sections. Untick a " +
                     "section to leave it off the printout. Saved with this job.\n" +
-                    "• \"Drawn depth\" — on the Undercut Drawing, under \"Drawing settings\". Changes only how " +
+                    "• \"Drawn depth\" — on the Undercut Drawing, under \"Drawing settings\", and in the " +
+                    "undercut preview's options (also opened from a section's own page). Changes only how " +
                     "deep cuts look, never the printed numbers.\n" +
                     "• \"Draw to the shaft end\" — on the Undercut Drawing, under \"Drawing " +
                     "settings\", beside the Drawn depth slider. On unless turned off: a liner strip whose cuts end " +
