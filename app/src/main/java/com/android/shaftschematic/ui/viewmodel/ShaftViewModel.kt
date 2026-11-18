@@ -595,9 +595,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
 
     // Whether the FINAL drawing's schematic sheet is the Full length sheet — the whole shaft at
     // true length, unbroken, fiberglass sections coloured, above the final schematic. Session-only
-    // and default OFF (an election for the jobs that carry fiberglass); wins over the before/after
-    // sheet, and runout bubbles win over it (`finalSheetKind`).
-    internal val _finalFullLength = MutableStateFlow(false)
+    // and default ON: it is the Final tab's first sheet (on-device report: the whole shaft over
+    // the schematic is what the final sheet was asked to be, and a wrapped section shows nowhere
+    // else). It wins over the before/after sheet, and runout bubbles win over it
+    // (`finalSheetKind`).
+    internal val _finalFullLength = MutableStateFlow(true)
     val finalFullLength: StateFlow<Boolean> = _finalFullLength.asStateFlow()
 
     internal val _previewBlackWhiteOnly = MutableStateFlow(false)

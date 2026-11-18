@@ -904,12 +904,12 @@ internal val helpSections: List<HelpSection> = listOf(
                     "lengthened, or shortened once the wear and undercut work is known. " +
                     "Editing it never changes the original, so the two read as the before and " +
                     "the after.\n\n" +
-                    "It prints by default as one sheet with the original above it and the " +
-                    "final below, each dimensioned and labelled; the \"Original + Final\" chip " +
-                    "on its PDF options sheet turns that off for the final alone. \"Full " +
-                    "length\" prints instead the whole shaft unbroken, with every section " +
-                    "ticked \"Fiberglass wrap\" coloured and labelled FIBERGLASS, above the " +
-                    "final schematic. Elect " +
+                    "Its preview offers three sheets in a row above the page. \"Full length " +
+                    "+ schematic\", the default, prints the whole shaft unbroken, with every " +
+                    "section ticked \"Fiberglass wrap\" coloured and labelled FIBERGLASS, " +
+                    "above the final schematic and its dimensions. \"Original + Final\" " +
+                    "prints the original above the final, each dimensioned and labelled. " +
+                    "\"Final only\" prints the final schematic alone. Elect " +
                     "runout bubbles there instead for a measurement sheet, and a blank runout " +
                     "sheet takes the finished shaft's readings, all marked Final; every other " +
                     "document keeps drawing the original.",

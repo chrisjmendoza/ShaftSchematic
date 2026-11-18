@@ -102,15 +102,27 @@ chip greys out while bubbles are elected); else FINAL with before/after → `BEF
 stale-preview bug).
 
 The **"Full length"** election is the third session flag (`ShaftViewModel.finalFullLength`,
-`setFinalFullLength`), default **OFF** (on-device request: the whole shaft with its fiberglass
-represented, unbroken like the wear drawing, with the schematic and its measurements under it). It
+`setFinalFullLength`), default **ON** — it is the Final tab's first sheet (on-device request: the
+whole shaft with its fiberglass represented, unbroken like the wear drawing, with the schematic and
+its measurements under it; on-device report: behind a default-off chip in the options panel it was
+not found, the preview came up as Original + Final, and a ticked Fiberglass wrap showed nowhere).
+Turning it off gives the Original + Final sheet (that election is still on underneath), and turning
+that off too gives the final alone. The Final preview shows the choice in plain view above the page:
+ONE single-choice chip row, `FinalSheetChoiceRow` (`ui/screen/FinalSheetChoiceRow.kt`) — **Full
+length + schematic | Original + Final | Final only** — which is a reading of the two elections
+(`finalSheetChoice`) and writes both on every choice (`finalSheetElections`), never a third piece
+of state. The row is hidden while a section sheet is on screen and greyed while runout bubbles are
+elected; the options panel's chips stay as the same state's other control. It
 selects `FinalSheetKind.FULL_LENGTH` — `composeFullLengthPdfOnCanvas`
 (`pdf/FullLengthPdfComposer.kt`): a `FULL_LENGTH_BAND_PT` band across the top of the page drawing
 the whole FINAL shaft through the ONE simple profile (`drawSimpleShaftProfile(breakLongRuns = false)`)
 at a LINEAR x map over the drawn extent (`drawnExtentMm`, so a thread excluded from the OAL stays
-inside the band) — lengths to scale, no S-break — with diameters enlarged to a readable height
-(`fullLengthDrawnDiaPt`: true scale when ≥ `FULL_LENGTH_SHAFT_MIN_PT`, else enlarged to it, capped
-at `FULL_LENGTH_SHAFT_MAX_PT`; it carries no values, so nothing is measured off it), and under it
+inside the band) — no S-break, and ONE scale for lengths and diameters, so the shaft keeps its
+true proportions (on-device request; `fullLengthPtPerMm`: the shaft fills the band's width unless
+its largest Ø would pass `FULL_LENGTH_SHAFT_MAX_PT`, when the whole drawing shrinks, centred — no
+axis is stretched against the other). It draws the shaft's keyways through the schematic's own
+pass (`drawBodyKeywaysPdf` / `drawTaperKeywayPdf`, off the STORED spec, the schematic's clocking
+decision — on-device request) and carries no values, and under it
 the final schematic through the ONE schematic composer in a `SheetBand` hosting the footer (the
 before/after mechanism, its text caps included). Every wrapped body run (`fiberglassBodyRuns` —
 `Body.fiberglass` by fragment-stripped id, `AutoFiberglass` for a bare-shaft run) is filled

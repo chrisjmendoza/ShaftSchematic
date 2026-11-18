@@ -119,9 +119,12 @@ class FullLengthPdfComposerTest {
         val c = compose(spec)
         val band = fullLengthBands(PDF_PAGE_WIDTH_PT.toFloat(), PDF_PAGE_HEIGHT_PT.toFloat()).fullLength
         val sections = fiberglassBodyRuns(spec, resolveComponents(spec)).sortedBy { it.startMmPhysical }
-        val fills = c.rects.filter { it.color == FIBERGLASS_FILL_COLOR && it.rect.height() > 20f }
+        val fills = c.rects.filter { it.color == FIBERGLASS_FILL_COLOR && it.rect.height() > 12f }
             .sortedBy { it.rect.left }
         val xPerMm = band.width() / spec.overallLengthMm
+        assertEquals(sections.size, fills.size)
+        // Diameters ride the same scale as lengths: the shaft keeps its proportions.
+        assertEquals(sections.first().diaMm * xPerMm, fills.first().rect.height(), 0.05f)
         sections.zip(fills).forEach { (s, f) ->
             assertEquals(band.left + s.startMmPhysical * xPerMm, f.rect.left, 0.5f)
             assertEquals(band.left + s.endMmPhysical * xPerMm, f.rect.right, 0.5f)
@@ -143,7 +146,7 @@ class FullLengthPdfComposerTest {
         val band = fullLengthBands(PDF_PAGE_WIDTH_PT.toFloat(), PDF_PAGE_HEIGHT_PT.toFloat()).fullLength
         val xPerMm = band.width() / (spec.overallLengthMm + threadLen)
         val sections = fiberglassBodyRuns(spec, resolveComponents(spec)).sortedBy { it.startMmPhysical }
-        val fills = c.rects.filter { it.color == FIBERGLASS_FILL_COLOR && it.rect.height() > 20f }
+        val fills = c.rects.filter { it.color == FIBERGLASS_FILL_COLOR && it.rect.height() > 12f }
             .sortedBy { it.rect.left }
         assertEquals(sections.size, fills.size)
         sections.zip(fills).forEach { (s, f) ->
@@ -188,10 +191,25 @@ class FullLengthPdfComposerTest {
     }
 
     @Test
-    fun `the drawn diameter is enlarged to read on a long shaft and capped on a short one`() {
-        // 9" on a 353 1/2" shaft over ~720 pt is about 18 pt true — enlarged to the floor.
-        assertEquals(FULL_LENGTH_SHAFT_MIN_PT, fullLengthDrawnDiaPt(228.6f, 720f / 8979f), 0.01f)
-        // A stubby shaft whose true height is huge stops at the band's room.
-        assertEquals(FULL_LENGTH_SHAFT_MAX_PT, fullLengthDrawnDiaPt(228.6f, 1f), 0.01f)
+    fun `lengths and diameters share one scale`() {
+        // A long shaft fills the band's width, and its diameter follows at that same scale.
+        assertEquals(720f / 8979f, fullLengthPtPerMm(8979f, 228.6f, 720f), 1e-6f)
+        // A stubby shaft stops at the band's height, and its length shrinks with it.
+        assertEquals(FULL_LENGTH_SHAFT_MAX_PT / 228.6f, fullLengthPtPerMm(500f, 228.6f, 720f), 1e-6f)
+    }
+
+    @Test
+    fun `the band draws the shaft's keyways`() {
+        val plain = FiberglassShaftFixture.spec()
+        val keyed = plain.copy(
+            tapers = plain.tapers.map {
+                if (it.id == "aftTaper") it.copy(keywayWidthMm = 50.8f, keywayDepthMm = 14.3f, keywayLengthMm = 412.75f) else it
+            },
+        )
+        val band = fullLengthBands(PDF_PAGE_WIDTH_PT.toFloat(), PDF_PAGE_HEIGHT_PT.toFloat()).fullLength
+        // The slot's mill end is an arc; nothing else in the band draws one.
+        fun arcsInBand(spec: ShaftSpec) = compose(spec).arcs.count { it.bottom < band.bottom }
+        assertEquals(0, arcsInBand(plain))
+        assertTrue("a keyed taper draws its slot in the full-length band", arcsInBand(keyed) > 0)
     }
 }

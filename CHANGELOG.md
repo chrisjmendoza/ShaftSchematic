@@ -8,6 +8,23 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-17
 
+### feat(final): the Full length drawing keeps its proportions and shows the keyways
+
+On-device request: the whole shaft across the top of the Full length sheet is now drawn at one
+scale, lengths and diameters alike, so it keeps its true proportions; before, its diameters were
+enlarged and a long shaft read stubby. It also draws the shaft's keyways, the same slots the
+schematic under it shows. Its heading now reads "to scale".
+
+### fix(final): the Final preview opens on the Full length sheet, and the sheet choice is in view
+
+On-device report: the Final preview came up as Original + Final, and a section ticked "Fiberglass
+wrap" showed nothing. The sheet that was asked for — the whole shaft unbroken across the top, its
+fiberglass coloured and labelled, with the final schematic and its measurements under it — was
+there, but behind a "Full length" chip in the options panel that started off. The Final preview now
+opens on that sheet, and a row above the page picks between the three: "Full length + schematic",
+"Original + Final" and "Final only". The row is hidden while a section sheet is on screen and greyed
+out while Runout bubbles is ticked. The options panel's chips still work and show the same choice.
+
 ### feat(undercut): a section at the shaft end shows the thread
 
 On-device request: the shop's undercut sketches always draw the thread, so it is clear which end of

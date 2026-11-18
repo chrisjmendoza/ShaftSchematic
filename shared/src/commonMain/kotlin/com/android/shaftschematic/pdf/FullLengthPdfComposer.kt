@@ -18,6 +18,9 @@ import com.android.shaftschematic.gfx.style
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.autoSectionFiberglass
+import com.android.shaftschematic.model.hiddenKeywayHostIds
+import com.android.shaftschematic.model.keywayClocking
+import com.android.shaftschematic.model.secondaryKeywayHostIds
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.ui.drawing.renderSpanSpec
 import com.android.shaftschematic.ui.resolved.ResolvedBody
@@ -38,10 +41,10 @@ import kotlin.math.min
 //
 // The schematic band is the ONE schematic composer drawn into a [SheetBand], the before/after
 // sheet's mechanism, so it prints exactly as the final schematic does. The full-length band is
-// the ONE simple profile ([drawSimpleShaftProfile]) with its long-run breaks off, at a linear
-// x map: lengths to scale. Its diameters are enlarged to a readable height (a 9" shaft 30 ft
-// long is a quarter inch tall at true scale), so nothing is ever measured off it — it carries
-// no values at all; the schematic below carries them.
+// the ONE simple profile ([drawSimpleShaftProfile]) with its long-run breaks off, at ONE scale
+// for lengths and diameters alike, so the shaft keeps its true proportions (on-device request —
+// an enlarged diameter made a 30 ft shaft read stubby). It carries the keyways, through the
+// schematic's own keyway pass, and no values at all; the schematic below carries those.
 //
 // Black-and-white printers: the fiberglass colour prints as a mid grey, distinct from the light
 // component shade, the crossed winding lines survive any printer, and every section carries the
@@ -170,10 +173,13 @@ internal fun drawFullLengthBand(
         docSpec.threads.maxOfOrNull { it.majorDiaMm },
     ).maxOrNull()?.takeIf { it > 0f } ?: return
 
-    val xPerMm = rect.width() / extent.spanMm
-    val xAt: (Float) -> Float = { mm -> rect.left + (mm - extent.startMm) * xPerMm }
-    val drawnMaxDiaPt = fullLengthDrawnDiaPt(maxDiaMm, xPerMm)
-    val rPerMm = drawnMaxDiaPt / maxDiaMm / 2f
+    // ONE scale for both axes. A shaft too stubby for the band's height draws narrower than the
+    // band, centred, rather than squashed.
+    val ptPerMm = fullLengthPtPerMm(extent.spanMm, maxDiaMm, rect.width())
+    val xLeft = rect.left + (rect.width() - extent.spanMm * ptPerMm) / 2f
+    val xAt: (Float) -> Float = { mm -> xLeft + (mm - extent.startMm) * ptPerMm }
+    val drawnMaxDiaPt = maxDiaMm * ptPerMm
+    val rPerMm = ptPerMm / 2f
     val rPx: (Float) -> Float = { dia -> dia * rPerMm }
     val shaftTop = rect.top + FULL_LENGTH_TITLE_ROW_PT + 2f * FULL_LENGTH_LABEL_ROW_PT
     val cy = shaftTop + drawnMaxDiaPt / 2f
@@ -203,6 +209,22 @@ internal fun drawFullLengthBand(
         breakLongRuns = false,
         unfilledBodyIds = wrapped.mapTo(mutableSetOf()) { it.id },
     )
+
+    // Keyways, from the schematic's own pass and off the STORED spec (a resolved body carries no
+    // keyway fields), with the schematic's clocking decision, so the two drawings on this page
+    // show the same slots.
+    val clocking = spec.keywayClocking()
+    val hiddenKeywayIds = spec.hiddenKeywayHostIds()
+    val secondaryKeywayIds = spec.secondaryKeywayHostIds()
+    drawBodyKeywaysPdf(c, spec.bodies, xAt, cy, ptPerMm, outline, clocking, hiddenKeywayIds, secondaryKeywayIds)
+    spec.tapers.filter { it.keywayWidthMm > 0f && it.keywayLengthMm > 0f }.forEach { t ->
+        drawTaperKeywayPdf(
+            c, t, xAt(t.startFromAftMm), xAt(t.startFromAftMm + t.lengthMm),
+            top0 = cy - rPx(t.startDiaMm), top1 = cy - rPx(t.endDiaMm),
+            xAt = xAt, cy = cy, diaPtPerMm = ptPerMm, outline = outline,
+            clocking = clocking, hiddenKeywayIds = hiddenKeywayIds, secondaryKeywayIds = secondaryKeywayIds,
+        )
+    }
 
     if (wrapped.isEmpty()) return
     drawFiberglassLegend(c, rect.right, titleBaseline, outline, fill, winding)
@@ -247,12 +269,13 @@ internal fun drawFullLengthBand(
 }
 
 /**
- * The diameter, in points, the largest Ø on the full-length band draws at: true scale when that
- * is already readable ([FULL_LENGTH_SHAFT_MIN_PT] or more), else enlarged to it — never past
- * [FULL_LENGTH_SHAFT_MAX_PT], the band's room. Lengths are never enlarged.
+ * The full-length band's ONE scale, in points per mm, for lengths and diameters alike: the shaft
+ * fills the band's width, unless its largest Ø would then stand taller than
+ * [FULL_LENGTH_SHAFT_MAX_PT] — the band's room — in which case the whole drawing shrinks to that
+ * height. Neither axis is ever stretched against the other.
  */
-fun fullLengthDrawnDiaPt(maxDiaMm: Float, xPerMm: Float): Float =
-    max(maxDiaMm * xPerMm, FULL_LENGTH_SHAFT_MIN_PT).coerceAtMost(FULL_LENGTH_SHAFT_MAX_PT)
+fun fullLengthPtPerMm(spanMm: Float, maxDiaMm: Float, widthPt: Float): Float =
+    min(widthPt / spanMm, FULL_LENGTH_SHAFT_MAX_PT / maxDiaMm)
 
 /** Crossed winding lines over one wrapped section — the filament-wound look, legible in grey. */
 private fun drawFiberglassWinding(c: Canvas, x0: Float, x1: Float, top: Float, bot: Float, paint: Paint) {
@@ -336,7 +359,7 @@ const val FIBERGLASS_LABEL = "FIBERGLASS"
 
 private const val FIBERGLASS_LEGEND = "Fiberglass"
 private const val FULL_LENGTH_TITLE = "FULL LENGTH"
-private const val FULL_LENGTH_SCALE_NOTE = "lengths to scale"
+private const val FULL_LENGTH_SCALE_NOTE = "to scale"
 
 /** The full-length band's height on the page, title row to the rule under it. */
 const val FULL_LENGTH_BAND_PT = 96f
@@ -345,10 +368,7 @@ private const val FULL_LENGTH_NOTE_PT = 8f
 private const val FULL_LENGTH_TITLE_ROW_PT = 16f
 private const val FULL_LENGTH_LABEL_ROW_PT = 11f
 
-/** The largest Ø on the band draws at least this tall, so a long shaft's steps still read. */
-const val FULL_LENGTH_SHAFT_MIN_PT = 36f
-
-/** ... and never taller than this, the room the band leaves under its label rows. */
+/** The largest Ø on the band never draws taller than this, the room under its label rows. */
 const val FULL_LENGTH_SHAFT_MAX_PT = 44f
 
 private const val FULL_LENGTH_OUTLINE_PT = 1.0f

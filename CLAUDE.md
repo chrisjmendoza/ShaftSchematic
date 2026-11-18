@@ -1010,11 +1010,19 @@ its own tab and from Export all, and a `/`, `:` or `*` in a customer name never 
 filename (two schemes had drifted apart and one of them did not sanitize — manual-figure
 report). `PdfPreviewScreen`/`PdfExportRoute` take the target from the NAV ROUTE ARGUMENT
 (`?target=final`), never from ViewModel state. A third session election, **"Full length"**
-(`finalFullLength`, default OFF; bubbles win over it, it wins over Original + Final, whose chip greys
-out while it is on), prints `FinalSheetKind.FULL_LENGTH` (`pdf/FullLengthPdfComposer.kt`, suffix
-`_Final_FullLength`): the whole FINAL shaft in a top band at a LINEAR x map — lengths to scale, NO
-S-break (`drawSimpleShaftProfile(breakLongRuns = false)`), diameters enlarged to a readable height and
-carrying no values — over the final schematic in a `SheetBand` hosting the footer. Every wrapped body
+(`finalFullLength`, default **ON** — the Final tab's FIRST sheet; on-device report: the whole shaft
+over the schematic is what the final sheet was asked to be, and behind a default-off chip in the
+options panel it was not found, so a ticked Fiberglass wrap showed nowhere; bubbles win over it, it
+wins over Original + Final, whose options chip greys out while it is on, so turning it off gives the
+Original + Final sheet. The Final preview carries the choice in plain view above the page — ONE
+single-choice row `FinalSheetChoiceRow`, "Full length + schematic | Original + Final | Final only",
+a READING of the two elections through `finalSheetChoice`/`finalSheetElections`, never a third
+piece of state; hidden while a section sheet is on screen, greyed while bubbles are elected), prints `FinalSheetKind.FULL_LENGTH` (`pdf/FullLengthPdfComposer.kt`, suffix
+`_Final_FullLength`): the whole FINAL shaft in a top band at a LINEAR x map — NO S-break
+(`drawSimpleShaftProfile(breakLongRuns = false)`), lengths AND diameters at ONE scale so the shaft
+keeps its true proportions (`fullLengthPtPerMm`; on-device request — do not enlarge the diameters
+again without asking), its keyways drawn through the schematic's own keyway pass off the stored
+spec (on-device request), carrying no values — over the final schematic in a `SheetBand` hosting the footer. Every wrapped body
 run (`fiberglassBodyRuns`) fills `FIBERGLASS_FILL_COLOR` (pale sage from the shop photos; a mid grey
 in black-and-white) under crossed winding lines AND carries the word FIBERGLASS (inside, else above on
 a leader — `planFiberglassLabels`, never dropped) plus a legend, so a black-and-white printer loses
