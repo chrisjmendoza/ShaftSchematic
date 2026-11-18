@@ -135,6 +135,74 @@ class UndercutLinerEndRailPlanTest {
         assertEquals(null, undercutCaptionTwoLines("Overall"))
     }
 
+    /** The wrap test's caption, with the new vertical range and obstacles. */
+    private fun boundedSpot(
+        stationX: Float,
+        setOnLeft: Boolean,
+        minTopY: Float = Float.NEGATIVE_INFINITY,
+        obstacles: List<UndercutCaptionBox> = emptyList(),
+        inkTop: Float = -8f,
+    ) = undercutRailCaptionSpot(
+        stationX, setOnLeft, lineY = 100f, textWidth = 80f, ascent = -8f, descent = 2f,
+        gap = 5f, arrow = 3f, minX = 36f, maxX = 400f, wrappedWidth = 42f,
+        minTopY = minTopY, obstacles = obstacles, inkTop = inkTop,
+    )
+
+    @Test
+    fun `a wrapped caption that would rise past the range hangs down from the rail instead`() {
+        // Centred, the block's top is at 90; with the range starting at 92 its first line takes
+        // the rail's height and the second hangs below (top 95).
+        assertEquals(UndercutRailCaptionSpot(345f, 103f, wrapped = true), boundedSpot(340f, true, minTopY = 92f))
+        // The caption's own glyphs decide, not the font's ascent: 6 over the baseline clears 91.5.
+        assertEquals(UndercutRailCaptionSpot(345f, 98f, wrapped = true), boundedSpot(340f, true, minTopY = 91.5f, inkTop = -6f))
+    }
+
+    @Test
+    fun `a caption steps through its candidates to the first spot clear of every obstacle`() {
+        // A value under the hanging block and the block below the line: no outboard spot is left,
+        // the range rules out inboard above the line, so it goes inboard below it.
+        val underRail = UndercutCaptionBox(340f, 112f, 400f, 130f)
+        assertEquals(
+            UndercutRailCaptionSpot(252f, 112f),
+            boundedSpot(340f, true, minTopY = 92f, obstacles = listOf(underRail)),
+        )
+        // A value right where the one-line caption would stand, with room past the station: every
+        // outboard spot touches it, so it moves inboard above the line, the first clear spot.
+        val beside = UndercutCaptionBox(220f, 96f, 260f, 104f)
+        assertEquals(UndercutRailCaptionSpot(112f, 93f), boundedSpot(200f, true, obstacles = listOf(beside)))
+        // A box that only touches the caption's edge is no collision.
+        val touching = UndercutCaptionBox(285f, 90f, 300f, 110f)
+        assertEquals(UndercutRailCaptionSpot(205f, 103f), boundedSpot(200f, true, obstacles = listOf(touching)))
+    }
+
+    @Test
+    fun `with no clear spot a caption takes the one overlapping least and is never dropped`() {
+        // Everything covered: every one-line spot overlaps 800 units, every wrapped one 840 — the
+        // first one-line spot (on the rail's height past the station) wins the tie.
+        val everywhere = UndercutCaptionBox(0f, 0f, 1000f, 1000f)
+        assertEquals(UndercutRailCaptionSpot(205f, 103f), boundedSpot(200f, true, obstacles = listOf(everywhere)))
+    }
+
+    @Test
+    fun `a caption's box covers both lines of a wrap and its pads`() {
+        assertEquals(
+            UndercutCaptionBox(343.5f, 89.5f, 388.5f, 110.5f),
+            undercutRailCaptionBox(
+                UndercutRailCaptionSpot(345f, 98f, wrapped = true), textWidth = 80f, wrappedWidth = 42f,
+                ascent = -8f, descent = 2f, padX = 1.5f, padY = 0.5f,
+            ),
+        )
+        assertEquals(
+            UndercutCaptionBox(205f, 97f, 285f, 103f),
+            undercutRailCaptionBox(
+                UndercutRailCaptionSpot(205f, 103f), textWidth = 80f, wrappedWidth = 42f,
+                ascent = -8f, descent = 2f, padX = 0f, padY = 0f, inkTop = -6f, inkBottom = 0f,
+            ),
+        )
+        assertEquals(0f, UndercutCaptionBox(0f, 0f, 10f, 10f).overlapArea(UndercutCaptionBox(10f, 0f, 20f, 10f)), 0f)
+        assertEquals(25f, UndercutCaptionBox(0f, 0f, 10f, 10f).overlapArea(UndercutCaptionBox(5f, 5f, 20f, 20f)), 0f)
+    }
+
     @Test
     fun `the chain, nested rows and total are the toggle-off plan's and the overhanging lead stays`() {
         val off = plan(aftLead(), null)

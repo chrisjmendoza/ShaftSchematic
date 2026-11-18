@@ -894,10 +894,16 @@ chain's above rows — at the ONE tier pitch; their witnesses rise from the shaf
 cross (total, chain, nested) is knocked out by its halo. `fromSet` wins over it (plan identical to
 From S.E.T. alone); off is byte-identical. Each rail carries a caption at its station end —
 "S.E.T. to liner start" (the liner end on the S.E.T.'s side) / "S.E.T. to liner end"
-(`UndercutSetRailSpan.caption`, on-device request) — placed by the ONE `undercutRailCaptionSpot`
-(past its station end on the rail's height; on two lines there when one does not fit,
-`undercutCaptionTwoLines`; above the line only when neither fits — on-device report: a caption
-moved above its line overprinted the title of the section above) and drawn last on a halo by
+(`UndercutSetRailSpan.caption`, on-device request) — placed by the ONE `undercutRailCaptionSpot`,
+which takes the first of its ordered candidates that stays inside the x range AND a y range and
+clears every obstacle (past its station end: one line on the rail's height; two lines
+(`undercutCaptionTwoLines`) centred there; two lines hanging from it; two lines, then one, below
+the line; then inboard of the arrowhead above, then below), else the one overlapping least — never
+dropped. Obstacles are the strip's own rail values (the label passes collect their boxes) and the
+captions already placed, tested against the caption's GLYPHS (`getTextBounds`), not the font's
+ascent; the printed strip's y range starts under the "← AFT / FWD →" row or the title of the
+strip above (`drawUndercutDetailStrip` returns its title's ink bottom) and ends over the shaft —
+on-device report: a wrapped caption centred on its rail overprinted both. Drawn last on a halo by
 `drawUndercutStripRails`; the From-S.E.T. cut rails carry none. Do not
 build a second rail type for it. See `docs/contracts/UndercutDrawing.md` (Liner ends from the S.E.T.).
 

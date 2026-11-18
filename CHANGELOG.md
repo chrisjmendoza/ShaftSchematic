@@ -8,6 +8,18 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-18
 
+### fix(undercut): "S.E.T. to liner start / end" captions find a clear spot
+
+On-device report, a portrait undercut sheet with three sections: a "S.E.T. to liner end" caption
+wrapped onto two lines rose above its section — on the first section it printed over the "FWD →"
+label, on the third over the title of the section above. A caption now never reaches above
+whatever prints over its section, and it stays clear of every dimension value on its section and
+of the other caption. It tries, in order: one line past the end of its dimension line; two lines
+there, centred on the line; two lines with the first on the line and the second below it; two
+lines below the line; one line below the line; and last, before the arrowhead, above and then
+below the line. When nothing is fully clear it takes the spot that overlaps least. The same rule
+places the captions on the Undercut screen's section drawing.
+
 ### fix(undercut): the liner-outline key moves to the Notes line, captions wrap, the break gap closes up
 
 On-device reports on the printed undercut sheet:

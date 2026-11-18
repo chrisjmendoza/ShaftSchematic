@@ -179,6 +179,7 @@ actual class Rect actual constructor() {
 }
 
 actual val Rect.top: Int get() = this.top
+actual val Rect.bottom: Int get() = this.bottom
 
 /**
  * Paint state. Defaults are Android's: 12 pt text, hairline stroke, fill style, opaque black, left

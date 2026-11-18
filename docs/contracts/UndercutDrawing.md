@@ -2604,9 +2604,9 @@ relative to the S.E.T.; once a cut runs over a liner edge the drawing no longer 
   is `UNDERCUT_LINER_START_CAPTION` ("S.E.T. to liner start") on the rail to the liner end on
   the S.E.T.'s side and `UNDERCUT_LINER_END_CAPTION` ("S.E.T. to liner end") on the other; a
   From-S.E.T. cut rail has none. ONE placement, `undercutRailCaptionSpot`: just past the rail's
-  station end (`UNDERCUT_RAIL_LABEL_GAP_PT` off the witness), centred on the rail's own height;
-  where that would leave the strip's cell (the canvas's width) it goes inboard of the arrowhead,
-  above the line. `drawUndercutStripRails(captionMinX, captionMaxX)` draws captions last, each
+  station end (`UNDERCUT_RAIL_LABEL_GAP_PT` off the witness), centred on the rail's own height,
+  else the first clear spot of its ordered candidates (see "Rail captions: where they stand").
+  `drawUndercutStripRails(captionMinX, captionMaxX, captionMinY, captionMaxY)` draws captions last, each
   on a sheet-white halo, in the rail's text paint. A caption is not a measured value: it prints
   on a blank draft too.
 - **What stays** — the chain, the nested rows and the total, planned exactly as with the switch
@@ -2716,11 +2716,43 @@ as before. The canvases carry no key.
 
 ### Rail captions: where they stand
 
-`undercutRailCaptionSpot` — the ONE rule, printed strip and canvas — tries, in order: past the
-rail's station end on the rail's own height, on one line; the same place on two lines
-(`undercutCaptionTwoLines`, broken at the space nearest the middle, each line's edge toward the
-station); inboard of the arrowhead above the line. On-device report: "S.E.T. to liner end" on a
-lower section, moved above its line for want of room, overprinted the title of the section above.
+`undercutRailCaptionSpot` — the ONE rule, printed strip and canvas — takes the first of these
+candidates that lies inside the drawable x range `[minX, maxX]` and y range `[minTopY, maxBottomY]`
+and overlaps none of its `obstacles` (`UndercutCaptionBox`):
+
+1. past the rail's station end, one line, on the rail's own height;
+2. there on two lines (`undercutCaptionTwoLines`, broken at the space nearest the middle, each
+   line's edge toward the station), centred on the rail's height;
+3. there on two lines with the FIRST on the rail's height — the block hangs down a line;
+4. there on two lines wholly below the rail line;
+5. there on one line just below the rail line;
+6. inboard of the arrowhead on one line, above the line, then below it (both held inside the x
+   range).
+
+When no candidate is clear it takes the one with the least overlap (obstacle area plus the area
+outside the ranges), earlier first on a tie — a caption is never dropped. With no y range and no
+obstacles it is exactly the earlier three-step rule (1, 2, 6-above).
+
+The tests read the caption's own GLYPHS (`getTextBounds` — `inkTop`/`inkBottom`), not the font's
+full ascent and descent: two values on neighbouring tiers already stand that close, and a caption on
+its rail's height is no nearer its neighbours than a value there. `undercutRailCaptionBox` is the
+one measure of a placed caption.
+
+Obstacles (`drawUndercutStripRails` → `drawUndercutRailCaptions`): every rail value the strip's
+label passes drew — the total, the chain (break-seated, lifted and fallback rows alike), the nested
+rows and the baseline tiers' values, each collected by `drawUndercutRail(labelBoxes)` as it draws
+it, full ascent over the value and its own glyphs under the last line — plus every caption placed
+before it. Rail and witness LINES are not obstacles: the caption's halo knocks them out.
+
+The y range on the printed strip (`drawUndercutStripRails(captionMinY, captionMaxY)`): from just
+under the ink of whatever prints above the strip — the "← AFT / FWD →" row for the first row of
+strips, the title of the strip above for the rest (`drawUndercutDetailStrip` returns its title's ink
+bottom, descent included) — plus `UC_CAPTION_CLEAR_PT`, down to the witness gap over the shaft. The
+detail canvas passes its own top edge.
+
+On-device reports: "S.E.T. to liner end" on a lower section, moved above its line for want of room,
+overprinted the title of the section above; then, wrapped and centred on its rail, it rose over the
+"FWD →" label on the first section and over the section title above the third.
 
 ### Header: the shaft side
 

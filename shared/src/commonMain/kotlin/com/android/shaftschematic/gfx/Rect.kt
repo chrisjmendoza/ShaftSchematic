@@ -23,3 +23,4 @@ expect class Rect {
 }
 
 expect val Rect.top: Int
+expect val Rect.bottom: Int
