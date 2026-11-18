@@ -848,8 +848,11 @@ data class UndercutRecord(
   spans clipped to the liner, split over the liner's OWN surface (`UndercutLinerOd.surface`, from
   `linerSurfaceSegs` — the reduced shoulder OD over a shoulder, modelled square), so a retraced
   stretch sits at the shoulder OD there and a stretch running across a shoulder step retraces the
-  step; an end face only where a notch runs ACROSS that edge (a notch merely ending at the edge
-  leaves the real face standing, and an edge no cut crosses keeps its real face), retraced as ONE
+  step; an end face only where a notch runs ACROSS that edge, or where two notches BUTT at it, one
+  each side — their shared edge draws only the step between their floors, so the liner's face above
+  is gone too (on-device report: that stub drew as a faint sliver) — while a notch merely ending at
+  the edge with nothing cut on the other side leaves the real face standing, and an edge no cut
+  reaches keeps its real face; retraced as ONE
   full-height dotted line (`LinerOutlineEdge.FULL_FACE`) from the top OD to the bottom OD at that
   station — the liner's surface Ø at that end, the shoulder OD on a shouldered end — straight
   through the body cross-section, so the liner's actual end placement reads at a glance
@@ -2720,7 +2723,7 @@ canvases. Wherever this document says the outline is "dotted", read this line.
 
 A printed strips page whose printed sections retrace at least one piece of a liner carries a key at
 the foot of the page, right of the Notes line: a sample of the line and `LINER_OUTLINE_LEGEND`
-("Original liner surface"), drawn by `drawUndercutNotesRow(legendPaint)`, the notes rule stopping
+("Original shaft surface" — the line also retraces blends and body surface, on-device request), drawn by `drawUndercutNotesRow(legendPaint)`, the notes rule stopping
 short of it. (It first stood on the AFT / FWD row, where it read as part of the drawing — on-device
 report.) A sheet with the outline off, or with nothing retraced, rules the Notes line edge to edge
 as before. The canvases carry no key.

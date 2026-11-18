@@ -82,6 +82,21 @@ class LinerOutlineMathTest {
     }
 
     @Test
+    fun `two cuts butted at the edge, one each side, retrace the full-height face`() {
+        // The on-device MID liner: one cut ends at the AFT edge on the body, the next starts there on the liner.
+        val out = linerOutlineSegments(liner, listOf(notch("body", 950f, 1000f, 214f), notch("liner", 1000f, 1150f, 224f)))
+        assertEquals(
+            LinerOutlineSeg(LinerOutlineEdge.FULL_FACE, 1000f, 1000f, 254f, 254f),
+            out.single { it.edge == LinerOutlineEdge.FULL_FACE },
+        )
+        // Only the liner side cut: the face still stands.
+        assertTrue(
+            linerOutlineSegments(liner, listOf(notch("liner", 1000f, 1150f, 224f)))
+                .none { it.edge == LinerOutlineEdge.FULL_FACE },
+        )
+    }
+
+    @Test
     fun `touching, overlapping and nested cuts merge into one OD stretch`() {
         val out = linerOutlineSegments(
             liner,

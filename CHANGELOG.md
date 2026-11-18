@@ -8,6 +8,14 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-18
 
+### fix(undercut): a liner face between two butted cuts is retraced; the key reads "Original shaft surface"
+
+- Where one cut ends exactly at a liner's edge and the next starts there, the liner's end face is
+  now retraced in the phantom line like a face a single cut runs across. The short stretch from
+  the liner's outside diameter down to the cut drew as a faint grey sliver (on-device report).
+- The key at the foot of the undercut sheet now reads "Original shaft surface": the line retraces
+  blends and body surface as well as liners (on-device request).
+
 ### feat(pdf): text size per sheet group
 
 The footer and dimension text sizes are now set separately for three groups of sheets (on-device

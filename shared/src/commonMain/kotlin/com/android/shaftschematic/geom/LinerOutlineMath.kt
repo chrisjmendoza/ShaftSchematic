@@ -58,8 +58,11 @@ val LINER_OUTLINE_PHANTOM_PT: List<Float> = listOf(7f, 2f, 1.5f, 2f, 1.5f, 2f)
 fun linerOutlinePattern(scale: Float = 1f): FloatArray =
     FloatArray(LINER_OUTLINE_PHANTOM_PT.size) { LINER_OUTLINE_PHANTOM_PT[it] * scale }
 
-/** What the sheet's legend calls the liner outline. */
-const val LINER_OUTLINE_LEGEND = "Original liner surface"
+/**
+ * What the sheet's legend calls the phantom retrace. "Shaft", not "liner": the same line also
+ * retraces a blend and the body surface beside a liner that a cut took away (on-device request).
+ */
+const val LINER_OUTLINE_LEGEND = "Original shaft surface"
 
 /**
  * One dotted piece. A [LinerOutlineEdge.SURFACE] piece runs `x0Mm → x1Mm` at `dia0Mm`
@@ -90,9 +93,12 @@ data class LinerOutlineSeg(
  *   straight through the body cross-section — so the liner's actual end placement reads at a
  *   glance (on-device request). Neither the cut floors nor the stock's Ø outside the edge bound
  *   it: trimmed to the seat, a face over a seat a hair under the OD would be a few pixels tall
- *   and read as missing (on-device report). A notch merely ending at the edge draws its own section face
- *   there and erases nothing of the liner's, so no face is retraced; nor is one at an edge no
- *   cut crosses, where the real face still stands.
+ *   and read as missing (on-device report). Two cuts BUTTED at the edge, one each side, erase the
+ *   face just the same — their shared edge draws only the step between their two floors — so it
+ *   is retraced too (on-device report: the stub between the liner OD and the higher floor drew as
+ *   a faint sliver, not the phantom line). A notch merely ending at the edge with nothing cut on
+ *   the other side draws its own section face there and erases nothing of the liner's, so no face
+ *   is retraced; nor is one at an edge no cut reaches, where the real face still stands.
  */
 fun linerOutlineSegments(
     liner: UndercutLinerOd,
@@ -134,7 +140,10 @@ fun linerOutlineSegments(
     }
 
     fun face(edgeMm: Float, odMm: Float) {
-        if (notches.any { it.startMm < edgeMm - epsMm && it.endMm > edgeMm + epsMm }) {
+        val crossed = notches.any { it.startMm < edgeMm - epsMm && it.endMm > edgeMm + epsMm }
+        val butted = notches.any { abs(it.endMm - edgeMm) <= epsMm && it.startMm < edgeMm - epsMm } &&
+            notches.any { abs(it.startMm - edgeMm) <= epsMm && it.endMm > edgeMm + epsMm }
+        if (crossed || butted) {
             out += LinerOutlineSeg(LinerOutlineEdge.FULL_FACE, edgeMm, edgeMm, odMm, odMm)
         }
     }
