@@ -76,8 +76,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.android.shaftschematic.geom.THREAD_DENSITY_DEFAULT
-import com.android.shaftschematic.geom.THREAD_SLANT_DEFAULT
 import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
 import com.android.shaftschematic.model.UndercutPageOrientation
 import com.android.shaftschematic.pdf.WEAR_STRIP_SIZE_FRAC_DEFAULT
@@ -94,17 +92,14 @@ import com.android.shaftschematic.ui.viewmodel.setLineThicknessScale
 import com.android.shaftschematic.ui.viewmodel.setLinerCompression
 import com.android.shaftschematic.ui.viewmodel.setLinersProportional
 import com.android.shaftschematic.ui.viewmodel.setPdfArrowSizePt
-import com.android.shaftschematic.ui.viewmodel.setPdfDimTextScale
-import com.android.shaftschematic.ui.viewmodel.setPdfFooterTextScale
+import com.android.shaftschematic.ui.viewmodel.setPdfRunoutDimTextScale
+import com.android.shaftschematic.ui.viewmodel.setPdfRunoutFooterTextScale
+import com.android.shaftschematic.ui.viewmodel.setPdfUndercutDimTextScale
 import com.android.shaftschematic.ui.viewmodel.setPdfFooterBoltHoleDia
 import com.android.shaftschematic.ui.viewmodel.setPdfInspectionSealAreas
 import com.android.shaftschematic.ui.viewmodel.setPdfTaperRatePerFoot
 import com.android.shaftschematic.ui.viewmodel.setPdfFooterCapturedKwInset
 import com.android.shaftschematic.ui.viewmodel.setPdfOutputFont
-import com.android.shaftschematic.ui.viewmodel.setPdfShowUnitsNote
-import com.android.shaftschematic.ui.viewmodel.setPdfThreadDensity
-import com.android.shaftschematic.ui.viewmodel.setPdfThreadSlant
-import com.android.shaftschematic.ui.viewmodel.setPdfDualUnitLayout
 import com.android.shaftschematic.ui.viewmodel.setPdfFractionStyle
 import com.android.shaftschematic.ui.viewmodel.setPdfRunoutBubbleDropScale
 import com.android.shaftschematic.ui.viewmodel.setPdfRunoutBubbleScale
@@ -138,7 +133,6 @@ import com.android.shaftschematic.ui.viewmodel.setWearCompactStrips
 import com.android.shaftschematic.ui.viewmodel.setWearShowShaftProfile
 import com.android.shaftschematic.ui.viewmodel.setWearStripComponents
 import com.android.shaftschematic.ui.viewmodel.setWearStripSizeFrac
-import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
 import com.android.shaftschematic.util.InkBand
 import com.android.shaftschematic.util.PdfPageOrientation
@@ -622,45 +616,31 @@ internal fun RunoutWearOptionsSheet(
     /** The app-wide `PdfPrefs.arrowSizePt`; read only when [showDimensionArrows]. */
     arrowSizePt: Float = PDF_ARROW_SIZE_DEFAULT_PT,
     /**
-     * Shows the "Footer text size" / "Dimension text size" pickers. On for the consolidated sheet
+     * Shows the RUNOUT group's "Footer text size" / "Dimension text size" pickers
+     * (`PdfPrefs.runoutFooterTextScale` / `runoutDimTextScale`). On for the consolidated sheet
      * only — the one document here that prints the shared footer and the schematic's rails; the
-     * classic runout and wear sheets keep their own sizes, so the pickers would be inert, and the
-     * undercut sheet takes [showDimTextSize] instead.
+     * classic runout and wear sheets print no scaled text, so the pickers would be inert there,
+     * and the undercut sheet takes [showDimTextSize] instead.
      */
     showSheetTextSizes: Boolean = false,
     /**
-     * Shows "Dimension text size" alone ([DimTextSizeChips]) — the undercut sheet, whose strips
-     * follow `PdfPrefs.dimTextScale` and which prints no shared footer. Reads [dimTextScale].
+     * Shows the UNDERCUT group's "Dimension text size" alone ([DimTextSizeChips],
+     * `PdfPrefs.undercutDimTextScale`) — the undercut sheet, which prints no footer. Reads
+     * [dimTextScale].
      */
     showDimTextSize: Boolean = false,
-    /** The app-wide `PdfPrefs.footerTextScale`; read only when [showSheetTextSizes]. */
+    /** The RUNOUT group's `PdfPrefs.runoutFooterTextScale`; read only when [showSheetTextSizes]. */
     footerTextScale: Float = PDF_TEXT_SCALE_DEFAULT,
-    /** The app-wide `PdfPrefs.dimTextScale`; read only when [showSheetTextSizes]. */
+    /**
+     * The shown group's dimension size — `PdfPrefs.runoutDimTextScale` under [showSheetTextSizes],
+     * `PdfPrefs.undercutDimTextScale` under [showDimTextSize].
+     */
     dimTextScale: Float = PDF_TEXT_SCALE_DEFAULT,
     /**
      * The app-wide `PdfPrefs.fractionStyle`. Ungated, unlike the arrowhead size: every document
      * this sheet serves prints lengths, so every one of them draws fractions.
      */
     fractionStyle: FractionStyle = FractionStyle.STACKED,
-    /**
-     * Shows the Thread section (slant + density). Every document this sheet serves draws the
-     * shaft's threads, so the hosts pass [hasDrawnThreads] off the spec they draw; false on a
-     * shaft with no thread, where the hatch controls would tune nothing.
-     */
-    hasThreads: Boolean = false,
-    /** The app-wide `PdfPrefs.threadSlant`; read only when [hasThreads]. */
-    threadSlant: Float = THREAD_SLANT_DEFAULT,
-    /** The app-wide `PdfPrefs.threadDensity`; read only when [hasThreads]. */
-    threadDensity: Float = THREAD_DENSITY_DEFAULT,
-    /** The app-wide `PdfPrefs.dualUnitLayout`; ungated for the same reason as the fraction style. */
-    dualUnitLayout: DualUnitLayout = DualUnitLayout.Default,
-    /**
-     * The DOCUMENT's dual-units flag and its setter. `dual_units` travels with the job, not with
-     * the app, so it belongs on every sheet that offers a dual LAYOUT — offering the layout with no
-     * way to turn the mode on from the same place is what sent this back for a second pass.
-     */
-    dualUnits: Boolean = false,
-    onDualUnitsChange: ((Boolean) -> Unit)? = null,
     /**
      * Live-tuning sink for a preview that reshapes under the finger: each slider reports
      * its in-progress value here. Visual only — the commit path is unchanged and nothing
@@ -736,7 +716,6 @@ internal fun RunoutWearOptionsSheet(
     // the printed sheet belongs in this menu). Collected here rather than added to each of the
     // four hosts' argument lists; each host collects the ones its page reads as render keys.
     val outputFont by vm.pdfOutputFont.collectAsState()
-    val showUnitsNote by vm.pdfShowUnitsNote.collectAsState()
     val footerCapturedKwInset by vm.pdfFooterCapturedKwInset.collectAsState()
     val footerBoltHoleDia by vm.pdfFooterBoltHoleDia.collectAsState()
     val taperRatePerFoot by vm.pdfTaperRatePerFoot.collectAsState()
@@ -845,7 +824,7 @@ internal fun RunoutWearOptionsSheet(
         }
 
         // ── Sections ─────────────────────────────────────────────────────────
-        // Laid out in `OptionsSection` order (most-used first, Units last) whatever order
+        // Laid out in `OptionsSection` order (most-used first) whatever order
         // they are supplied in here — the same list `PdfOptionsSheet` builds from. A section
         // this document has nothing for is simply not supplied.
         val sections = mutableMapOf<OptionsSection, OptionsSectionBody>()
@@ -949,23 +928,6 @@ internal fun RunoutWearOptionsSheet(
             }
         }
 
-        // ── Thread ───────────────────────────────────────────────────────────
-        // Only on a shaft that draws a thread: on any other the hatch controls tune nothing.
-        if (hasThreads) {
-            sections[OptionsSection.THREAD] = OptionsSectionBody(
-                summary = threadSectionSummary(threadSlant, threadDensity),
-            ) {
-                ThreadSlantSlider(
-                    threadSlant = threadSlant,
-                    onCommit = { vm.setPdfThreadSlant(it) },
-                )
-                ThreadDensitySlider(
-                    threadDensity = threadDensity,
-                    onCommit = { vm.setPdfThreadDensity(it) },
-                )
-            }
-        }
-
         // ── Lines & text ─────────────────────────────────────────────────────
         // Line thickness, the output font and the fraction style are ungated: every document
         // this sheet serves draws lines and prints text. The arrowhead picker only where rails print.
@@ -986,15 +948,16 @@ internal fun RunoutWearOptionsSheet(
             if (showDimTextSize) {
                 DimTextSizeChips(
                     dimTextScale = dimTextScale,
-                    onCommit = { vm.setPdfDimTextScale(it) },
+                    onCommit = { vm.setPdfUndercutDimTextScale(it) },
                 )
             }
             if (showSheetTextSizes) {
                 SheetTextSizeChips(
                     footerTextScale = footerTextScale,
                     dimTextScale = dimTextScale,
-                    onCommitFooter = { vm.setPdfFooterTextScale(it) },
-                    onCommitDim = { vm.setPdfDimTextScale(it) },
+                    onCommitFooter = { vm.setPdfRunoutFooterTextScale(it) },
+                    onCommitDim = { vm.setPdfRunoutDimTextScale(it) },
+                    sheets = RUNOUT_TEXT_SIZE_SHEETS,
                 )
             }
             // Where the cut diameters are written is a text choice, not a shading one: under the
@@ -1083,24 +1046,6 @@ internal fun RunoutWearOptionsSheet(
                     onCommit = { vm.setPdfTieringMode(it) },
                 )
             }
-        }
-
-        // ── Units ────────────────────────────────────────────────────────────
-        // The document's own `dual_units` switch where the host offers it, plus the app-wide
-        // layout chips, which style what the switch turns on and so read as disabled until
-        // it is.
-        sections[OptionsSection.UNITS] = OptionsSectionBody(
-            summary = unitsSectionSummary(dualUnits, dualUnitLayout),
-        ) {
-            if (onDualUnitsChange != null) {
-                DualUnitsSwitchRow(dualUnits = dualUnits, onDualUnitsChange = onDualUnitsChange)
-            }
-            DualUnitLayoutChips(
-                layout = dualUnitLayout,
-                enabled = dualUnits,
-                onCommit = { vm.setPdfDualUnitLayout(it) },
-            )
-            UnitsNoteSwitchRow(checked = showUnitsNote, onCheckedChange = { vm.setPdfShowUnitsNote(it) })
         }
 
         OptionsSections(sections)

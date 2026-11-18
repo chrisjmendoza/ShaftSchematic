@@ -124,6 +124,41 @@ class SchematicRenderReviewTest {
         }
     }
 
+    /**
+     * Ø tolerances on the callouts: a 9" liner at +.002 / −.000 and a shown 8 1/2" body at
+     * +.000 / −.003, stacked after their values; the same shaft in millimetres.
+     */
+    @Test
+    fun `diameter tolerance callouts`() {
+        val inch = 25.4f
+        val s = com.android.shaftschematic.model.ShaftSpec(
+            overallLengthMm = 120f * inch,
+            liners = listOf(
+                com.android.shaftschematic.model.Liner(
+                    id = "LN", startFromAftMm = 20f * inch, lengthMm = 30f * inch, odMm = 9f * inch,
+                    endMmPhysical = 50f * inch, diaTolPlusMm = 0.002f * inch,
+                ),
+            ),
+            bodies = listOf(
+                com.android.shaftschematic.model.Body(
+                    id = "B1", startFromAftMm = 70f * inch, lengthMm = 30f * inch, diaMm = 8.5f * inch,
+                    showDiaOnDrawing = true, diaTolMinusMm = 0.003f * inch,
+                ),
+            ),
+            autoBodyDiaMm = 8.5f * inch,
+        )
+        for ((name, unit) in listOf("dia_tolerance_in.png" to UnitSystem.INCHES, "dia_tolerance_mm.png" to UnitSystem.MILLIMETERS)) {
+            val (bmp, c) = bitmapPage()
+            composeShaftPdfOnCanvas(
+                c, PDF_PAGE_WIDTH_PT.toFloat(), PDF_PAGE_HEIGHT_PT.toFloat(),
+                spec = s, unit = unit, project = ProjectInfo(customer = "Review"),
+                appVersion = "review", filename = name, pdfPrefs = PdfPrefs(),
+                resolvedComponents = resolveComponents(s),
+            )
+            save(name, bmp)
+        }
+    }
+
     /** The Final tab's Full length sheet: the port tailshaft with its three fiberglass sections. */
     @Test
     fun `full length fiberglass sheet`() {
@@ -435,7 +470,10 @@ class SchematicRenderReviewTest {
         val config = midTaper.runoutConfig.copy(showDyePenTest = true, showCouplingFace = true)
         for (s in com.android.shaftschematic.settings.PDF_TEXT_SCALES) {
             val pct = (s * 100).toInt()
-            val prefs = PdfPrefs(footerTextScale = s, dimTextScale = s)
+            val prefs = PdfPrefs(
+                footerTextScale = s, dimTextScale = s,
+                runoutFooterTextScale = s, runoutDimTextScale = s,
+            )
             renderConsolidated("text_${pct}_consolidated.png", midTaper, pdfPrefs = prefs, config = config)
             renderConsolidated(
                 "text_${pct}_consolidated_no_face.png", midTaper, pdfPrefs = prefs,
@@ -455,7 +493,10 @@ class SchematicRenderReviewTest {
         try {
             for (font in com.android.shaftschematic.util.OutputFont.entries) {
                 com.android.shaftschematic.data.SettingsStore.updatePdfPrefs { it.copy(outputFont = font) }
-                val prefs = PdfPrefs(footerTextScale = 1.5f, dimTextScale = 1.5f)
+                val prefs = PdfPrefs(
+                    footerTextScale = 1.5f, dimTextScale = 1.5f,
+                    runoutFooterTextScale = 1.5f, runoutDimTextScale = 1.5f,
+                )
                 renderConsolidated(
                     "font_${font.name.lowercase()}_consolidated.png", midTaper, pdfPrefs = prefs,
                     config = midTaper.runoutConfig.copy(showDyePenTest = true),

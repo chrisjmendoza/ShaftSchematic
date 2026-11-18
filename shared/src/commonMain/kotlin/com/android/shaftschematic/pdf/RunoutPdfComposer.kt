@@ -78,6 +78,7 @@ import com.android.shaftschematic.settings.WearAreaStyle
 import com.android.shaftschematic.settings.PDF_SBREAK_THRESHOLD_DEFAULT
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.RunoutConfig
+import com.android.shaftschematic.settings.SheetTextGroup
 import com.android.shaftschematic.settings.TirDirection
 import com.android.shaftschematic.ui.resolved.BodyBlend
 import com.android.shaftschematic.ui.resolved.ResolvedBody
@@ -173,9 +174,19 @@ fun composeRunoutPdfOnCanvas(
      */
     includeBubbles: Boolean = true,
     includeWearInfo: Boolean = true,
+    /**
+     * Whose text sizes this sheet prints at ([PdfPrefs.forTextGroup]): [SheetTextGroup.RUNOUT] for
+     * the Runout and Consolidated Output tabs' documents, [SheetTextGroup.SCHEMATIC] for the Final
+     * tab's two runout-composer sheets (the Final schematic with runout bubbles, the blank final
+     * runout sheet) — every Final sheet is tuned from the schematic's options.
+     */
+    textGroup: SheetTextGroup = SheetTextGroup.RUNOUT,
     /** Test seam: receives the solved layout once the vertical budget is fixed. Never set by the app. */
     layoutProbe: ((RunoutSheetLayout) -> Unit)? = null,
 ) {
+    // The ONE text-size remap: from here down — footer, rails, Ø values — `dimTextScale` and
+    // `footerTextScale` are this sheet group's sizes.
+    val pdfPrefs = pdfPrefs.forTextGroup(textGroup)
     // Normalized content flags: the classic sheet IS the runout document (bubbles always
     // on, wear info never), whatever the variant flags say.
     val drawBubbles = !consolidated || includeBubbles
@@ -1127,6 +1138,7 @@ fun runoutSheetMaxShaftHeightPt(
     consolidated: Boolean = true,
     includeBubbles: Boolean = true,
     includeWearInfo: Boolean = true,
+    textGroup: SheetTextGroup = SheetTextGroup.RUNOUT,
     pageW: Float = PDF_PAGE_WIDTH_PT.toFloat(),
     pageH: Float = PDF_PAGE_HEIGHT_PT.toFloat(),
 ): Float {
@@ -1140,6 +1152,7 @@ fun runoutSheetMaxShaftHeightPt(
             runoutReadings = runoutReadings, runoutStationPlacements = runoutStationPlacements,
             wearRecord = wearRecord, blankValues = blankValues, consolidated = consolidated,
             includeBubbles = includeBubbles, includeWearInfo = includeWearInfo,
+            textGroup = textGroup,
             layoutProbe = { height = it.shaftHeightPt },
         )
     }

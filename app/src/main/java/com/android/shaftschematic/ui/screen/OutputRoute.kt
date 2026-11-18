@@ -162,9 +162,12 @@ private data class ConsolidatedRenderInputs(
     val runoutBubbleScale: Float,
     val runoutBubbleDropScale: Float,
     val arrowSizePt: Float,
-    /** `PdfPrefs.footerTextScale` / `dimTextScale` — keys only, inside the `PdfPrefs` snapshot. */
-    val footerTextScale: Float,
-    val dimTextScale: Float,
+    /**
+     * The RUNOUT group's `PdfPrefs.runoutFooterTextScale` / `runoutDimTextScale` — keys only,
+     * inside the `PdfPrefs` snapshot; the composer swaps them in through `forTextGroup`.
+     */
+    val runoutFooterTextScale: Float,
+    val runoutDimTextScale: Float,
     /** Not a composer argument — it reaches the ink via `FractionTypography.active`. Key only. */
     val fractionStyle: FractionStyle,
     /**
@@ -265,8 +268,9 @@ fun OutputRoute(
     // Dimension-rail arrowhead size: a chip tap commits straight to PdfPrefs, so the render
     // loop needs it as an input key or the sheet would keep the old heads.
     val pdfArrowSizePt     by vm.pdfArrowSizePt.collectAsState()
-    val pdfFooterTextScale by vm.pdfFooterTextScale.collectAsState()
-    val pdfDimTextScale    by vm.pdfDimTextScale.collectAsState()
+    // The consolidated sheet's text sizes are the RUNOUT group's (`SheetTextGroup.RUNOUT`).
+    val pdfRunoutFooterTextScale by vm.pdfRunoutFooterTextScale.collectAsState()
+    val pdfRunoutDimTextScale    by vm.pdfRunoutDimTextScale.collectAsState()
     // Fraction style: same posture — it reaches the ink through the renderer's active style,
     // which the loop cannot observe, so it rides along as an input key.
     val pdfFractionStyle   by vm.pdfFractionStyle.collectAsState()
@@ -647,8 +651,8 @@ fun OutputRoute(
                 runoutBubbleScale = pdfRunoutBubbleScale,
                 runoutBubbleDropScale = pdfRunoutBubbleDropScale,
                 arrowSizePt = pdfArrowSizePt,
-                footerTextScale = pdfFooterTextScale,
-                dimTextScale = pdfDimTextScale,
+                runoutFooterTextScale = pdfRunoutFooterTextScale,
+                runoutDimTextScale = pdfRunoutDimTextScale,
                 fractionStyle = pdfFractionStyle,
                 outputFont = pdfOutputFont,
                 showUnitsNote = pdfShowUnitsNote,
@@ -1142,15 +1146,9 @@ fun OutputRoute(
                     showDimensionArrows = true,
                     arrowSizePt = pdfArrowSizePt,
                     showSheetTextSizes = true,
-                    footerTextScale = pdfFooterTextScale,
-                    dimTextScale = pdfDimTextScale,
+                    footerTextScale = pdfRunoutFooterTextScale,
+                    dimTextScale = pdfRunoutDimTextScale,
                     fractionStyle = pdfFractionStyle,
-                    hasThreads = hasDrawnThreads(spec),
-                    threadSlant = pdfThreadSlant,
-                    threadDensity = pdfThreadDensity,
-                    dualUnitLayout = pdfDualUnitLayout,
-                    dualUnits = dualUnits,
-                    onDualUnitsChange = { vm.setDualUnits(it) },
                     tuning = tuning,
                     blankDraft = blankDraft,
                     onSetBlankDraft = { blankDraft = it },

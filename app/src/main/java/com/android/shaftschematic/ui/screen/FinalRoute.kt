@@ -48,6 +48,7 @@ import com.android.shaftschematic.model.forSheet
 import com.android.shaftschematic.model.SheetDateSheet
 import com.android.shaftschematic.ui.adaptive.LocalSidebarPermanent
 import com.android.shaftschematic.pdf.composeRunoutPdf
+import com.android.shaftschematic.settings.SheetTextGroup
 import com.android.shaftschematic.ui.nav.FINAL_DRAWING_LABEL
 import com.android.shaftschematic.ui.nav.blockingExportError
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
@@ -433,6 +434,7 @@ private fun rememberFinalRunoutSheet(
                         resolvedComponents = finalResolved,
                         lineThicknessScale = lineThicknessScale,
                         consolidated = false,
+                        textGroup = SheetTextGroup.SCHEMATIC,
                     )
                 }
                 if (wrote && openAfterExport) openRunoutPdf(ctx, uri)
@@ -474,6 +476,7 @@ private fun rememberFinalRunoutSheet(
                             resolvedComponents = resolvedSnapshot,
                             lineThicknessScale = thicknessSnapshot,
                             consolidated = false,
+                            textGroup = SheetTextGroup.SCHEMATIC,
                         )
                     }
                 }

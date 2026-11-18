@@ -1,6 +1,8 @@
 # PDF Export Specification
 Version: v0.5.x
-Last updated: 2026-11-16 — "Footer columns": the job's notes print under the job block on a
+Last updated: 2026-11-18 — §5.3: a liner OD or explicit body Ø may carry a tolerance, printed as
+stacked limits after its callout value (`Ø 9.000"` `+.002` over `-.000`, on-device request).
+2026-11-16 — "Footer columns": the job's notes print under the job block on a
 sheet whose "Notes on this sheet" switch is on, and each end column carries that end face's
 draw-plate hole line (`ShaftSpec.aftEndHoles`/`fwdEndHoles`, on-device request).
 2026-11-11 — §5.3: a liner and a shown body touching it at the same Ø print the
@@ -251,8 +253,8 @@ Top of page, full width.
   (the OAL rail, bare-shaft spans) use the document unit. A metric-designation thread
   carries an implicit mm override and prints its designation (`M20×2.5`) verbatim.
 - Dual units — with `dual_units` on, every printed dimension carries both units, in the layout
-  `PdfPrefs.dualUnitLayout` selects (Settings → Drawing → "Dual-unit layout", and both PDF
-  options sheets):
+  `PdfPrefs.dualUnitLayout` selects (Settings → Drawing → "Dual-unit layout" only — no PDF
+  options panel carries it, on-device ruling: rarely changed):
   - **INLINE** (default) — `<primary> [<secondary>]` on one line. Width-only growth.
   - **STACKED** — primary over secondary. About 55% narrower (a stack measures as its wider
     LINE), and one line taller.
@@ -292,8 +294,8 @@ Top of page, full width.
   layout alike; their rows and rotated columns are one text line thick. Dimension rails, the OAL
   and the footer keep dual.
 - Units note (opt-in, on-device request) — Settings → Drawing → "Units note on sheets"
-  (`PdfPrefs.showUnitsNote`, default OFF, also in every PDF options sheet's Units section via
-  `UnitsNoteSwitchRow`; app-wide, captured by Drawing profiles). On, EVERY sheet — schematic (Final included), classic
+  (`PdfPrefs.showUnitsNote`, default OFF, Settings only — no PDF options panel carries it,
+  on-device ruling: rarely changed; app-wide, captured by Drawing profiles). On, EVERY sheet — schematic (Final included), classic
   and consolidated runout, wear, undercut in either orientation, the undercut "no sections" note
   page included — prints `Units in inches` / `Units in mm` from the DOCUMENT unit
   (`DisplayUnits.documentUnit`) at `UNITS_NOTE_TEXT_PT` (8 pt, the sheet face), right-aligned at
@@ -598,6 +600,26 @@ they are now all-BELOW, same as liners.
   falls back to halfway toward the centre, then the centre, only to clear a collision. Only a
   body joins a liner — never two
   liners or two bodies — and a sheet with no touching equal pair prints exactly as before.
+  A pair joins only when its TOLERANCES agree too (next item).
+- **Tolerances** (on-device request: a 9" liner OD at +.002 / −.000 on the Final drawing). A
+  liner's OD and an explicit body's Ø may carry an upper and a lower deviation
+  (`diaTolPlusMm` / `diaTolMinusMm`, typed magnitudes in mm, stored verbatim; entered in the
+  "Ø tol +" / "Ø tol −" row under the Ø on the card and in the Add dialog, both tabs). The value
+  prints as it always has and the two limits follow it in the drafting stack — 0.65× the callout's
+  text, upper (`+.002`) over lower (`-.000`), left edges aligned, the pair centred on the value's
+  digits, a quarter of a text size after it. ONE formatter, `formatDiaTolerance` (`UnitFormat.kt`),
+  in the callout's own unit: inches with no leading zero at 3 places (4 when either limit needs a
+  fourth; a limit of an inch or more keeps its integer, `+1.250`; a zero side keeps its sign,
+  `-.000`), millimetres at the fewest shared places (`+0.25` / `-0.10`, a zero side a bare `0`).
+  A whole inch value takes the limits' places (`Ø 9.000"`, not `Ø 9"` — `formatTolerancedDiaWithUnit`).
+  No unit mark on the limits; under dual units they follow the primary value — inline, the
+  secondary prints after the stack; stacked, under the value. The tolerance is part of the
+  grouping key, so two bodies (or liners) of one Ø with different tolerances print two callouts.
+  `DiameterLeaderRenderer` measures the label, reserves its `occupancy` box (taller where the stack
+  stands above or below the value) and inks it from ONE layout, so the callout planner and the name
+  labels see the stack. Every sheet that prints these callouts prints it — the schematic, the Final
+  schematic, Original + Final and section sheets. A callout with no tolerance draws exactly as
+  before; a blank draft prints none.
 - **Formatting:** labels use `formatDiaWithUnit` (inches: whole numbers print bare, any other value prints 3 decimals — `11"`, `10.990"` — or 4 when it is exactly an odd sixteenth, `10.9375"`, through `LengthFormat.formatInchesDecimal`, on-device ruling: a fraction whose decimal ends in the fourth place prints exactly; mm stays compact 1-decimal),
   the same convention as the footer's "Ø" text — not the old raw 4-decimal formatting.
   **One exception:** the footer's `Thread:` line prints the thread's major Ø through
@@ -837,7 +859,11 @@ hand-drafting convention `|←—— 237 1/2" ——→|` — instead of floatin
   about two and a half value heights, more white than values between the tiers (on-device
   report). Everything else follows from the paint: the planner measures every box and every lift
   off it, so a value too wide for its break at the larger size floats like any other. Its sibling
-  `footerTextScale` sizes the footer block — see `docs/contracts/PdfExport.md`.
+  `footerTextScale` sizes the footer block — see `docs/contracts/PdfExport.md`. Both are the
+  SCHEMATIC group's sizes: the consolidated sheet prints at `runoutDimTextScale` /
+  `runoutFooterTextScale` and the undercut strips at `undercutDimTextScale`, each its own chips
+  (`SheetTextGroup`, swapped in once per composer by `PdfPrefs.forTextGroup` — see
+  `docs/contracts/PdfExport.md`, "Per sheet group").
 - **Every value on a white box (the halo).** On-device ruling: "put a white box behind every
   rail value so a line crossing it never strikes through the numbers — I do that on my hand
   drawings and it is still clear where the line is." Every rail value — OAL included, seated in
@@ -1058,20 +1084,16 @@ the rows inside one). On this sheet:
    same per-job `RunoutConfig` values the Consolidated Output tab exposes, §5.6; the group
    leads because these are the controls the page-strip layout exists to keep judgeable, and
    Shaft height leads it — the control reached for most, on-device direction).
-2. **Thread** (collapsed, `options_thread_expander`) — **Thread slant** (`PdfPrefs.threadSlant`,
-   the thread hatch's lean multiplier, commit on release), **Thread density**
-   (`PdfPrefs.threadDensity`, the fraction of the thread's true crests the hatch draws, commit
-   on release). Only while the drawn spec has a thread of length > 0 (`hasDrawnThreads` —
-   the Final preview reads its own target spec). Header summary: `3× · 50%`.
-3. **Lines & text** (collapsed, `options_lines_expander`) — Line thickness (its live `onDrag`
+2. **Lines & text** (collapsed, `options_lines_expander`) — Line thickness (its live `onDrag`
    channel unchanged), Dimension arrows, Footer / Dimension text size, Fractions. Header
    summary: the line weight.
-4. **"Shade in Components"** (collapsed, `options_shade_expander`; renamed from "Shade in
+3. **"Shade in Components"** (collapsed, `options_shade_expander`; renamed from "Shade in
    PDF") — a new "Explicit bodies only" sub-checkbox sits under its Bodies row — see below.
-5. **"Measurement reference"** (collapsed, `options_measure_ref_expander`).
-6. **Units** (collapsed, `options_units_expander`) LAST — the Dual units switch + layout
-   chips (rarely used options trail, on-device request). Header summary: `Single` /
-   `Dual · <layout>`.
+4. **"Measurement reference"** (collapsed, `options_measure_ref_expander`).
+
+There is no Thread and no Units section (on-device ruling: rarely changed): Thread slant /
+density, the dual-units switch, the dual-unit layout and the units note are Settings → Drawing
+only, still render-input keys of the preview so a Settings change redraws it.
 
 The open/closed state is composition-local (`OptionsExpander(initiallyExpanded)`), so a
 reopened sheet starts from these defaults. The sheet scrolls; its height is capped by
@@ -1239,15 +1261,11 @@ follows the same section list the schematic sheet uses (§5.5): a **Content chip
 Coupling face), then **Shaft** (open: **"Shaft height"**, Body S-break, **liner
 compression** — §5.7, the same per-job `RunoutConfig` values as the tab's own controls),
 **Runout bubbles** (collapsed: the **Bubble size** / **Bubble height** sliders, see below),
-**Thread** (collapsed, only on a threaded shaft: Thread slant, Thread density), **Lines &
-text** (collapsed: Line thickness, Dimension arrows, Footer / Dimension text size, Fractions),
-**Shade in Components**
+**Lines & text** (collapsed: Line thickness, Dimension arrows, Footer / Dimension text size,
+Fractions), **Shade in Components**
 (collapsed, + its "Explicit bodies only" sub-checkbox), **Measurement reference**
-(collapsed) — **Units** (collapsed: Dual units + layout) LAST. This is the fullest instance
-of the shared sheet: every gated row is on. The sheet takes `hasThreads`, which the schematic,
-runout, wear and Output routes pass as `hasDrawnThreads(spec)`; the undercut route passes whether
-its printed strips actually reach a thread (`undercutStripsReachThread`, see
-`contracts/UndercutDrawing.md`). The other three tabs reuse the same sheet with rows
+(collapsed). This is the fullest instance
+of the shared sheet: every gated row is on. The other three tabs reuse the same sheet with rows
 gated off by what their composer actually reads (a section left with nothing is omitted):
 - **Runout** (the classic standalone sheet) keeps the Content chips, Shaft height, Body
   S-break (it draws compression breaks too), Line thickness, Liner & taper compression, and the
@@ -1273,10 +1291,8 @@ gated off by what their composer actually reads (a section left with nothing is 
   default) and, with two or more sections, "Sections to print" (the per-job rows captioned "Saved with this job").
 
 Every instance keeps Lines & text (Line thickness + Fractions ungated — every document here
-prints lengths), Shade in Components and Units (ungated) at their fixed spots in the order;
-the Thread section follows what the sheet draws — the schematic, runout and wear documents
-draw the shaft's threads, so it shows there exactly when the shaft has one; the undercut sheet
-draws a thread only where a strip reaches it, so it shows there only then.
+prints lengths) and Shade in Components (ungated) at their fixed spots in the order. No
+instance carries a Thread or Units section: those controls are Settings → Drawing only.
 
 **Scope legibility** (DESIGN_INTENT §3.3, ruling Q3): a look row on either sheet is a remote
 control for the ONE app-wide `PdfPrefs` value, never a per-page copy, so both sheets carry the

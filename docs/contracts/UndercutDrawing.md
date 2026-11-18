@@ -206,13 +206,9 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   always runs in untransformed canvas space. A double-tap, or the corner "Reset view" button
   (testTag `undercut_detail_reset_view`, shown only while zoomed or panned), animates back to the
   fitted view — the schematic preview's pair (on-device request).
-- The undercut options' **Thread** section shows only while the printed sheet draws a thread:
-  a printed strip's draw range overlapping a thread (`undercutStripsReachThread` over the cut
-  strips, or the started strips when nothing is recorded — a strip at a shaft end draws the end
-  thread, one excluded from the OAL included, so it counts), or the whole-shaft profile on a
-  threaded shaft when there are no strips (on-device request: a shaft whose only thread lies
-  outside every strip showed hatch sliders that tuned nothing). The route passes it as
-  `UndercutOptionsSheet(showThreadControls)` at all three openings (preview, tab, detail page).
+- The undercut options carry no **Thread** and no **Units** section: thread slant / density and
+  the units (dual units, dual-unit layout, units note) are Settings → Drawing only, on every
+  document (on-device ruling: rarely changed). The preview still redraws when one changes there.
 - Cards edit a **local draft** that previews on the canvas and reaches the record only when
   **confirmed**. The previewed draft's notch draws **dashed** in the selection color (`SheetInk.Selection`) —
   provisional, unmistakable against the liner and the settled cuts — and switches to the
@@ -1027,8 +1023,7 @@ data class UndercutRecord(
     simply spans the wider window. **Drawing only**: chain datums, the S.E.T. lead, the overall
     dimension, "S.E.T. to liner start/end" and every value are unchanged (no rail gains a span to the
     thread end); cuts stay clamped to `[0, OAL]` (`clampUndercutSpan`), a free strip's add range and
-    range title are held to the shaft, and `sheetDrawsThread` (`undercutStripsReachThread` over the
-    strips) turns on by itself. A strip short of the end, or a shaft with no thread past it, is
+    range title are held to the shaft. A strip short of the end, or a shaft with no thread past it, is
     byte-identical. No toggle. Pinned by `UndercutEndThreadRangeTest`, `UndercutEndThreadPdfTest`
     (on-device fixture `undercut_end_thread_pacific_warrior.shaft`: hatch left of x(0), every
     printed string the same as without the thread) and `UndercutDetailEndThreadTest`.
@@ -2651,9 +2646,13 @@ relative to the S.E.T.; once a cut runs over a liner edge the drawing no longer 
 
 ### Text size
 
-On-device request. The strips' text follows the app-wide `PdfPrefs.dimTextScale` ("Dimension
-text size", 100 / 125 / 150 / 175% — the schematic's setting, shown on the undercut options as
-`DimTextSizeChips`, tags `undercut_dim_text_scale_<pct>`): `stripText` (rail values through its
+On-device request. The strips' text follows the app-wide `PdfPrefs.undercutDimTextScale`
+("Dimension text size", 100 / 125 / 150 / 175% — the UNDERCUT text group's own setting, apart from
+the schematic's (on-device request: the schematic at one size, the undercut sections larger),
+shown on the undercut options and in Settings → Drawing as `DimTextSizeChips`, tags
+`undercut_dim_text_scale_<pct>`; it starts at the user's previous shared size). The composer swaps
+it into `dimTextScale` once at its entry (`pdfPrefs.forTextGroup(SheetTextGroup.UNDERCUT)`), so the
+fit below starts from it: `stripText` (rail values through its
 derived `dimText`, captions, strip titles) and `diaText` are the base sizes times the scale; rows
 and bands are sized off those paints' metrics. The header, the AFT/FWD row, the notes and the
 footnote keep the base size.

@@ -148,6 +148,7 @@
       <tr><td><span class="ui">Start from AFT</span> / <span class="ui">Start from FWD</span></td><td>Distance from the chosen shaft end to the near edge of the liner.</td></tr>
       <tr><td><span class="ui">Length</span></td><td>Axial length. On a FWD-measured liner, the FWD edge stays put and the liner grows toward AFT.</td></tr>
       <tr><td><span class="ui">Outer Ø</span></td><td>The liner OD (outside diameter).</td></tr>
+      <tr><td><span class="ui">Ø tol +</span> / <span class="ui">Ø tol −</span></td><td>Optional tolerance on the OD: how far over (+) and under (−) the size may be, typed as plain amounts in the drawing's unit (for example <span class="ui">.002</span> and blank). Leave a side blank for zero. It prints after the OD callout, stacked: <span class="ui">Ø 9.000″</span> then <span class="ui">+.002</span> over <span class="ui">-.000</span>.</td></tr>
       <tr><td><span class="ui">Shoulders</span> section</td><td>Optional stepped ends; see below. Hidden unless switched on in Settings.</td></tr>
     </tbody>
   </table>
@@ -176,6 +177,7 @@
     <li>The liner outline over the shaft, with any shoulders stepped in.</li>
     <li>Two dimensions above the shaft: the distance from the nearer S.E.T. to the liner's near edge (left out when the liner sits right on the S.E.T.), and the liner length. Which S.E.T. is used follows <span class="path">Settings → PDF Export Options → Measurement reference</span>, not the liner's own Measure From chip.</li>
     <li>An OD callout below the shaft (on by default; see <a href="#components-drawing-toggles">Show Ø on drawing</a>).</li>
+    <li>When the liner has a tolerance, its two limits after the OD callout, in smaller text, the upper over the lower. A whole-inch OD then prints with three decimals (<span class="ui">Ø 9.000″</span>). A liner beside a body of the same Ø shares one callout only when their tolerances match.</li>
     <li>For a shoulder with a radius: one footer line per liner, “Liner shoulder R: &lt;radius&gt;” (“AFT r, FWD r” when the two ends differ). A sharp corner prints nothing.</li>
   </ul>
   <aside class="shop"><p>On a long shaft a liner may be drawn shorter than scale so the sheet fits the page; the dimension still gives the true length. The shoulder step is drawn to scale but its length and reduced Ø are not dimensioned on the sheet; only the edge radius prints, in the footer.</p></aside>
@@ -192,6 +194,7 @@
       <tr><td><span class="ui">Start from AFT</span> / <span class="ui">Start from FWD</span></td><td>Distance from the chosen shaft end to the near edge of the body.</td></tr>
       <tr><td><span class="ui">Length</span></td><td>Axial length. On a FWD-measured body, the FWD edge stays put and the body grows toward AFT.</td></tr>
       <tr><td><span class="ui">Diameter</span></td><td>The body diameter.</td></tr>
+      <tr><td><span class="ui">Ø tol +</span> / <span class="ui">Ø tol −</span></td><td>Optional tolerance on the diameter, entered and printed like a liner's (see <a href="#components-liners">Liner fields</a>). It prints only where the body's Ø callout does, so turn on <span class="ui">Show Ø on drawing</span> too. Bare shaft has no tolerance.</td></tr>
       <tr><td><span class="ui">Component blend</span></td><td>Square or Blend at each end; see below.</td></tr>
       <tr><td><span class="ui">Fiberglass wrap</span></td><td>The section is wrapped in fiberglass. Ticking it also turns on a seal area at each end; see below.</td></tr>
       <tr><td><span class="ui">Seal areas</span></td><td>Grooved fiberglass seat areas at either end; see below.</td></tr>

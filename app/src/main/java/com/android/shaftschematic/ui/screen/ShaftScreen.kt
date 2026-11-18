@@ -269,7 +269,8 @@ fun ShaftScreen(
                 blendAftSeal: Boolean, blendFwdSeal: Boolean,
                 blendAftSealLenMm: Float, blendFwdSealLenMm: Float,
                 blendAftToLinerOd: Boolean, blendFwdToLinerOd: Boolean,
-                blendAngles: BlendAngleDraft, fiberglass: Boolean) -> Unit,
+                blendAngles: BlendAngleDraft, fiberglass: Boolean,
+                diaTol: DiaToleranceDraft) -> Unit,
     /** "Explicit body" on an auto card: a body on exactly that section, carrying its face choices. */
     onPromoteAutoBody: (startMm: Float, lengthMm: Float, diaMm: Float) -> Unit,
     onSetAutoSectionDia: (spanStartMm: Float, spanEndMm: Float, diaMm: Float) -> Unit,
@@ -288,13 +289,14 @@ fun ShaftScreen(
     onAddThread: (startMm: Float, lengthMm: Float, majorDiaMm: Float, pitchMm: Float, excludeFromOAL: Boolean,
                   isAftEnd: Boolean, metricDesignation: String?,
                   reliefLenMm: Float, reliefDiaMm: Float, reliefAtAft: Boolean) -> Unit,
-    onAddLiner: (Float, Float, Float, LinerAuthoredReference, LinerShoulderDraft) -> Unit,
+    onAddLiner: (Float, Float, Float, LinerAuthoredReference, LinerShoulderDraft, DiaToleranceDraft) -> Unit,
     onAddCouplerBoltSlot: (startMm: Float, holeDiaMm: Float, count: Int, spacingMm: Float, through: Boolean, depthMm: Float, reference: SlotAuthoredReference, holeStyle: BoltHoleStyle, clocking: BoltHoleClocking) -> Unit,
 
     // Updates (all mm)
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     onUpdateBodyReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateBodyShowDia: (Int, Boolean) -> Unit,
+    onUpdateBodyDiaTol: (Int, Float, Float) -> Unit = { _, _, _ -> },
     onUpdateBodyShowLabel: (Int, Boolean) -> Unit,
     onUpdateBodyShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateBodyCompressOnDrawing: (Int, Boolean) -> Unit,
@@ -315,6 +317,7 @@ fun ShaftScreen(
     onUpdateThreadShowLabel: (Int, Boolean) -> Unit,
     onUpdateLiner: (Int, Float, Float, Float) -> Unit,
     onUpdateLinerShowDia: (Int, Boolean) -> Unit,
+    onUpdateLinerDiaTol: (Int, Float, Float) -> Unit = { _, _, _ -> },
     onUpdateLinerShowLabel: (Int, Boolean) -> Unit,
     onUpdateLinerShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateLinerShoulder: (Int, LinerAuthoredReference, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
@@ -775,6 +778,7 @@ fun ShaftScreen(
                 onUpdateBody = onUpdateBody,
                 onUpdateBodyReference = onUpdateBodyReference,
                 onUpdateBodyShowDia = onUpdateBodyShowDia,
+                onUpdateBodyDiaTol = onUpdateBodyDiaTol,
                 onUpdateBodyShowLabel = onUpdateBodyShowLabel,
                 onUpdateBodyShade = onUpdateBodyShade,
                 onUpdateBodyCompressOnDrawing = onUpdateBodyCompressOnDrawing,
@@ -795,6 +799,7 @@ fun ShaftScreen(
                 onUpdateThreadShowLabel = onUpdateThreadShowLabel,
                 onUpdateLiner = onUpdateLiner,
                 onUpdateLinerShowDia = onUpdateLinerShowDia,
+                onUpdateLinerDiaTol = onUpdateLinerDiaTol,
                 onUpdateLinerShowLabel = onUpdateLinerShowLabel,
                 onUpdateLinerShade = onUpdateLinerShade,
                 onUpdateLinerShoulder = onUpdateLinerShoulder,
@@ -931,9 +936,9 @@ fun ShaftScreen(
                     initialLengthMm = addLengthMm,
                     perComponentUnitsEnabled = perComponentUnitsEnabled,
                     dialogUnitConverterEnabled = dialogUnitConverterEnabled,
-                    onSubmit = { s, l, d, ref, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, k180, k90, cw90, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd, bAngles, bFiberglass ->
+                    onSubmit = { s, l, d, ref, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, k180, k90, cw90, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd, bAngles, bFiberglass, diaTol ->
                         addBodyOpen = false
-                        onAddBody(s, l, d, ref, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd, bAngles, bFiberglass)
+                        onAddBody(s, l, d, ref, kwW, kwD, kwL, kwO, kwEnd, kwSpooned, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd, bAngles, bFiberglass, diaTol)
                         onSetKeyways180Apart(k180)
                         onSetKeyways90Apart(k90)
                         if (k90) onSetKeyways90Cw(cw90)
@@ -950,9 +955,9 @@ fun ShaftScreen(
                     initialLengthMm = addLengthMm,
                     linerShouldersEnabled = linerShouldersEnabled,
                     dialogUnitConverterEnabled = dialogUnitConverterEnabled,
-                    onSubmit = { s, l, od, ref, shoulders ->
+                    onSubmit = { s, l, od, ref, shoulders, diaTol ->
                         addLinerOpen = false
-                        onAddLiner(s, l, od, ref, shoulders)
+                        onAddLiner(s, l, od, ref, shoulders, diaTol)
                     },
                     onCancel = { addLinerOpen = false }
                 )

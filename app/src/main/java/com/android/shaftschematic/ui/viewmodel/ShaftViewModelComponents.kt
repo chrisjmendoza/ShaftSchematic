@@ -118,6 +118,9 @@ fun ShaftViewModel.addBodyAt(
     blendFwdRadiusMm: Float = 0f,
     /** Whether the body is wrapped in fiberglass (`AddBodyDialog`'s Fiberglass box). */
     fiberglass: Boolean = false,
+    /** The Ø tolerance's upper and lower deviations (mm magnitudes, stored verbatim; 0 = none). */
+    diaTolPlusMm: Float = 0f,
+    diaTolMinusMm: Float = 0f,
     /**
      * A PROMOTION ("Explicit body" on an auto card): the body takes every face choice of the
      * bare-shaft section it is created on — blends, Angle entries, liner targets, seal areas and
@@ -170,6 +173,8 @@ fun ShaftViewModel.addBodyAt(
                     // Promoting a wrapped bare-shaft section keeps it wrapped, the Ø-callout carry.
                     fiberglass = fiberglass ||
                         s.autoSectionFiberglassOn(startMm, startMm + max(0f, lengthMm)),
+                    diaTolPlusMm = max(0f, diaTolPlusMm),
+                    diaTolMinusMm = max(0f, diaTolMinusMm),
                 ).let { b -> sectionFaces?.let { (aft, fwd) -> b.withAutoSectionFaces(aft, fwd) } ?: b }
             ) + s.bodies
         ).withAutoDiaOverridesSurviving(before = s)
@@ -804,6 +809,9 @@ fun ShaftViewModel.addLinerAt(
     shoulderFwdLenMm: Float = 0f,
     shoulderFwdOdMm: Float = 0f,
     shoulderFwdRadiusMm: Float = 0f,
+    /** The OD tolerance's upper and lower deviations (mm magnitudes, stored verbatim; 0 = none). */
+    diaTolPlusMm: Float = 0f,
+    diaTolMinusMm: Float = 0f,
     target: SpecTarget = SpecTarget.ORIGINAL,
 ) {
     val id = newId()
@@ -824,6 +832,8 @@ fun ShaftViewModel.addLinerAt(
             shoulderFwdLenMm = shoulderFwdLenMm,
             shoulderFwdOdMm = shoulderFwdOdMm,
             shoulderFwdRadiusMm = shoulderFwdRadiusMm,
+            diaTolPlusMm = max(0f, diaTolPlusMm),
+            diaTolMinusMm = max(0f, diaTolMinusMm),
         )
         split.spec.copy(liners = listOf(liner) + split.spec.liners)
             .withAutoDiaOverridesSurviving(before = s)
@@ -1254,6 +1264,38 @@ fun ShaftViewModel.updateLinerShowDia(
         copyField = { old, v -> old.copy(showDiaOnDrawing = v) },
         withList = { s.copy(liners = it) },
     )
+}
+
+/**
+ * The liner OD's tolerance — upper and lower deviations as typed magnitudes in mm, stored
+ * verbatim (golden rule); 0 on a side = none. Prints as a stacked tolerance on the Ø callout.
+ * One edit, one undo step; a write that changes nothing is a no-op.
+ */
+fun ShaftViewModel.updateLinerDiaTolerance(
+    index: Int,
+    plusMm: Float,
+    minusMm: Float,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
+    if (index !in s.liners.indices) s else {
+        val old = s.liners[index]
+        val new = old.copy(diaTolPlusMm = max(0f, plusMm), diaTolMinusMm = max(0f, minusMm))
+        if (new == old) s else s.copy(liners = s.liners.toMutableList().also { l -> l[index] = new })
+    }
+}
+
+/** Body mirror of [updateLinerDiaTolerance], for an explicit body's Ø. */
+fun ShaftViewModel.updateBodyDiaTolerance(
+    index: Int,
+    plusMm: Float,
+    minusMm: Float,
+    target: SpecTarget = SpecTarget.ORIGINAL,
+) = updateSpec(target) { s ->
+    if (index !in s.bodies.indices) s else {
+        val old = s.bodies[index]
+        val new = old.copy(diaTolPlusMm = max(0f, plusMm), diaTolMinusMm = max(0f, minusMm))
+        if (new == old) s else s.copy(bodies = s.bodies.toMutableList().also { l -> l[index] = new })
+    }
 }
 
 /**

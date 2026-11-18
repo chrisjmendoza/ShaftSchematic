@@ -223,7 +223,7 @@ class BlendAngleUiTest {
                 AddBodyDialog(
                     unit = UnitSystem.MILLIMETERS,
                     spec = ShaftSpec(overallLengthMm = 1000f),
-                    onSubmit = { _, _, _, _, _, _, _, _, _, _, _, _, _, _, bAft, _, _, _, _, _, _, _, _, angles, _ ->
+                    onSubmit = { _, _, _, _, _, _, _, _, _, _, _, _, _, _, bAft, _, _, _, _, _, _, _, _, angles, _, _ ->
                         submitted = angles
                         submittedLen = bAft
                     },

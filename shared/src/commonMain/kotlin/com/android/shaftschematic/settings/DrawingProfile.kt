@@ -98,6 +98,15 @@ data class DrawingProfile(
     val wearJoinGapMaxMm: Float = SHIPPED_PDF_PREFS.wearJoinGapMaxMm,
     val footerTextScale: Float = SHIPPED_PDF_PREFS.footerTextScale,
     val dimTextScale: Float = SHIPPED_PDF_PREFS.dimTextScale,
+    /**
+     * The runout / consolidated and undercut groups' text sizes (`PdfPrefs.forTextGroup`). Null in
+     * a profile saved before the groups existed, which then loads them from its OWN
+     * [dimTextScale] / [footerTextScale] — that profile drew every sheet at those sizes, and a
+     * shipped-value default here would restyle its runout and undercut sheets on apply.
+     */
+    val runoutDimTextScale: Float? = null,
+    val runoutFooterTextScale: Float? = null,
+    val undercutDimTextScale: Float? = null,
     val lineThicknessScale: Float = DRAWING_LINE_THICKNESS_DEFAULT,
 ) {
     /**
@@ -144,6 +153,9 @@ data class DrawingProfile(
         wearJoinGapMaxMm = wearJoinGapMaxMm,
         footerTextScale = footerTextScale,
         dimTextScale = dimTextScale,
+        runoutDimTextScale = runoutDimTextScale ?: dimTextScale,
+        runoutFooterTextScale = runoutFooterTextScale ?: footerTextScale,
+        undercutDimTextScale = undercutDimTextScale ?: dimTextScale,
     ).clamped()
 
     /** Line thickness inside the settable range — [toPdfPrefs]'s clamp for the one field outside it. */
@@ -189,6 +201,9 @@ data class DrawingProfile(
             wearJoinGapMaxMm = prefs.wearJoinGapMaxMm,
             footerTextScale = prefs.footerTextScale,
             dimTextScale = prefs.dimTextScale,
+            runoutDimTextScale = prefs.runoutDimTextScale,
+            runoutFooterTextScale = prefs.runoutFooterTextScale,
+            undercutDimTextScale = prefs.undercutDimTextScale,
             lineThicknessScale = lineThicknessScale
                 .coerceIn(DRAWING_LINE_THICKNESS_MIN, DRAWING_LINE_THICKNESS_MAX),
         )

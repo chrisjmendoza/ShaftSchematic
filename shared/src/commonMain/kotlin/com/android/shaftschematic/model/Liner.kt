@@ -43,6 +43,13 @@ enum class LinerAuthoredReference { AFT, FWD }
  * (golden rule). The radius is the fillet where the shoulder's step face meets the liner OD —
  * picked from a standard list, drawn as a small arc, and printed only as a footer note.
  * All fields default 0 so documents that never touch shoulders decode byte-identical.
+ *
+ * @property diaTolPlusMm The OD's upper deviation, a MAGNITUDE in canonical mm, stored verbatim
+ *   (0 = none). With [diaTolMinusMm] it prints as a stacked tolerance after the Ø callout value
+ *   (`Ø 9.000"` then `+.002` over `-.000` — on-device request). A tolerance exists when either
+ *   side is > 0 ([hasDiaTolerance]). Print-only: nothing in geometry, resolve, OAL or collision
+ *   reads it.
+ * @property diaTolMinusMm The OD's lower deviation, a magnitude in canonical mm (0 = none).
  */
 @Serializable
 @OptIn(ExperimentalSerializationApi::class)
@@ -67,7 +74,12 @@ data class Liner(
     val shoulderFwdLenMm: Float = 0f,
     val shoulderFwdOdMm: Float = 0f,
     val shoulderFwdRadiusMm: Float = 0f,
+    val diaTolPlusMm: Float = 0f,
+    val diaTolMinusMm: Float = 0f,
 ) : Segment
+
+/** True when this liner's OD carries a tolerance (either side > 0). */
+val Liner.hasDiaTolerance: Boolean get() = diaTolPlusMm > 0f || diaTolMinusMm > 0f
 
 /** One end's shoulder, or null when that end has none (needs BOTH length and OD > 0). */
 data class LinerShoulder(val lenMm: Float, val odMm: Float, val radiusMm: Float)

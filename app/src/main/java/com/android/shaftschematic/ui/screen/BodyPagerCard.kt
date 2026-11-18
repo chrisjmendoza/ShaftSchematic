@@ -71,7 +71,7 @@ import com.android.shaftschematic.ui.theme.strongChipLabel
  * "Explicit body" checkbox that promotes it; an explicit body shows the "Measure From: AFT | FWD"
  * chips (the liner card's row — the Start field shows and accepts the distance from the chosen
  * end, a switch never moves the body, and a FWD body keeps its FWD distance through an OAL change),
- * the editable Start/Length/Ø, the component blends and seal areas, and the keyway
+ * the editable Start/Length/Ø with the Ø tolerance row under it, the component blends and seal areas, and the keyway
  * section. That section is gated by the shared "Keyway" checkbox ([KeywayGateRow]), seeded open
  * whenever any of W/D/L is typed; unticking it with values present confirms through
  * [RemoveKeywayConfirmDialog] before clearing them. Inside the gate: KW from AFT | FWD, the keyway
@@ -115,6 +115,8 @@ internal fun BodyPagerCard(
     /** Sets an explicit body's "Measure From" reference — never moves its stored start. */
     onUpdateBodyReference: (Int, LinerAuthoredReference) -> Unit,
     onUpdateBodyShowDia: (Int, Boolean) -> Unit,
+    /** An explicit body's Ø tolerance: upper and lower deviations, mm magnitudes. */
+    onUpdateBodyDiaTol: (Int, Float, Float) -> Unit = { _, _, _ -> },
     onUpdateBodyShowLabel: (Int, Boolean) -> Unit,
     onUpdateBodyShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateBodyCompressOnDrawing: (Int, Boolean) -> Unit,
@@ -590,6 +592,20 @@ internal fun BodyPagerCard(
         ) { s ->
             toMmOrNull(s, unit)?.let { onUpdateBody(idx, b.startFromAftMm, b.lengthMm, it) }
         }
+        DiaToleranceRow(
+            plus = { m ->
+                CommitNum(
+                    diaTolPlusLabel(unit), diaTolFieldText(b.diaTolPlusMm, unit),
+                    modifier = m.testTag("body_dia_tol_plus"), parseValid = ::isDiaTolText,
+                ) { s -> diaTolMmOrNull(s, unit)?.let { onUpdateBodyDiaTol(idx, it, b.diaTolMinusMm) } }
+            },
+            minus = { m ->
+                CommitNum(
+                    diaTolMinusLabel(unit), diaTolFieldText(b.diaTolMinusMm, unit),
+                    modifier = m.testTag("body_dia_tol_minus"), parseValid = ::isDiaTolText,
+                ) { s -> diaTolMmOrNull(s, unit)?.let { onUpdateBodyDiaTol(idx, b.diaTolPlusMm, it) } }
+            },
+        )
         ShowDiaToggleRow(
             label = "Show Ø on drawing",
             checked = b.showDiaOnDrawing,

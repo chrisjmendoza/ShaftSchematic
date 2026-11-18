@@ -907,12 +907,12 @@ on-device report: a wrapped caption centred on its rail overprinted both. Drawn 
 `drawUndercutStripRails`; the From-S.E.T. cut rails carry none. Do not
 build a second rail type for it. See `docs/contracts/UndercutDrawing.md` (Liner ends from the S.E.T.).
 
-**The undercut sheet's strips follow "Dimension text size"** (`PdfPrefs.dimTextScale`, on-device
-request; `DimTextSizeChips` on its options — the schematic's own knob, not a second pref): rail
-values, captions, Ø values and strip titles scale, the header / AFT-FWD row / notes do not, and the
-size is fitted down ONCE per sheet by `fittedUndercutTextScale` (largest step leaving the shortest
-shaft ≥ `UC_TEXT_FIT_MIN_SHAFT_PT`, read off dry passes of the ONE `drawUndercutSheet`) — never
-per strip. 100% is byte-identical.
+**The undercut sheet's strips follow ITS OWN "Dimension text size"** (`PdfPrefs.undercutDimTextScale`,
+the UNDERCUT text group — see "Text size per sheet group" below; on-device request; `DimTextSizeChips`
+on its options and in Settings → Drawing): rail values, captions, Ø values and strip titles scale,
+the header / AFT-FWD row / notes do not, and the size is fitted down ONCE per sheet by
+`fittedUndercutTextScale` (largest step leaving the shortest shaft ≥ `UC_TEXT_FIT_MIN_SHAFT_PT`, read
+off dry passes of the ONE `drawUndercutSheet`) — never per strip. 100% is byte-identical.
 
 **Body blends draw on the undercut detail strips** (on-device request: a body's 45° blend up to
 an undercut liner drew as a square corner): a blended body face draws its ramp at its TRUE mm
@@ -1473,6 +1473,20 @@ per-job `RunoutConfig` pair (a FIT, not a look), theme/preview/undercut styling,
 "Restore Drawing defaults" resets exactly the captured set, so a profile can always be undone.
 Enums are stored by NAME through the tolerant `fromName` helpers; every payload field is
 defaulted — profiles from older builds must keep loading.
+**Text size per sheet group** (on-device request: the schematic at one size, the undercut sections
+larger): the sheet text sizes are three app-wide groups, `SheetTextGroup` — SCHEMATIC (the
+schematic, every Final sheet — the Final tab's two runout-composer sheets included, through
+`composeRunoutPdf(textGroup = SCHEMATIC)` — and the section sheets) reads `dimTextScale` /
+`footerTextScale`, whose names and keys are kept; RUNOUT (classic runout, consolidated) reads
+`runoutDimTextScale` / `runoutFooterTextScale`; UNDERCUT (the strips) reads `undercutDimTextScale`.
+The wear sheet reads none. ONE remap, `PdfPrefs.forTextGroup`, applied once at the entry of
+`composeRunoutPdfOnCanvas` and `composeUndercutPdfOnCanvas`, so everything downstream reads
+`dimTextScale` / `footerTextScale` as the group's; the schematic composer is never remapped. Each
+group STARTS at the old shared value: `SettingsStore` reads a missing group key as the schematic
+key (`groupTextScale`), and a schematic write first freezes every unset group key at the
+schematic's old value in the same edit (`freezeTextGroupKeys`); a profile saved before the groups
+loads them from its own shared sizes (null fields in `DrawingProfile`). Each options panel's chips
+write their own group and say which sheets they change; Settings → Drawing shows all three.
 The same rule governs the PDF options sheets (ruling 2026-09-02, `docs/DESIGN_INTENT.md`
 §3.3 Q3): a look control on a document's sheet is a **remote control for the one shared
 `PdfPrefs` value** — there is **no per-document override slot for a look pref and none is
@@ -1481,7 +1495,11 @@ the per-job envelope case by case, the trace-depth precedent (`WearRecord.traceD
 `PdfPrefs.wearTraceDepthFrac`, with "Save as default" back). Legibility is part of the contract:
 both sheets carry the shared `OptionsScopeNote` caption ("app-wide") and every per-job control's
 caption ends "Saved with this job" — a new sheet control must land in one of those two classes
-and say so.
+and say so. Not every look pref is on the sheets: the thread hatch (`threadSlant`/`threadDensity`)
+and the units (the document's dual-units switch — Settings → Drawing "Dual-unit display" — the
+"Dual-unit layout" and the "Units note on sheets") live in Settings → Drawing ONLY, with no
+Thread or Units section on any PDF options panel (on-device ruling: rarely changed). The previews
+still take them as re-render keys, so a Settings change redraws an open preview.
 
 ### A keyway's WIDTH rides the diameter scale, its LENGTH the axial map
 A sheet carries two scales: `diaPtPerMm` (the drawn shaft height, what the "Shaft height" slider
@@ -1554,6 +1572,25 @@ through it; a repaired section's body Ø beside the taper overprinted its neighb
 Angle-mode blend callouts (Body blends, above) ride this same list.
 PDF-only — no on-screen canvas equivalent (the editor preview draws rails, never callouts), so no
 draw-both-sites rule applies.
+
+**A liner OD and an explicit body Ø may carry a TOLERANCE** (on-device request: a 9" liner at
++.002 / −.000 on the Final drawing). `Liner`/`Body.diaTolPlusMm` / `diaTolMinusMm` — the upper and
+lower deviations as typed MAGNITUDES in mm, stored verbatim, 0 = none, additive/defaulted — are
+value entry, so under add-dialog parity: ONE `DiaToleranceRow` (`ui/screen/DiaToleranceRow.kt`,
+"Ø tol +" / "Ø tol −", blank = 0) under the Ø on the liner card, the explicit-body card,
+`AddLinerDialog` and `AddBodyDialog` (never the auto-body card), on the Schematic and Final tabs
+alike through the target-routed card callbacks. It prints only on the Ø callout, as the drafting
+stack: the value, then the two limits in 0.65× text, upper over lower, left-aligned, centred on the
+value's digits — formatted by the ONE `formatDiaTolerance` (`pdf/UnitFormat.kt`, the callout's own
+unit, primary only under dual): inches `+.002` / `-.000` (no leading zero, 3 places, 4 when either
+limit needs it, `+1.250` keeps its integer), mm `+0.05` / `0` (shared compact places, a zero side a
+bare `0`); a whole inch value then prints at the limits' places (`Ø 9.000"`,
+`formatTolerancedDiaWithUnit`). `DiaCallout.tolerance` carries it; `DiameterLeaderRenderer` sizes
+the label, its `occupancy` box and the ink from ONE `TolLayout`, so the planners see the stack. The
+tolerance is part of the grouping key (same Ø, different tolerance = two callouts), and
+`joinSharedOdCallouts` joins a liner and a body only when their tolerances agree. Split fragments
+keep it, a merge takes the AFT one's (`carryBodyDisplay`); `bodyForPdf` carries it to every run. A
+callout without one draws byte-identically; a blank draft prints none.
 
 **The band they share is as tall as they need** (full-page schematic): the room under the shaft is
 measured from both planners at the requested sizes (`belowShaftBandNeedPt`), never under the
@@ -1805,7 +1842,7 @@ directly. An override whose id no longer resolves is **skipped at the render lay
 pruned** — the runout-reading/wear-pit posture.
 
 Dual values are SET in one of two layouts — `PdfPrefs.dualUnitLayout`, Settings → Drawing →
-"Dual-unit layout" and both PDF options sheets. **INLINE** (the default) is
+"Dual-unit layout" (and the editor's Preview options), never a PDF options panel. **INLINE** (the default) is
 `<primary> [<secondary>]` on one line; **STACKED** is the primary over the secondary. Either way
 **both terms always carry their unit suffix** — the moment a sheet mixes units, a bare number is
 how a shaft gets machined wrong — and the SECONDARY always takes the compact format (mm to one

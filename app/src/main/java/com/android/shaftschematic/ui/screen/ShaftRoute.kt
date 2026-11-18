@@ -83,6 +83,8 @@ import com.android.shaftschematic.ui.viewmodel.updateLiner
 import com.android.shaftschematic.ui.viewmodel.updateLinerAuthoredReference
 import com.android.shaftschematic.ui.viewmodel.updateLinerLabel
 import com.android.shaftschematic.ui.viewmodel.updateLinerShoulder
+import com.android.shaftschematic.ui.viewmodel.updateLinerDiaTolerance
+import com.android.shaftschematic.ui.viewmodel.updateBodyDiaTolerance
 import com.android.shaftschematic.ui.viewmodel.updateLinerShowDia
 import com.android.shaftschematic.ui.viewmodel.updateLinerShade
 import com.android.shaftschematic.ui.viewmodel.updateLinerShowLabel
@@ -430,7 +432,7 @@ fun ShaftRoute(
         onSetEndHoles = { end, holes -> vm.setEndHoles(end, holes, target) },
         onSelectComponentById = vm::selectComponentById,
 
-        onAddBody   = { s, l, d, ref, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd, bAngles, bFiberglass ->
+        onAddBody   = { s, l, d, ref, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd, bAngles, bFiberglass, diaTol ->
             vm.addBodyAt(
                 s, l, d, ref, kwW, kwD, kwL, kwO, kwEnd, kwSp, kwUnit, bAft, bFwd, bProf, bSAft, bSFwd, bSAftLen, bSFwdLen, bOdAft, bOdFwd,
                 blendAftAngleDeg = bAngles.aftAngleDeg,
@@ -438,6 +440,8 @@ fun ShaftRoute(
                 blendAftRadiusMm = bAngles.aftRadiusMm,
                 blendFwdRadiusMm = bAngles.fwdRadiusMm,
                 fiberglass = bFiberglass,
+                diaTolPlusMm = diaTol.plusMm,
+                diaTolMinusMm = diaTol.minusMm,
                 target = target,
             )
         },
@@ -458,7 +462,7 @@ fun ShaftRoute(
                 reliefLenMm = rLen, reliefDiaMm = rDia, reliefAtAft = rAft, target = target,
             )
         },
-        onAddLiner  = { s, l, od, ref, shoulders -> vm.addLinerAt(
+        onAddLiner  = { s, l, od, ref, shoulders, diaTol -> vm.addLinerAt(
             s, l, od, ref,
             shoulderAftLenMm = shoulders.aft?.lenMm ?: 0f,
             shoulderAftOdMm = shoulders.aft?.odMm ?: 0f,
@@ -466,6 +470,8 @@ fun ShaftRoute(
             shoulderFwdLenMm = shoulders.fwd?.lenMm ?: 0f,
             shoulderFwdOdMm = shoulders.fwd?.odMm ?: 0f,
             shoulderFwdRadiusMm = shoulders.fwd?.radiusMm ?: 0f,
+            diaTolPlusMm = diaTol.plusMm,
+            diaTolMinusMm = diaTol.minusMm,
             target = target,
         ) },
         onAddCouplerBoltSlot = { s, dia, cnt, sp, thru, dep, ref, style, clocking -> vm.addCouplerBoltSlotAt(s, dia, cnt, sp, thru, dep, ref, style, clocking, target) },
@@ -473,6 +479,7 @@ fun ShaftRoute(
         onUpdateBody   = { i, s, l, d      -> vm.updateBody(i, s, l, d, target) },
         onUpdateBodyReference = { i, ref  -> vm.updateBodyAuthoredReference(i, ref, target) },
         onUpdateBodyShowDia = { i, show    -> vm.updateBodyShowDia(i, show, target) },
+        onUpdateBodyDiaTol = { i, plus, minus -> vm.updateBodyDiaTolerance(i, plus, minus, target) },
         onUpdateBodyShowLabel = { i, show  -> vm.updateBodyShowLabel(i, show, target) },
         onUpdateBodyShade = { i, shade -> vm.updateBodyShade(i, shade, target) },
         onUpdateBodyCompressOnDrawing = { i, on -> vm.updateBodyCompressOnDrawing(i, on, target) },
@@ -493,6 +500,7 @@ fun ShaftRoute(
         onUpdateThreadShowLabel = { i, show -> vm.updateThreadShowLabel(i, show, target) },
         onUpdateLiner  = { i, s, l, od     -> vm.updateLiner(i, s, l, od, target) },
         onUpdateLinerShowDia = { i, show   -> vm.updateLinerShowDia(i, show, target) },
+        onUpdateLinerDiaTol = { i, plus, minus -> vm.updateLinerDiaTolerance(i, plus, minus, target) },
         onUpdateLinerShowLabel = { i, show -> vm.updateLinerShowLabel(i, show, target) },
         onUpdateLinerShade = { i, shade -> vm.updateLinerShade(i, shade, target) },
         onUpdateLinerShoulder = { i, end, len, od, r -> vm.updateLinerShoulder(i, end, len, od, r, target) },

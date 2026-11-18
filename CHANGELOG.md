@@ -8,6 +8,43 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-18
 
+### feat(pdf): text size per sheet group
+
+The footer and dimension text sizes are now set separately for three groups of sheets (on-device
+request: the schematic at one size, the undercut sections generally larger): the schematic, Final
+and section sheets; the runout and consolidated sheets; and the undercut sheet (dimension text only —
+it has no footer). Each PDF options panel's size chips change only its own group and say which
+sheets they change, and Settings → Drawing shows all three, each labelled. Every group starts at the
+size you already had, so nothing prints differently until you adjust one, and changing one group
+never moves another. Drawing profiles save all three — a profile saved before this loads each group
+at its own old size — and "Restore Drawing defaults" puts all three back to 100%.
+
+### feat(schematic): a diameter tolerance on liners and bodies, printed on the Ø callout
+
+A liner's outer Ø and an explicit body's Ø can now carry a tolerance — for example a 9" liner at
++.002 / −.000 (on-device request, mainly for the Final drawing). Type it in the new "Ø tol +" and
+"Ø tol −" fields under the Ø, on the card or in the Add Liner / Add Body dialog, on the Schematic
+and Final tabs alike; leave a side blank for zero. Wherever that Ø callout prints, the value is
+followed by the two limits stacked in smaller text, upper over lower: `Ø 9.000"` then `+.002` over
+`-.000` (inches with no leading zero; millimetres as `+0.05` over `0`). A whole-inch value prints
+at the limits' decimals (`9.000"`, not `9"`). Bare-shaft sections have no tolerance.
+
+- `Liner`/`Body.diaTolPlusMm` / `diaTolMinusMm` (mm magnitudes, verbatim, default 0 — older
+  documents open unchanged); ONE `DiaToleranceRow` on both cards and both Add dialogs (parity).
+- ONE formatter `formatDiaTolerance`; `DiaCallout.tolerance`; `DiameterLeaderRenderer` sizes,
+  reserves (`occupancy`) and inks the stack from one layout. Same Ø with different tolerances
+  prints two callouts; a liner and a touching body join only when their tolerances agree. Split
+  fragments keep the tolerance, a merge takes the AFT one's. Callouts with no tolerance print
+  exactly as before.
+
+### chore(pdf): thread and units options move to Settings only
+
+The PDF options panels no longer have a Thread section or a Units section (on-device ruling:
+they are rarely changed, so they don't need to sit on every preview). Thread slant, thread
+density, the dual-unit layout and the units note are in Settings → Drawing, as before, and dual
+units for the open document is switched with Settings → Drawing → "Dual-unit display". Changing
+any of them in Settings still redraws an open preview. Nothing prints differently.
+
 ### feat(pdf): seal areas draw as thin grey lines, and are a toggle on every printed sheet
 
 Seal-area grooves now draw as thin solid grey lines instead of dashed black ones, on every sheet

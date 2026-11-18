@@ -282,7 +282,7 @@ class UndercutPortraitRenderTest {
         render("four_strips_portrait_from_set.png", fourSpec, fourProject, fourRecord.copy(railStyle = fromSet))
         // "Dimension text size" on the undercut strips, at its steps, on the busiest pages.
         for (pct in listOf(125, 150, 175)) {
-            val big = PdfPrefs(dimTextScale = pct / 100f)
+            val big = PdfPrefs(undercutDimTextScale = pct / 100f)
             render("polar_portrait_from_set_text$pct.png", polar.spec, polarProject, polarTwoSections.copy(railStyle = fromSet), pdfPrefs = big)
             render("four_strips_portrait_from_set_text$pct.png", fourSpec, fourProject, fourRecord.copy(railStyle = fromSet), pdfPrefs = big)
             render("polar_portrait_text$pct.png", polar.spec, polarProject, polarTwoSections, pdfPrefs = big)
@@ -369,7 +369,7 @@ class UndercutPortraitRenderTest {
         )
         render(
             "stack_three_landscape_busy_text150.png", fourSpec, fourProject, busyThree,
-            pdfPrefs = PdfPrefs(dimTextScale = 1.5f),
+            pdfPrefs = PdfPrefs(undercutDimTextScale = 1.5f),
         )
         // The blank write-in template on a landscape page: its started liner strips follow the same rule.
         render(

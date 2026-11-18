@@ -1,4 +1,4 @@
-# AddComponentDialogs Contract (v1.17, 2026-10-29)
+# AddComponentDialogs Contract (v1.18, 2026-11-18)
 
 ## Purpose
 Composable dialogs for adding new components: `AddBodyDialog`, `AddLinerDialog`,
@@ -226,6 +226,7 @@ still authored in inches on an inch document. That asymmetry is a known follow-u
 | Start from AFT / FWD | Always (label follows chip). Independent AFT/FWD seeds, as in `AddLinerDialog`; submits the PHYSICAL start (`addDialogPhysStartMm`). A FWD start that would reach past the AFT face shows `ADD_PAST_AFT_END_MSG` and holds Add — refused, never clamped |
 | Length | Always |
 | Diameter | Always — labelled "Diameter (unit)" on the dialog AND on both body cards (auto and explicit); the cards once said a bare "Ø (unit)", which a new user has nothing to read against |
+| Ø tol + / Ø tol − | Always, side by side directly under Diameter — the ONE `DiaToleranceRow` (`ui/screen/DiaToleranceRow.kt`) the explicit-body card carries too; testTags `add_body_dia_tol_plus` / `add_body_dia_tol_minus` (card: `body_dia_tol_plus` / `body_dia_tol_minus`). Typed in the document unit as MAGNITUDES, blank = 0, stored verbatim (`Body.diaTolPlusMm` / `diaTolMinusMm`); prints as a stacked tolerance after the body's Ø callout (`PDF_EXPORT.md` §5.3). The auto-body card has none |
 | Keyway checkbox | Always. The gate for the whole keyway section (shared `KeywayGateRow`, `KeywaySection.kt`); default OFF in the dialog. On the card it seeds from `hasAnyKeywayValue` so a half-typed keyway keeps its section open, and unticking a card with any value opens "Remove keyway?" (`kw_remove_confirm`) before clearing W/D/L/inset/spooned |
 | KW from: AFT \| FWD chips | Only while the Keyway checkbox is ON (keyway end-face reference). Default seeded by `ShaftSpec.suggestedBodyKeywayEnd`: opposite the shaft's existing keyway when exactly one side is taken (an aft taper keyway suggests FWD, and vice versa); both/neither → AFT. The SAME seed drives the card's chips for a not-yet-real keyway (parity of behavior, on-device report: a new body keyway defaulting onto the taken side read as a second aft keyway). A seed only — the chips always win, and nothing stored is ever rewritten by it |
 | KW W / KW D / KW L | Only while the Keyway checkbox is ON (blank = 0 = no keyway; while OFF the dialog submits 0 whatever the hidden fields hold) |
@@ -265,6 +266,7 @@ by definition, so there is nothing to toggle. This is intentional and not a pari
 | Start from AFT / FWD | Always (label follows chip) |
 | Length | Always |
 | Outer Ø | Always |
+| Ø tol + / Ø tol − | Always, side by side directly under Outer Ø — the same `DiaToleranceRow` as the liner card (`add_liner_dia_tol_plus` / `add_liner_dia_tol_minus`; card: `liner_dia_tol_plus` / `liner_dia_tol_minus`). Magnitudes in the document unit, blank = 0, stored verbatim (`Liner.diaTolPlusMm` / `diaTolMinusMm`); `onSubmit` hands them on as a `DiaToleranceDraft` |
 
 ### AddThreadDialog
 | Field / control | Condition |
@@ -558,6 +560,11 @@ the aft-most center as `startFromAftMm = OAL − enteredFwd − (count−1)·spa
 ---
 
 ## Change log
+**v1.18 (2026-11-18)**
+- `AddLinerDialog` and `AddBodyDialog` gain the "Ø tol + / Ø tol −" row under the Ø, mirroring the
+  liner card and the explicit-body card (ONE `DiaToleranceRow`); both `onSubmit`s take a trailing
+  `DiaToleranceDraft`. Value entry, so under the parity rule. On-device request.
+
 **v1.17 (2026-10-29)**
 - `AddBodyDialog` gains the "Measure From: AFT | FWD" chips and a "Start from AFT / FWD" field,
   mirroring the explicit-body card's new row (`Body.authoredReference`); `onSubmit` takes the

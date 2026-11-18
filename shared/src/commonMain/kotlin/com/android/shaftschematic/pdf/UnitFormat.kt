@@ -1,5 +1,6 @@
 package com.android.shaftschematic.pdf
 
+import com.android.shaftschematic.pdf.notes.DiaToleranceText
 import com.android.shaftschematic.util.DualLabel
 import com.android.shaftschematic.util.LengthFormat
 import com.android.shaftschematic.util.UnitSystem
@@ -69,6 +70,68 @@ fun formatDiaWithUnit(mm: Double, unit: Any?): String {
             "$s mm"
         }
     }
+}
+
+/**
+ * A liner or body Ø tolerance as its callout prints it — the two limits a stacked tolerance sets
+ * after the value (`Ø 9.000"` then `+.002` over `-.000`), or null when neither side is > 0.
+ * [plusMm] and [minusMm] are the stored MAGNITUDES of the upper and lower deviation.
+ *
+ * - Inches (drafting practice): sign + three decimals with no leading zero (`+.002`, `-.000`); a
+ *   limit of an inch or more keeps its integer part (`+1.250`). A zero side keeps its sign and
+ *   decimals. Both limits take the same places — four when either needs a fourth to print exactly
+ *   (`+.0005`), never more.
+ * - Millimetres (ISO practice): sign + the fewest decimals (1 to 3) both limits print exactly at,
+ *   shared by the two (`+0.05` / `-0.10`); a zero side prints a bare `0`.
+ *
+ * No unit mark on either limit: they read in the value's unit. Pure — the one formatter behind the
+ * callout builders and their tests.
+ */
+fun formatDiaTolerance(plusMm: Double, minusMm: Double, unit: UnitSystem): DiaToleranceText? {
+    val plus = plusMm.coerceAtLeast(0.0)
+    val minus = minusMm.coerceAtLeast(0.0)
+    if (plus <= 0.0 && minus <= 0.0) return null
+    return if (unit == UnitSystem.INCHES) {
+        val pIn = plus / 25.4
+        val mIn = minus / 25.4
+        fun exactAt(v: Double, d: Int): Boolean {
+            val scaled = v * pow10(d)
+            return kotlin.math.abs(scaled - mathRound(scaled)) < 1e-3
+        }
+        val places = if (exactAt(pIn, 3) && exactAt(mIn, 3)) 3 else 4
+        fun limit(sign: String, v: Double): String {
+            val s = formatFixedUs(v, places)
+            return sign + if (s.startsWith("0.")) s.substring(1) else s
+        }
+        DiaToleranceText(upper = limit("+", pIn), lower = limit("-", mIn))
+    } else {
+        fun exactAt(v: Double, d: Int): Boolean {
+            val scaled = v * pow10(d)
+            return kotlin.math.abs(scaled - mathRound(scaled)) < 1e-2
+        }
+        val places = (1..3).firstOrNull { d -> exactAt(plus, d) && exactAt(minus, d) } ?: 3
+        fun limit(sign: String, v: Double): String =
+            if (v <= 0.0) "0" else sign + formatFixedUs(v, places)
+        DiaToleranceText(upper = limit("+", plus), lower = limit("-", minus))
+    }
+}
+
+/**
+ * A toleranced Ø value as its callout prints it: [formatDiaWithUnit], except that a WHOLE inch
+ * value, which would print bare (`9"`), takes the limits' decimal places (`9.000"`) — drafting
+ * practice sets an inch value and its tolerance to the same places. Millimetres print unchanged.
+ */
+fun formatTolerancedDiaWithUnit(mm: Double, unit: UnitSystem, tolerance: DiaToleranceText): String {
+    val plain = formatDiaWithUnit(mm, unit)
+    if (unit != UnitSystem.INCHES || '.' in plain) return plain
+    val places = tolerance.upper.substringAfter('.', "").length.coerceIn(3, 4)
+    return formatFixedUs(mm / 25.4, places) + "\""
+}
+
+private fun pow10(d: Int): Double {
+    var r = 1.0
+    repeat(d) { r *= 10.0 }
+    return r
 }
 
 /**

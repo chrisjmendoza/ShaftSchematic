@@ -38,6 +38,7 @@ import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_DROP_SCALE_MAX
 import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_DROP_SCALE_MIN
 import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_SCALE_MAX
 import com.android.shaftschematic.settings.PDF_RUNOUT_BUBBLE_SCALE_MIN
+import com.android.shaftschematic.settings.PDF_TEXT_SCALE_DEFAULT
 import com.android.shaftschematic.settings.PDF_TEXT_SCALE_MAX
 import com.android.shaftschematic.settings.PDF_TEXT_SCALE_MIN
 import com.android.shaftschematic.settings.PDF_CURVE_HEIGHT_MAX_IN
@@ -242,6 +243,9 @@ object SettingsStore {
         floatPreferencesKey("pdf_runout_bubble_drop_scale")
     private val KEY_PDF_FOOTER_TEXT_SCALE = floatPreferencesKey("pdf_footer_text_scale")
     private val KEY_PDF_DIM_TEXT_SCALE = floatPreferencesKey("pdf_dim_text_scale")
+    private val KEY_PDF_RUNOUT_FOOTER_TEXT_SCALE = floatPreferencesKey("pdf_runout_footer_text_scale")
+    private val KEY_PDF_RUNOUT_DIM_TEXT_SCALE = floatPreferencesKey("pdf_runout_dim_text_scale")
+    private val KEY_PDF_UNDERCUT_DIM_TEXT_SCALE = floatPreferencesKey("pdf_undercut_dim_text_scale")
 
     // Drawing line thickness (applies to both preview and PDF)
     private val KEY_LINE_THICKNESS_SCALE = floatPreferencesKey("line_thickness_scale")
@@ -475,15 +479,21 @@ object SettingsStore {
         }
     }
 
-    // Sheet text sizes: multipliers on the footer block's text and on the dimension values. A
-    // missing key reads the one `PdfPrefs()` default (100%), so older stores print as before.
+    // Sheet text sizes: multipliers on the footer block's text and on the dimension values, one
+    // pair per sheet group (`SheetTextGroup`). The original two keys hold the SCHEMATIC group. A
+    // missing schematic key reads the one `PdfPrefs()` default (100%), so older stores print as
+    // before; a missing group key reads the schematic key it was split from ([groupTextScale]), so
+    // each group starts at the size every sheet printed at before the groups existed.
     fun pdfFooterTextScaleFlow(ctx: Context): Flow<Float> =
         ctx.settingsPrefs.map { p ->
             (p[KEY_PDF_FOOTER_TEXT_SCALE] ?: PdfPrefs().footerTextScale)
                 .coerceIn(PDF_TEXT_SCALE_MIN, PDF_TEXT_SCALE_MAX)
         }
     suspend fun setPdfFooterTextScale(ctx: Context, v: Float) {
-        ctx.editSettings { it[KEY_PDF_FOOTER_TEXT_SCALE] = v.coerceIn(PDF_TEXT_SCALE_MIN, PDF_TEXT_SCALE_MAX) }
+        ctx.editSettings {
+            freezeTextGroupKeys(it, KEY_PDF_FOOTER_TEXT_SCALE, KEY_PDF_RUNOUT_FOOTER_TEXT_SCALE)
+            it[KEY_PDF_FOOTER_TEXT_SCALE] = v.coerceIn(PDF_TEXT_SCALE_MIN, PDF_TEXT_SCALE_MAX)
+        }
     }
     fun pdfDimTextScaleFlow(ctx: Context): Flow<Float> =
         ctx.settingsPrefs.map { p ->
@@ -491,7 +501,57 @@ object SettingsStore {
                 .coerceIn(PDF_TEXT_SCALE_MIN, PDF_TEXT_SCALE_MAX)
         }
     suspend fun setPdfDimTextScale(ctx: Context, v: Float) {
-        ctx.editSettings { it[KEY_PDF_DIM_TEXT_SCALE] = v.coerceIn(PDF_TEXT_SCALE_MIN, PDF_TEXT_SCALE_MAX) }
+        ctx.editSettings {
+            freezeTextGroupKeys(
+                it, KEY_PDF_DIM_TEXT_SCALE,
+                KEY_PDF_RUNOUT_DIM_TEXT_SCALE, KEY_PDF_UNDERCUT_DIM_TEXT_SCALE,
+            )
+            it[KEY_PDF_DIM_TEXT_SCALE] = v.coerceIn(PDF_TEXT_SCALE_MIN, PDF_TEXT_SCALE_MAX)
+        }
+    }
+    fun pdfRunoutFooterTextScaleFlow(ctx: Context): Flow<Float> =
+        ctx.settingsPrefs.map { p ->
+            groupTextScale(p, KEY_PDF_RUNOUT_FOOTER_TEXT_SCALE, KEY_PDF_FOOTER_TEXT_SCALE)
+        }
+    suspend fun setPdfRunoutFooterTextScale(ctx: Context, v: Float) {
+        ctx.editSettings { it[KEY_PDF_RUNOUT_FOOTER_TEXT_SCALE] = v.coerceIn(PDF_TEXT_SCALE_MIN, PDF_TEXT_SCALE_MAX) }
+    }
+    fun pdfRunoutDimTextScaleFlow(ctx: Context): Flow<Float> =
+        ctx.settingsPrefs.map { p ->
+            groupTextScale(p, KEY_PDF_RUNOUT_DIM_TEXT_SCALE, KEY_PDF_DIM_TEXT_SCALE)
+        }
+    suspend fun setPdfRunoutDimTextScale(ctx: Context, v: Float) {
+        ctx.editSettings { it[KEY_PDF_RUNOUT_DIM_TEXT_SCALE] = v.coerceIn(PDF_TEXT_SCALE_MIN, PDF_TEXT_SCALE_MAX) }
+    }
+    fun pdfUndercutDimTextScaleFlow(ctx: Context): Flow<Float> =
+        ctx.settingsPrefs.map { p ->
+            groupTextScale(p, KEY_PDF_UNDERCUT_DIM_TEXT_SCALE, KEY_PDF_DIM_TEXT_SCALE)
+        }
+    suspend fun setPdfUndercutDimTextScale(ctx: Context, v: Float) {
+        ctx.editSettings { it[KEY_PDF_UNDERCUT_DIM_TEXT_SCALE] = v.coerceIn(PDF_TEXT_SCALE_MIN, PDF_TEXT_SCALE_MAX) }
+    }
+
+    /** A group's stored size, else the schematic key it was split from, else the 100% default. */
+    internal fun groupTextScale(
+        p: Preferences,
+        groupKey: Preferences.Key<Float>,
+        schematicKey: Preferences.Key<Float>,
+    ): Float = (p[groupKey] ?: p[schematicKey] ?: PDF_TEXT_SCALE_DEFAULT)
+        .coerceIn(PDF_TEXT_SCALE_MIN, PDF_TEXT_SCALE_MAX)
+
+    /**
+     * Before a schematic text size is written: every group key still unset takes the schematic
+     * key's CURRENT stored value, in the same edit. An unset group key reads the schematic key
+     * ([groupTextScale]), so without this a change to the schematic size would drag those groups
+     * along. A schematic key never written freezes them at the 100% it read as.
+     */
+    internal fun freezeTextGroupKeys(
+        p: MutablePreferences,
+        schematicKey: Preferences.Key<Float>,
+        vararg groupKeys: Preferences.Key<Float>,
+    ) {
+        val old = p[schematicKey] ?: PDF_TEXT_SCALE_DEFAULT
+        for (key in groupKeys) if (p[key] == null) p[key] = old
     }
 
     // Dimension-rail arrowhead size (pt): one of PDF_ARROW_SIZES_PT.

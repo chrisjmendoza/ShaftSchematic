@@ -572,9 +572,13 @@ internal fun DimensionArrowSizeChips(
 }
 
 /**
- * The "Footer text size" and "Dimension text size" pickers, shared by the schematic and
- * consolidated PDF options and Settings → Drawing — ONE `PdfPrefs.footerTextScale` /
- * `PdfPrefs.dimTextScale` behind all three (on-device request: readers with poor eyesight).
+ * The "Footer text size" and "Dimension text size" pickers for ONE sheet group
+ * (`SheetTextGroup`) — the schematic / Final PDF options and Settings → Drawing write the
+ * SCHEMATIC group's `PdfPrefs.footerTextScale` / `dimTextScale`, the consolidated sheet's options
+ * and Settings → Drawing the RUNOUT group's (on-device request: readers with poor eyesight, and
+ * the schematic at one size while another sheet prints larger). [sheets] names the sheets the pair
+ * changes, printed over the chips so a tap never moves a sheet the reader did not expect.
+ * [tagPrefix] keeps the chips' test tags apart where two groups share a screen.
  *
  * Fixed steps, the [DimensionArrowSizeChips] posture: a tap IS the commit, and the preview
  * re-renders from the stored value.
@@ -585,26 +589,27 @@ internal fun SheetTextSizeChips(
     dimTextScale: Float,
     onCommitFooter: (Float) -> Unit,
     onCommitDim: (Float) -> Unit,
+    sheets: String = SCHEMATIC_TEXT_SIZE_SHEETS,
+    tagPrefix: String = "",
 ) {
     Column {
+        TextSizeSheetsCaption(sheets)
         TextScaleChipRow(
             title = "Footer text size",
             value = footerTextScale,
-            tagPrefix = "footer_text_scale",
+            tagPrefix = "${tagPrefix}footer_text_scale",
             onCommit = onCommitFooter,
         )
         Spacer(Modifier.height(8.dp))
         TextScaleChipRow(
             title = "Dimension text size",
             value = dimTextScale,
-            tagPrefix = "dim_text_scale",
+            tagPrefix = "${tagPrefix}dim_text_scale",
             onCommit = onCommitDim,
         )
         Text(
             "Footer: the job and spec block at the foot of the sheet. Dimension: lengths on " +
-                "the rails and Ø values. Schematic, consolidated and Final sheets; the " +
-                "undercut sheet follows Dimension text size too. A sheet without room prints " +
-                "at the largest size that fits.",
+                "the rails and Ø values. A sheet without room prints at the largest size that fits.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -612,13 +617,14 @@ internal fun SheetTextSizeChips(
 }
 
 /**
- * "Dimension text size" alone — the undercut sheet's options, which print no shared footer. The
- * SAME `PdfPrefs.dimTextScale` as [SheetTextSizeChips]' second row (one knob for every sheet's
- * dimension values), so a tap here also sets the schematic's.
+ * "Dimension text size" alone — the UNDERCUT group's `PdfPrefs.undercutDimTextScale`, on the
+ * undercut sheet's options and Settings → Drawing. The undercut sheet prints no footer, so the
+ * group has no footer size.
  */
 @Composable
 internal fun DimTextSizeChips(dimTextScale: Float, onCommit: (Float) -> Unit) {
     Column {
+        TextSizeSheetsCaption(UNDERCUT_TEXT_SIZE_SHEETS)
         TextScaleChipRow(
             title = "Dimension text size",
             value = dimTextScale,
@@ -633,11 +639,26 @@ internal fun DimTextSizeChips(dimTextScale: Float, onCommit: (Float) -> Unit) {
     }
 }
 
+/** The sheets each text-size group changes — the caption over its chips. */
+internal const val SCHEMATIC_TEXT_SIZE_SHEETS = "Schematic, Final and section sheets"
+internal const val RUNOUT_TEXT_SIZE_SHEETS = "Runout and consolidated sheets"
+internal const val UNDERCUT_TEXT_SIZE_SHEETS = "Undercut sheet"
+
 /** The caption under the undercut options' "Dimension text size". */
 internal const val UNDERCUT_DIM_TEXT_SIZE_CAPTION =
-    "The size of the lengths, Ø values and section titles on this sheet. The same setting as " +
-        "the schematic's Dimension text size. A crowded sheet prints at the largest size " +
-        "that still leaves each section a readable shaft."
+    "The size of the lengths, Ø values and section titles on the undercut sheet — its own setting, " +
+        "apart from the schematic's. A crowded sheet prints at the largest size that still " +
+        "leaves each section a readable shaft."
+
+@Composable
+private fun TextSizeSheetsCaption(sheets: String) {
+    Text(
+        sheets,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.primary,
+    )
+    Spacer(Modifier.height(4.dp))
+}
 
 @Composable
 private fun TextScaleChipRow(
@@ -677,8 +698,8 @@ internal fun snappedThreadSlant(slant: Float): Float =
         .coerceIn(THREAD_SLANT_MIN, THREAD_SLANT_MAX)
 
 /**
- * The "Thread slant" slider, shared by both PDF options sheets and Settings → Drawing — ONE
- * `PdfPrefs.threadSlant` behind all three, the [DimensionArrowSizeChips] posture.
+ * The "Thread slant" slider in Settings → Drawing — `PdfPrefs.threadSlant`. Settings is its only
+ * surface (on-device ruling: rarely changed, so it stays off the PDF options panels).
  *
  * The thread hatch leans by each thread's own pitch over its own diameter (`geom/ThreadHatchMath.kt`);
  * this multiplies that true lean, 1× being the real crest angle. Drag is tracked locally and
@@ -743,8 +764,8 @@ internal fun snappedThreadDensity(density: Float): Float {
 }
 
 /**
- * The "Thread density" slider, directly after [ThreadSlantSlider] in both PDF options sheets and
- * Settings → Drawing — ONE `PdfPrefs.threadDensity` behind all three.
+ * The "Thread density" slider, directly after [ThreadSlantSlider] in Settings → Drawing —
+ * `PdfPrefs.threadDensity`, on the same Settings-only footing.
  *
  * The thread hatch spaces its strokes by each thread's own pitch at the drawing's diametral scale
  * (`geom/ThreadHatchMath.kt`); this is the fraction of those true crests drawn, 100% being every
@@ -882,7 +903,9 @@ internal fun FractionStyleChips(
 }
 
 /**
- * How a dual value is SET — the same picker in Settings → Drawing and both PDF options sheets.
+ * How a dual value is SET — the same picker in Settings → Drawing and the editor's Preview
+ * options (on a dual document). The PDF options panels do not carry it (on-device ruling: a rare
+ * change, so units live in Settings).
  *
  * Only bites on a document with dual units switched on; on a single-unit sheet neither layout
  * changes a thing, which is why this sits beside the other drawing prefs rather than in the
@@ -892,13 +915,6 @@ internal fun FractionStyleChips(
 internal fun DualUnitLayoutChips(
     layout: DualUnitLayout,
     onCommit: (DualUnitLayout) -> Unit,
-    /**
-     * False on a document with dual units switched OFF: the choice still SHOWS (so the setting is
-     * discoverable, and its stored value visible) but cannot be tapped, because it styles something
-     * the sheet is not printing. The same display-only lock the consolidated sheet's "Liners" shade
-     * checkbox uses — graying out never rewrites the stored preference.
-     */
-    enabled: Boolean = true,
 ) {
     Column {
         Text("Dual-unit layout", style = MaterialTheme.typography.titleSmall)
@@ -907,7 +923,6 @@ internal fun DualUnitLayoutChips(
             DualUnitLayout.entries.forEach { option ->
                 FilterChip(
                     selected = layout == option,
-                    enabled = enabled,
                     onClick = { onCommit(option) },
                     label = { ChipLabel(option.uiLabel()) },
                     modifier = Modifier
@@ -1028,9 +1043,9 @@ internal fun OptionsExpander(
  *
  * The order is how often a section is reached for, most-used on top (on-device request): the
  * per-job shaft fit and the wear document's own block open by default, everything after them
- * starts folded, and Units trails because the dual / rarely-used options sit last (on-device
- * ruling). The Content chips and the scope note are not a section: they lead the sheet,
- * outside this list. A sheet omits a section it has nothing to put in.
+ * starts folded, and the rarely-used options sit last (on-device ruling). The Content chips and the scope note are not a section: they lead the sheet,
+ * outside this list. A sheet omits a section it has nothing to put in. Thread hatch and units
+ * are not here at all: they live in Settings → Drawing only (on-device ruling: rarely changed).
  */
 internal enum class OptionsSection(
     val title: String,
@@ -1041,12 +1056,10 @@ internal enum class OptionsSection(
     SHAFT("Shaft", "options_shaft_expander", initiallyExpanded = true, contentSpacing = 12.dp),
     WEAR("Wear", "options_wear_expander", initiallyExpanded = true, contentSpacing = 12.dp),
     BUBBLES("Runout bubbles", "options_bubbles_expander", initiallyExpanded = false, contentSpacing = 12.dp),
-    THREAD("Thread", "options_thread_expander", initiallyExpanded = false, contentSpacing = 12.dp),
     LINES("Lines & text", "options_lines_expander", initiallyExpanded = false, contentSpacing = 12.dp),
     FOOTER("Footer lines", "options_footer_expander", initiallyExpanded = false, contentSpacing = 12.dp),
     SHADING("Shade in Components", "options_shade_expander", initiallyExpanded = false, contentSpacing = 0.dp),
     MEASUREMENT("Measurement reference", "options_measure_ref_expander", initiallyExpanded = false, contentSpacing = 0.dp),
-    UNITS("Units", "options_units_expander", initiallyExpanded = false, contentSpacing = 12.dp),
 }
 
 /** One section's body on an options sheet: its controls, and an optional header [summary]. */
@@ -1093,52 +1106,15 @@ internal fun OptionsSections(bodies: Map<OptionsSection, OptionsSectionBody>) {
     }
 }
 
-/**
- * Whether [spec] draws a thread — the gate on the options sheets' Thread section. A thread
- * with no length prints no hatch, so the slant and density would tune nothing.
- */
-internal fun hasDrawnThreads(spec: ShaftSpec): Boolean = spec.threads.any { it.lengthMm > 0f }
-
-/** The Thread section's header summary: slant and density, as their sliders read them. */
-internal fun threadSectionSummary(threadSlant: Float, threadDensity: Float): String =
-    "${fmtThreadSlant(threadSlant)} · ${fmtThreadDensity(threadDensity)}"
-
 /** The Lines & text section's header summary: the line weight, as its slider reads it. */
 internal fun linesSectionSummary(lineThicknessScale: Float): String =
     "${(lineThicknessScale * 100).roundToInt()}%"
 
-/** The Units section's header summary: dual off, or on in its layout. */
-internal fun unitsSectionSummary(dualUnits: Boolean, layout: DualUnitLayout): String =
-    if (dualUnits) "Dual · ${layout.uiLabel()}" else "Single"
-
-/**
- * The Units section's "Dual units" switch — the DOCUMENT's own flag, not a preference:
- * `dual_units` travels with the job. One construction for both sheets.
- */
-@Composable
-internal fun DualUnitsSwitchRow(
-    dualUnits: Boolean,
-    onDualUnitsChange: (Boolean) -> Unit,
-) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Switch(checked = dualUnits, onCheckedChange = onDualUnitsChange)
-        Spacer(Modifier.width(12.dp))
-        Column {
-            Text("Dual units", style = MaterialTheme.typography.bodyLarge)
-            Text(
-                "Print every dimension in both inches and millimetres. Saved with the document.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
 /**
  * One app-wide on/off pref as a PDF options sheet row: a switch beside its [title] and
- * [caption] — the [DualUnitsSwitchRow] construction, so the sheet's switches read alike.
- * Settings → Drawing shows the same prefs with the same wording ([UNITS_NOTE_SETTING_TITLE],
- * [FOOTER_CAPTURED_KW_SETTING_TITLE], [FOOTER_BOLT_HOLE_DIA_SETTING_TITLE] and their captions).
+ * [caption], so the sheet's switches read alike. Settings → Drawing shows the same prefs with the
+ * same wording ([FOOTER_CAPTURED_KW_SETTING_TITLE], [FOOTER_BOLT_HOLE_DIA_SETTING_TITLE] and
+ * their captions).
  */
 @Composable
 internal fun OptionsSwitchRow(
@@ -1160,21 +1136,6 @@ internal fun OptionsSwitchRow(
             )
         }
     }
-}
-
-/**
- * The "Units note" switch (`PdfPrefs.showUnitsNote` — "Units in inches"/"Units in mm" in the
- * lower-right corner): every document prints it, so both sheets carry it in their Units section.
- */
-@Composable
-internal fun UnitsNoteSwitchRow(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    OptionsSwitchRow(
-        title = UNITS_NOTE_SETTING_TITLE,
-        caption = UNITS_NOTE_SETTING_CAPTION,
-        checked = checked,
-        onCheckedChange = onCheckedChange,
-        testTag = "options_units_note",
-    )
 }
 
 /**

@@ -53,7 +53,21 @@ data class DiaCallout(
     val secondXMm: Double? = null,
     val secondSpanStartMm: Double? = null,
     val secondSpanEndMm: Double? = null,
+    /**
+     * The value's stacked tolerance — a liner OD's or an explicit body Ø's (on-device request),
+     * the two limits already formatted in [unit] by `formatDiaTolerance`. The renderer sets them
+     * after the PRIMARY value in smaller text, upper over lower. Null (the default) = no
+     * tolerance, and the callout draws exactly as it always has.
+     */
+    val tolerance: DiaToleranceText? = null,
 )
+
+/**
+ * A Ø tolerance's two printed limits: [upper] (`+.002`) set over [lower] (`-.000`). Built only by
+ * `formatDiaTolerance`; part of a callout's grouping identity, so two values that agree but
+ * carry different tolerances print separately.
+ */
+data class DiaToleranceText(val upper: String, val lower: String)
 
 enum class LeaderSide { ABOVE, BELOW }
 

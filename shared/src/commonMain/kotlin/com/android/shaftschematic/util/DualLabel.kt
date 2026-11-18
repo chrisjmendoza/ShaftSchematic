@@ -43,7 +43,7 @@ data class DualLabel(val primary: String, val secondary: String? = null) {
 }
 
 /**
- * How a dual value is SET — Settings → Drawing → "Dual-unit layout", and both PDF options sheets.
+ * How a dual value is SET — Settings → Drawing → "Dual-unit layout".
  *
  * A layout choice, not document state: the same job printed by two shops may want different
  * layouts, exactly like fraction style and arrowhead size. It is threaded explicitly to the
