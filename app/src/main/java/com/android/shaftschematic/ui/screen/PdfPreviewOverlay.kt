@@ -237,7 +237,7 @@ internal fun PdfPreviewOverlay(
     // put.
     val scaleState = remember { mutableFloatStateOf(1f) }
     val offsetState = remember { mutableStateOf(Offset.Zero) }
-    val transformState = rememberTransformableState { zoomChange, panChange, _ ->
+    val transformState = rememberTransformableState { _, zoomChange, panChange, _ ->
         scaleState.floatValue = (scaleState.floatValue * zoomChange).coerceIn(0.5f, 8f)
         offsetState.value = offsetState.value + panChange
     }

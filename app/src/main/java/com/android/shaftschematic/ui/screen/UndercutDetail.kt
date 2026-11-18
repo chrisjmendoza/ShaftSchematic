@@ -1261,7 +1261,7 @@ fun UndercutWindowDetailOverlay(
                                 span.startMm, span.startMm + span.lengthMm,
                                 aftSetXMm, fwdSetXMm,
                             ),
-                referenceLinerId = if (seedFromLiner) stripLiner?.id.orEmpty() else "",
+                referenceLinerId = if (seedFromLiner) stripLiner.id else "",
             )
         drafts = drafts + (PENDING_UNDERCUT_ID to seed)
         pendingSeed = seed
@@ -1319,7 +1319,7 @@ fun UndercutWindowDetailOverlay(
     // canvas's posture: an offset locked to zero at 1× or below left a drag at the fitted view
     // doing nothing until a pinch zoomed in (on-device report). Double-tap or the corner button
     // brings it back.
-    val zoomTransformState = rememberTransformableState { zoomChange, panChange, _ ->
+    val zoomTransformState = rememberTransformableState { _, zoomChange, panChange, _ ->
         zoomScale = (zoomScale * zoomChange).coerceIn(0.5f, 6f)
         zoomOffset += panChange
     }

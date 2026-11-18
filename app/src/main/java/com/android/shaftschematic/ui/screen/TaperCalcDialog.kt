@@ -310,7 +310,7 @@ private fun TaperEntryField(
                 color = MaterialTheme.colorScheme.primary,
             )
         } else LocalTextStyle.current,
-        visualTransformation = if (showsDerived && derived != null) {
+        visualTransformation = if (showsDerived) {
             DerivedValueTransformation(derived)
         } else VisualTransformation.None,
         colors = colors,
