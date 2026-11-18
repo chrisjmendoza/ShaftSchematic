@@ -191,7 +191,12 @@ fun composeRunoutPdfOnCanvas(
     // Blends need the resolved neighbours to know what diameter each face steps to; without
     // a resolve pass there is nothing to blend against, so the faces simply stay square —
     // the schematic composer's rule (`ShaftPdfComposer.blendsForPdf`).
-    val bodyBlendsForSheet = resolvedComponents?.let { bodyBlends(spec, it) } ?: emptyList()
+    // Seal areas are noise on an inspection sheet (on-device request): they draw only under
+    // `PdfPrefs.inspectionSealAreas`, or on a Final sheet, which always carries them. A face
+    // stripped of its seal keeps its blend; with no seal span the S-break has nothing to avoid.
+    val showSealAreas = inspectionSheetShowsSealAreas(pdfPrefs, project)
+    val bodyBlendsForSheet = (resolvedComponents?.let { bodyBlends(spec, it) } ?: emptyList())
+        .let { blends -> if (showSealAreas) blends else blends.map { it.copy(seal = false, sealLenMm = 0f) }.filter { it.lengthMm > 0f } }
 
     // ── Paints ──────────────────────────────────────────────────────────────
     val thicknessScale = lineThicknessScale.coerceIn(0.5f, 2.0f)
@@ -1609,6 +1614,14 @@ internal fun planDiaReadingsInProfile(
     }
     return out
 }
+
+/**
+ * Whether the runout / consolidated sheet draws the bodies' seal areas: the app-wide
+ * `PdfPrefs.inspectionSealAreas`, or any sheet of the FINAL drawing ([ProjectInfo.drawingLabel]
+ * set), where they always print. ONE rule for the composer and the tests.
+ */
+fun inspectionSheetShowsSealAreas(pdfPrefs: PdfPrefs, project: ProjectInfo): Boolean =
+    pdfPrefs.inspectionSealAreas || project.drawingLabel.isNotBlank()
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Classic-sheet header + OAL span line (consolidated = false)

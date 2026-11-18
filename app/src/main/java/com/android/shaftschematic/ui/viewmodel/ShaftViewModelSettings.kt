@@ -391,6 +391,12 @@ fun ShaftViewModel.setPdfFooterCapturedKwInset(v: Boolean, persist: Boolean = tr
 }
 
 /** Settings → Drawing → "Bolt hole Ø on footer". */
+fun ShaftViewModel.setPdfInspectionSealAreas(v: Boolean, persist: Boolean = true) {
+    _pdfInspectionSealAreas.value = v
+    SettingsStore.updatePdfPrefs { it.copy(inspectionSealAreas = v) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfInspectionSealAreas(getApplication(), v) }
+}
+
 fun ShaftViewModel.setPdfFooterBoltHoleDia(v: Boolean, persist: Boolean = true) {
     _pdfFooterBoltHoleDia.value = v
     SettingsStore.updatePdfPrefs { it.copy(footerBoltHoleDia = v) }
@@ -572,6 +578,7 @@ fun ShaftViewModel.applyDrawingProfile(profile: DrawingProfile) {
     setPdfShowUnitsNote(prefs.showUnitsNote)
     setPdfFooterCapturedKwInset(prefs.footerCapturedKwInset)
     setPdfFooterBoltHoleDia(prefs.footerBoltHoleDia)
+    setPdfInspectionSealAreas(prefs.inspectionSealAreas)
     setPdfTaperRatePerFoot(prefs.taperRatePerFoot)
     setPdfWearAreaStyle(prefs.wearAreaStyle)
     setPdfWearTraceDepthFrac(prefs.wearTraceDepthFrac)

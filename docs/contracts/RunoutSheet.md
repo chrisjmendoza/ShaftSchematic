@@ -2402,6 +2402,19 @@ Fills are drawn before outlines so the outline strokes are always visible on top
 
 ---
 
+### Seal areas
+
+The classic runout sheet and the consolidated sheet draw a body's seal areas (the dashed groove
+lines) only while the app-wide `PdfPrefs.inspectionSealAreas` is on — default OFF, on-device
+request: on an inspection they are noise. The switch is the "Seal areas" row in both sheets' PDF
+options ("Lines & text", `pdf_inspection_seal_areas`) and Settings → Drawing "Seal areas on
+inspection sheets"; Drawing profiles capture it. ONE rule, `inspectionSheetShowsSealAreas`
+(`pdf/RunoutPdfComposer.kt`), which is also true on any Final sheet (`ProjectInfo.drawingLabel`
+set): the Final tab's runout sheets always draw them. Off, the composer drops the seal from its
+`BodyBlend` list (a seal-only face goes with it; a blended face keeps its ramp), so the S-break
+gap has no seal span to steer round. Draw-only — the stored seal areas, the schematic, the editor
+preview and the undercut sheet are untouched.
+
 ## PdfPreviewOverlay
 
 `PdfPreviewOverlay` is an in-place full-screen composable (not a nav destination) used by RunoutRoute, WearRoute, UndercutRoute and OutputRoute. It lives in `ui/screen/PdfPreviewOverlay.kt`.

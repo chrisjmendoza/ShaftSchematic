@@ -8,6 +8,15 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-17
 
+### feat(sheets): seal areas are off on the inspection sheets, with a switch to show them
+
+On-device request: on an inspection the seal areas' dashed lines are noise. The runout sheet and
+the consolidated sheet no longer draw them. A "Seal areas" switch in those two sheets' PDF options
+(Lines & text) and in Settings → Drawing ("Seal areas on inspection sheets") turns them back on;
+it is app-wide, off by default, and saved in Drawing profiles. The seal areas themselves are
+untouched: the schematic, the editor preview, the undercut sheet and every Final sheet draw them
+as before.
+
 ### feat(sheets): PORT / STBD prints large on every sheet
 
 On-device request: with the port and starboard shafts' sheets side by side at the welder, the

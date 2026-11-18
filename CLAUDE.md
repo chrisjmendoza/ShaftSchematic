@@ -1344,7 +1344,14 @@ than the body is clamped where it is DRAWN. All three draw sites decompose the S
 the runout sheet keep their flat span separate (ONE shared body pass, `drawBodyRunsWithBreaks`
 in `pdf/BodyRunDraw.kt`) because that span still hosts the S-break pair
 (the break is cut into the FLAT span, the curves stay whole, and the break decision stays on the
-run's FULL drawn width). The wear document deliberately keeps square faces — it omits machining
+run's FULL drawn width). **The inspection sheets hide seal
+areas by default** (on-device request: noise on an inspection): the classic runout sheet and the
+consolidated sheet draw them only under the app-wide `PdfPrefs.inspectionSealAreas` (default OFF;
+the "Seal areas" row on those two sheets' PDF options and Settings → Drawing; profile-captured), ONE
+rule `inspectionSheetShowsSealAreas` — which is also true on any Final sheet (`drawingLabel` set),
+where they always print. Off, the composer strips the seal from its `BodyBlend` list, so the S-break
+has no seal span to avoid; the schematic, the editor preview and the undercut sheet never read it.
+The wear document deliberately keeps square faces — it omits machining
 detail by product decision, the same posture as its keyway omission (and the thread relief: `drawSimpleShaftProfile(threadRelief = false)` prints a relieved thread as the plain hatched envelope there). Pure curve math in `geom/BlendProfileMath.kt`, deliberately
 a general "join two radii across an axial span" primitive (`(x, radius)` points, the
 `KeywaySilhouetteMath`/`SurfaceProfileMath` convention) so the queued liner-shoulder fillet and the

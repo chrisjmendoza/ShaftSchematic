@@ -83,6 +83,7 @@ data class DrawingProfile(
     val showUnitsNote: Boolean = SHIPPED_PDF_PREFS.showUnitsNote,
     val footerCapturedKwInset: Boolean = SHIPPED_PDF_PREFS.footerCapturedKwInset,
     val footerBoltHoleDia: Boolean = SHIPPED_PDF_PREFS.footerBoltHoleDia,
+    val inspectionSealAreas: Boolean = SHIPPED_PDF_PREFS.inspectionSealAreas,
     val taperRatePerFoot: Boolean = SHIPPED_PDF_PREFS.taperRatePerFoot,
     /**
      * Null in a profile saved before the style existed, so its [wearAreasShaded] is what decides —
@@ -133,6 +134,7 @@ data class DrawingProfile(
         showUnitsNote = showUnitsNote,
         footerCapturedKwInset = footerCapturedKwInset,
         footerBoltHoleDia = footerBoltHoleDia,
+        inspectionSealAreas = inspectionSealAreas,
         taperRatePerFoot = taperRatePerFoot,
         wearAreaStyle = wearAreaStyle?.let { WearAreaStyle.fromName(it) }
             ?: wearAreasShaded?.let { WearAreaStyle.fromLegacyShaded(it) }
@@ -179,6 +181,7 @@ data class DrawingProfile(
             showUnitsNote = prefs.showUnitsNote,
             footerCapturedKwInset = prefs.footerCapturedKwInset,
             footerBoltHoleDia = prefs.footerBoltHoleDia,
+            inspectionSealAreas = prefs.inspectionSealAreas,
             taperRatePerFoot = prefs.taperRatePerFoot,
             wearAreaStyle = prefs.wearAreaStyle.name,
             wearTraceDepthFrac = prefs.wearTraceDepthFrac,

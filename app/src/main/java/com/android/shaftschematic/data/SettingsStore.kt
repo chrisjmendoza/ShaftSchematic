@@ -227,6 +227,7 @@ object SettingsStore {
     private val KEY_PDF_SHOW_UNITS_NOTE = booleanPreferencesKey("pdf_show_units_note")
     private val KEY_PDF_FOOTER_CAPTURED_KW_INSET = booleanPreferencesKey("pdf_footer_captured_kw_inset")
     private val KEY_PDF_FOOTER_BOLT_HOLE_DIA = booleanPreferencesKey("pdf_footer_bolt_hole_dia")
+    private val KEY_PDF_INSPECTION_SEAL_AREAS = booleanPreferencesKey("pdf_inspection_seal_areas")
     private val KEY_PDF_TAPER_RATE_PER_FOOT = booleanPreferencesKey("pdf_taper_rate_per_foot")
     // The old on/off switch the style replaced; read only when the style key was never written.
     private val KEY_PDF_WEAR_AREAS_SHADED = booleanPreferencesKey("pdf_wear_areas_shaded")
@@ -533,6 +534,13 @@ object SettingsStore {
     suspend fun setPdfFooterCapturedKwInset(ctx: Context, v: Boolean) {
         ctx.editSettings { it[KEY_PDF_FOOTER_CAPTURED_KW_INSET] = v }
     }
+    /** Seal areas on the runout and consolidated sheets (PdfPrefs.inspectionSealAreas). */
+    fun pdfInspectionSealAreasFlow(ctx: Context): Flow<Boolean> =
+        ctx.settingsPrefs.map { p -> p[KEY_PDF_INSPECTION_SEAL_AREAS] ?: PdfPrefs().inspectionSealAreas }
+    suspend fun setPdfInspectionSealAreas(ctx: Context, v: Boolean) {
+        ctx.editSettings { it[KEY_PDF_INSPECTION_SEAL_AREAS] = v }
+    }
+
     fun pdfFooterBoltHoleDiaFlow(ctx: Context): Flow<Boolean> =
         ctx.settingsPrefs.map { p -> p[KEY_PDF_FOOTER_BOLT_HOLE_DIA] ?: PdfPrefs().footerBoltHoleDia }
     suspend fun setPdfFooterBoltHoleDia(ctx: Context, v: Boolean) {

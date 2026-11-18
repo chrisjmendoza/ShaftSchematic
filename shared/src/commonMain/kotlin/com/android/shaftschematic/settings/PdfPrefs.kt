@@ -383,6 +383,14 @@ data class PdfPrefs(
      */
     val footerBoltHoleDia: Boolean = false,
     /**
+     * Draw the bodies' seal areas (the dashed groove lines) on the inspection sheets — the classic
+     * runout sheet and the consolidated sheet. Settings → Drawing → "Seal areas on inspection
+     * sheets" and those two sheets' PDF options. Default OFF (on-device request: on an inspection
+     * they are noise); the schematic, the undercut sheet and every Final sheet draw them
+     * regardless. Draw-only: the stored seal areas are untouched.
+     */
+    val inspectionSealAreas: Boolean = false,
+    /**
      * Print an inch taper's footer "Rate:" in inches per foot (`3 3/4"/ft`) instead of the ratio
      * (`1:3.2`) — `footerTaperRate`, `pdf/SheetFooter.kt`. Settings → Drawing → "Taper rate per
      * foot" and both PDF options panels. Default ON (on-device request: the shop names a taper

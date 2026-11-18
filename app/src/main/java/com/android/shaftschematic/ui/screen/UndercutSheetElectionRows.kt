@@ -388,6 +388,37 @@ internal fun UndercutKeywaysRow(
     }
 }
 
+internal const val INSPECTION_SEAL_AREAS_TITLE = "Seal areas"
+internal const val INSPECTION_SEAL_AREAS_SETTING_TITLE = "Seal areas on inspection sheets"
+internal const val INSPECTION_SEAL_AREAS_CAPTION =
+    "Draws the bodies' seal areas (the dashed lines) on the runout and consolidated sheets. " +
+        "The schematic, the undercut sheet and the Final sheets always draw them."
+
+/**
+ * The "Seal areas" switch — the app-wide `PdfPrefs.inspectionSealAreas`, on the runout and
+ * consolidated sheets' PDF options (on-device request: seal areas are noise on an inspection).
+ */
+@Composable
+internal fun InspectionSealAreasRow(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    testTag: String,
+    modifier: Modifier = Modifier,
+) {
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(INSPECTION_SEAL_AREAS_TITLE, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                "$INSPECTION_SEAL_AREAS_CAPTION App-wide.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Switch(checked = checked, onCheckedChange = onCheckedChange, modifier = Modifier.testTag(testTag))
+    }
+}
+
 /**
  * The undercut drawing's own "Shade liners" switch — `PdfPrefs.undercutShadeLiners`, which only the
  * undercut sheet and its canvases read, so switching it never changes the schematic's liner
