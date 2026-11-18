@@ -270,6 +270,8 @@ fun ShaftScreen(
                 blendAftSealLenMm: Float, blendFwdSealLenMm: Float,
                 blendAftToLinerOd: Boolean, blendFwdToLinerOd: Boolean,
                 blendAngles: BlendAngleDraft, fiberglass: Boolean) -> Unit,
+    /** "Explicit body" on an auto card: a body on exactly that section, carrying its face choices. */
+    onPromoteAutoBody: (startMm: Float, lengthMm: Float, diaMm: Float) -> Unit,
     onSetAutoSectionDia: (spanStartMm: Float, spanEndMm: Float, diaMm: Float) -> Unit,
     /** Sets the bare-shaft Ø of EVERY auto section together (the card's "All auto sections"). */
     onSetAllAutoSectionsDia: (diaMm: Float) -> Unit,
@@ -759,15 +761,10 @@ fun ShaftScreen(
                 componentTitlesDefault = componentTitlesDefault,
                 componentShadeDefaults = componentShadeDefaults,
                 selectedComponentId = selectedComponentId,
-                // Auto-body promotion adds a plain body; keyways and blends are added
-                // later via the promoted card's own fields.
-                onAddBody = { s, l, d ->
-                    onAddBody(
-                        s, l, d, LinerAuthoredReference.AFT, 0f, 0f, 0f, 0f, LinerAuthoredReference.AFT, false, null,
-                        0f, 0f, BlendProfile.OGEE, false, false, 0f, 0f, false, false, BlendAngleDraft(),
-                        false,
-                    )
-                },
+                // Auto-body promotion: the new body takes every face choice of the section
+                // (blends, seal areas, liner targets, Angle entries) and its wrap; a keyway is
+                // added later on the promoted card, since an auto section cannot carry one.
+                onAddBody = onPromoteAutoBody,
                 onSetAutoSectionDia = onSetAutoSectionDia,
                 onSetAllAutoSectionsDia = onSetAllAutoSectionsDia,
                 onSetAutoBlend = onSetAutoBlend,

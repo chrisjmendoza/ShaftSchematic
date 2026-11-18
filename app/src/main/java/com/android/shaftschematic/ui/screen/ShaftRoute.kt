@@ -441,6 +441,7 @@ fun ShaftRoute(
                 target = target,
             )
         },
+        onPromoteAutoBody = { s, l, d -> vm.addBodyAt(s, l, d, carryAutoSectionFaces = true, target = target) },
         onSetAutoSectionDia = { s0, s1, d -> vm.setAutoSectionDiaMm(s0, s1, d, target) },
         onSetAllAutoSectionsDia = { d -> vm.setAutoBodyDiaMm(d, target) },
         onSetAutoBlend = { s0, s1, end, len, prof, seal, sealLen, toOd -> vm.setAutoBlend(s0, s1, end, len, prof, seal, sealLen, toOd, target) },

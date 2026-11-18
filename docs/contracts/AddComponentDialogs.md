@@ -526,6 +526,13 @@ rule because it changes the seal areas. Promotion ("Explicit body") carries it o
 (`autoSectionFiberglassOn`) and demotion back onto the section (`withDemotedBodyFiberglass`); split
 and merge fragments keep it (`carryBodyDisplay`).
 
+**Promotion carries every face choice.** "Explicit body" on an auto card creates the body through
+`addBodyAt(carryAutoSectionFaces = true)`, which writes the section's `AutoBlend` faces onto it —
+Square | Blend and its length, Length | Angle with the angle and corner radius, "At a liner", the
+seal areas and their lengths (on-device ruling: "all checkboxes must carry over"). Demotion is the
+inverse: `withDemotedBodyFaces` gives the section the BODY's faces, replacing the anchors left
+dormant under it since promotion. The Add Body dialog never carries; its own choices stand.
+
 The auto-body card carries the same section, anchored in shaft space (`AutoBlend`), so a template's
 seal areas survive liners moving under it; the dialog has no auto counterpart because an Add dialog
 always creates an explicit body.

@@ -709,7 +709,9 @@ internal val helpSections: List<HelpSection> = listOf(
                     "What you type is never " +
                     "changed: a value that would put a cut off the shaft or partly over " +
                     "another cut (sit fully inside it or fully clear) stays in the card, and " +
-                    "the status pill says why it cannot be recorded yet. Tap \"Record cut\" " +
+                    "the status pill says why it cannot be recorded yet. An overlap can be " +
+                    "saved anyway — tap the pill — so the other cut can be corrected next. " +
+                    "Tap \"Record cut\" " +
                     "on the pill to put a new cut in the record.\n\n" +
                     "Undo and Redo sit in the " +
                     "top bar, beside Preview and Drawing options — the preview of the sheet " +

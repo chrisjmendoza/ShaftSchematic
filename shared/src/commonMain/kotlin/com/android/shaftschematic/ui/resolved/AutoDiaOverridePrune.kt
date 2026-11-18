@@ -6,6 +6,17 @@ import com.android.shaftschematic.model.showsAutoSectionDia
 import com.android.shaftschematic.model.withAutoSectionShowDia
 import com.android.shaftschematic.model.autoSectionFiberglass
 import com.android.shaftschematic.model.withAutoSectionFiberglass
+import com.android.shaftschematic.model.AutoBlend
+import com.android.shaftschematic.model.LinerAuthoredReference
+import com.android.shaftschematic.model.autoBlendFor
+import com.android.shaftschematic.model.blendAngleDegOn
+import com.android.shaftschematic.model.blendMmOn
+import com.android.shaftschematic.model.blendRadiusMmOn
+import com.android.shaftschematic.model.blendSealLenMmOn
+import com.android.shaftschematic.model.blendSealOn
+import com.android.shaftschematic.model.blendToLinerOdOn
+import com.android.shaftschematic.model.withAutoBlend
+import com.android.shaftschematic.model.withAutoBlendAngle
 import kotlin.math.abs
 
 /** Slop on the span-start comparison — the resolve layer's own body epsilon. */
@@ -130,4 +141,69 @@ fun ShaftSpec.withDemotedBodyFiberglass(removed: Body): ShaftSpec {
     val run = autoRunOn(removed.startFromAftMm, removed.startFromAftMm + removed.lengthMm)
         ?: return this
     return withAutoSectionFiberglass(run.startMmPhysical, run.endMmPhysical, removed.fiberglass)
+}
+
+/**
+ * The blend anchors of the bare-shaft section lying on exactly `[startMm, endMm]` — its AFT and
+ * FWD faces' [com.android.shaftschematic.model.AutoBlend]s (`null` per face with none) — the
+ * question a body promoted from that section ("Explicit body") asks, so every face choice on the
+ * auto card carries over: Square | Blend and its length, Length | Angle with the angle and corner
+ * radius, "At a liner", and the seal areas with their lengths (on-device ruling: "all checkboxes
+ * must carry over"). A span no auto run fills exactly carries nothing.
+ */
+fun ShaftSpec.autoSectionFacesOn(startMm: Float, endMm: Float): Pair<AutoBlend?, AutoBlend?> {
+    if (autoBlends.isEmpty()) return null to null
+    val run = autoRunOn(startMm, endMm) ?: return null to null
+    return autoBlends.autoBlendFor(run.startMmPhysical, run.endMmPhysical, LinerAuthoredReference.AFT) to
+        autoBlends.autoBlendFor(run.startMmPhysical, run.endMmPhysical, LinerAuthoredReference.FWD)
+}
+
+/**
+ * [this] body with a bare-shaft section's face anchors ([autoSectionFacesOn]) written onto its
+ * stored blend fields, verbatim: each face's blend length, Angle entry and corner radius, liner
+ * target, seal flag and seal length, and the anchors' profile. A face with no anchor is square
+ * with no seal area.
+ */
+fun Body.withAutoSectionFaces(aft: AutoBlend?, fwd: AutoBlend?): Body = copy(
+    blendAftMm = aft?.lengthMm ?: 0f,
+    blendAftAngleDeg = aft?.angleDeg,
+    blendAftRadiusMm = aft?.radiusMm ?: 0f,
+    blendAftToLinerOd = aft?.toLinerOd ?: false,
+    blendAftSeal = aft?.seal ?: false,
+    blendAftSealLenMm = aft?.sealLenMm ?: 0f,
+    blendFwdMm = fwd?.lengthMm ?: 0f,
+    blendFwdAngleDeg = fwd?.angleDeg,
+    blendFwdRadiusMm = fwd?.radiusMm ?: 0f,
+    blendFwdToLinerOd = fwd?.toLinerOd ?: false,
+    blendFwdSeal = fwd?.seal ?: false,
+    blendFwdSealLenMm = fwd?.sealLenMm ?: 0f,
+    blendProfile = aft?.profile ?: fwd?.profile ?: blendProfile,
+)
+
+/**
+ * The inverse carry: this spec is the result of removing [removed], and when a bare-shaft section
+ * now fills exactly the body's stored span (a demotion) each of that section's faces takes the
+ * body's face — blend length and profile, seal pair, liner target, then the Angle entry — replacing
+ * any anchor left dormant under the body since its promotion, so the section shows what the body
+ * had, not what the section had before. A square face with no seal clears the face. A removal whose
+ * gap merges into a neighbouring section carries nothing.
+ */
+fun ShaftSpec.withDemotedBodyFaces(removed: Body): ShaftSpec {
+    val run = autoRunOn(removed.startFromAftMm, removed.startFromAftMm + removed.lengthMm)
+        ?: return this
+    val s0 = run.startMmPhysical
+    val s1 = run.endMmPhysical
+    var s = this
+    for (end in listOf(LinerAuthoredReference.AFT, LinerAuthoredReference.FWD)) {
+        s = s.withAutoBlend(
+            s0, s1, end,
+            lengthMm = removed.blendMmOn(end),
+            profile = removed.blendProfile,
+            seal = removed.blendSealOn(end),
+            sealLenMm = removed.blendSealLenMmOn(end),
+            toLinerOd = removed.blendToLinerOdOn(end),
+        )
+        s = s.withAutoBlendAngle(s0, s1, end, removed.blendAngleDegOn(end), removed.blendRadiusMmOn(end))
+    }
+    return s
 }
