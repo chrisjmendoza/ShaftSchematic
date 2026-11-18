@@ -106,15 +106,12 @@ class DrawingLabelPrintTest {
     // ── Header ───────────────────────────────────────────────────────────────
 
     @Test
-    fun `a set drawing label prints in the sheet header line, after the date and side`() {
+    fun `a set drawing label prints in the sheet header line, after the date`() {
         val line = jobInfoHeaderLine(project(drawingLabel = "Final"), date)
 
         assertTrue(line.contains("Drawing: Final"))
         assertTrue(line.indexOf("Date: $date") < line.indexOf("Drawing: Final"))
-        assertTrue(
-            "the side badge stays ahead of the drawing label",
-            line.indexOf("PORT") < line.indexOf("Drawing: Final"),
-        )
+        assertFalse("the side is the corner badge's, never on the job line", line.contains("PORT"))
     }
 
     @Test
@@ -123,7 +120,7 @@ class DrawingLabelPrintTest {
 
         assertFalse(line.contains("Drawing"))
         assertEquals(
-            "Customer: NorthSound Marine   Vessel: FV Tern Point   Job #: 814201   Date: $date  PORT",
+            "Customer: NorthSound Marine   Vessel: FV Tern Point   Job #: 814201   Date: $date",
             line,
         )
     }

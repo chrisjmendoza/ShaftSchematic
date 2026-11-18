@@ -303,6 +303,8 @@ fun planFooter(
     val colPad = 6f
     val midLines = buildFooterMidColumn(spec, project, cfg, date, blankValues)
     val noteLines = if (blankValues) emptyList() else footerNoteLines(project)
+    // A footer with no badge to print still keeps the one row it always has.
+    val sideBadgeRows = if (footerSideBadgeText(project) != null) FOOTER_SIDE_BADGE_ROWS else 1
 
     val (midX, rightX) = if (blankValues) {
         (rectLeft + width * midFrac) to (rectLeft + width * rightFrac)
@@ -340,7 +342,7 @@ fun planFooter(
     val wrappedMaxLines = maxOf(
         wrapCount(cols.aftLines, leftMaxW),
         wrapCount(cols.fwdLines, rightMaxW),
-        midLeadLines + wrapCount(midLines, midMaxW) + (if (blankValues) 0 else 1) +  // +1: Side badge
+        midLeadLines + wrapCount(midLines, midMaxW) + (if (blankValues) 0 else sideBadgeRows) +
             wrapCount(noteLines, midMaxW),
         1,
     )
@@ -408,10 +410,33 @@ private fun footerSideBadgeText(project: ProjectInfo): String? {
     }
 }
 
-/** The Side badge's paint: the footer text, 20% larger, bold. */
-private fun footerSideBadgePaint(text: Paint): Paint = Paint(text).apply {
-    textSize = text.textSize * 1.20f
-    isFakeBoldText = true
+/**
+ * The Side badge's text size, in footer text sizes (on-device request: with two shafts' sheets
+ * side by side the side has to be found at a glance — at 1.2 it had to be searched for).
+ */
+const val FOOTER_SIDE_BADGE_SCALE = 2.4f
+
+/** Footer rows the Side badge takes in the middle column — its capitals stand two rows tall. */
+const val FOOTER_SIDE_BADGE_ROWS = 2
+
+/** The smallest the Side badge is set to keep a long one (`CENTER  FINAL`) inside its column. */
+private const val FOOTER_SIDE_BADGE_MIN_SCALE = 1.2f
+
+/**
+ * The Side badge's paint: the footer text at [FOOTER_SIDE_BADGE_SCALE], bold — set smaller, down
+ * to [FOOTER_SIDE_BADGE_MIN_SCALE], when [badgeText] would otherwise run past [maxW].
+ */
+private fun footerSideBadgePaint(text: Paint, badgeText: String? = null, maxW: Float = Float.MAX_VALUE): Paint {
+    val paint = Paint(text).apply {
+        textSize = text.textSize * FOOTER_SIDE_BADGE_SCALE
+        isFakeBoldText = true
+    }
+    val w = badgeText?.let { paint.measureText(it) } ?: 0f
+    if (w > maxW && w > 0f) {
+        paint.textSize = (paint.textSize * maxW / w)
+            .coerceAtLeast(text.textSize * FOOTER_SIDE_BADGE_MIN_SCALE)
+    }
+    return paint
 }
 
 /** Printed width of the Side badge row, which belongs to the middle column. */
@@ -560,13 +585,27 @@ internal fun drawFooter(
         // The Side badge sits below the job block, set larger — a blank draft writes it in on a
         // rule instead, which `midLines` already carries as its own label line. A non-blank
         // drawingLabel is a sibling on the SAME baseline (never its own row — wrappedMaxLines'
-        // Side-badge reservation must still count for exactly one line): to the right of the
+        // Side-badge reservation counts the badge once, FOOTER_SIDE_BADGE_ROWS): to the right of the
         // Side badge separated by two spaces, or alone at midX when there is no Side badge.
         if (!blankValues) {
             footerSideBadgeText(project)?.let { badgeText ->
-                y += lh * 0.35f
-                c.drawText(badgeText, midX, y, footerSideBadgePaint(text))
-                y += lh
+                // The badge stands centred in the rows the plan counted for it, between the row
+                // above and the row below; a footer squeezed to a tighter pitch sets it smaller
+                // rather than letting it touch either.
+                val fm = text.fontMetrics
+                val roomTop = y - lh + fm.descent
+                val roomH = lh * (FOOTER_SIDE_BADGE_ROWS + 1) - (fm.descent - fm.ascent)
+                val badge = footerSideBadgePaint(text, badgeText, midMaxW)
+                val bm = badge.fontMetrics
+                val badgeH = bm.descent - bm.ascent
+                if (badgeH > roomH && badgeH > 0f) {
+                    badge.textSize = (badge.textSize * roomH / badgeH)
+                        .coerceAtLeast(text.textSize * FOOTER_SIDE_BADGE_MIN_SCALE)
+                }
+                val fit = badge.fontMetrics
+                val top = roomTop + ((roomH - (fit.descent - fit.ascent)) * 0.5f).coerceAtLeast(0f)
+                c.drawText(badgeText, midX, top - fit.ascent, badge)
+                y += lh * FOOTER_SIDE_BADGE_ROWS
             }
             // The job's notes, under the badge (on-device request: the space under the job block
             // is usually free). Counted in wrappedMaxLines, so the band already holds them.

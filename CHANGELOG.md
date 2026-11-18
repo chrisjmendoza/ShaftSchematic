@@ -8,6 +8,17 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-17
 
+### feat(sheets): PORT / STBD prints large on every sheet
+
+On-device request: with the port and starboard shafts' sheets side by side at the welder, the
+side had to be searched for in the job text. It now prints once on every sheet in large bold
+capitals. The undercut, wear and runout sheets carry it in the upper right corner of the header
+(about three times the header text on the undercut and wear sheets), and their job line no longer
+repeats it; the undercut title line is the title alone again. The schematic, the consolidated
+sheet and the Final tab's sheets print the footer's side at nearly twice its former size, under the job
+block and above the notes; it takes two footer rows there. A job with no side and a blank draft
+print as before.
+
 ### feat(final): the Full length drawing keeps its proportions and shows the keyways
 
 On-device request: the whole shaft across the top of the Full length sheet is now drawn at one

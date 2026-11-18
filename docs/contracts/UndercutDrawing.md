@@ -2667,11 +2667,15 @@ lists are never written. A section with no cuts returns the record unchanged.
 
 ### Header: the shaft side
 
-On-device request: `drawSheetHeader(boldSideOnTitle = true)` — the undercut sheet only. With a
-side in the project information (`ShaftPosition.printableLabelOrNull`), the title line is the
-title, an em dash and the side in BOLD capitals (`UNDERCUT RECORD — PORT`), centred as one line,
-and the job line above omits its plain side. No side, or a blank draft (write-in header): the
-header is unchanged.
+On-device request (two shafts' sheets side by side at the welder: the side had to be searched
+for). With a side in the project information (`ShaftPosition.printableLabelOrNull`), the header
+prints it ONCE, in large bold capitals tucked into the upper right corner — `drawHeaderSideBadge`
+(`pdf/SheetHeader.kt`), the one badge the wear and classic runout headers print too. Its text
+size is 80% of the header block's height (`HEADER_SIDE_BADGE_HEIGHT_FRAC`), so it costs the
+sheet no height; the job line and the title stay centred on the page when that clears the badge
+and centre in the room left of it otherwise. The job line carries no side
+(`jobInfoHeaderLine`), and the title line is the title alone. No side prints no badge; a blank
+draft's header is write-in and rules its "Side:" line as before.
 
 ### Crowded sections: the detail canvas's axial map
 

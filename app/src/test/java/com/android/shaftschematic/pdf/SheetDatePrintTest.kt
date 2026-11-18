@@ -48,7 +48,7 @@ class SheetDatePrintTest {
 
         assertFalse(line.contains("Date"))
         assertEquals(
-            "Customer: NorthSound Marine   Vessel: FV Tern Point   Job #: 814201   Item: Tail shaft  PORT",
+            "Customer: NorthSound Marine   Vessel: FV Tern Point   Job #: 814201   Item: Tail shaft",
             line,
         )
         assertEquals("no leading or trailing space to shift the centred line", line.trim(), line)
@@ -65,8 +65,8 @@ class SheetDatePrintTest {
     }
 
     @Test
-    fun `a null date on an otherwise empty job prints just the side`() {
-        assertEquals("PORT", jobInfoHeaderLine(ProjectInfo(side = ShaftPosition.PORT), null))
+    fun `a null date on an otherwise empty job prints an empty line, the side being the corner badge's`() {
+        assertEquals("", jobInfoHeaderLine(ProjectInfo(side = ShaftPosition.PORT), null))
         assertEquals("", jobInfoHeaderLine(ProjectInfo(), null))
     }
 
@@ -76,18 +76,7 @@ class SheetDatePrintTest {
         val line = jobInfoHeaderLine(p, p.printedDateOrNull("2026-11-13"))
 
         assertEquals(
-            "Customer: NorthSound Marine   Vessel: FV Tern Point   Job #: 814201   Item: Tail shaft   Date: 11/6/2026  PORT",
-            line,
-        )
-    }
-
-    @Test
-    fun `the bold-side header variant omits a null date too`() {
-        val (line, bold) = sheetHeaderJobLineAndBoldSide(project(), null, boldSideOnTitle = true)
-
-        assertEquals("PORT", bold)
-        assertEquals(
-            "Customer: NorthSound Marine   Vessel: FV Tern Point   Job #: 814201   Item: Tail shaft",
+            "Customer: NorthSound Marine   Vessel: FV Tern Point   Job #: 814201   Item: Tail shaft   Date: 11/6/2026",
             line,
         )
     }
