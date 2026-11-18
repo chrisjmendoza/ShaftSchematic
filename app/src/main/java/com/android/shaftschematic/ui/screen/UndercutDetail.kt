@@ -405,7 +405,7 @@ fun UndercutWindowDetailOverlay(
      */
     seedNewCut: Boolean = false,
     /**
-     * App-wide `PdfPrefs.undercutLinerOutline`: the dotted retrace of each liner's original edges
+     * App-wide `PdfPrefs.undercutLinerOutline`: the phantom-line retrace of each liner's original edges
      * over the cuts, drawn here as on the printed sheet. Passed in so a change recomposes this canvas.
      */
     linerOutline: Boolean = true,
@@ -1891,7 +1891,7 @@ fun UndercutWindowDetailOverlay(
                                     pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f)),
                                 )
                             }
-                            // ── Liner outline — the liner's original edges, dotted over the cuts ──
+                            // ── Liner outline — the liner's original edges, a phantom line over the cuts ──
                             if (linerOutline) {
                                 drawLinerOutlines(
                                     liners = linerOds,

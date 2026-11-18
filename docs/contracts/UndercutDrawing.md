@@ -2693,6 +2693,21 @@ S.E.T. prints that shaft end too, across an S-break:
 - **Printed sheet only.** `linerStripFor` / `buildUndercutStrips` never set a break, so the detail
   canvas and the tab's overview are unchanged; they owe the mirror.
 
+### Liner outline: the line and its key
+
+On-device direction (a dotted line on a schematic means a hidden edge): the liner outline
+(`PdfPrefs.undercutLinerOutline`) and the retraced blend ramps are drawn as a PHANTOM line — one
+long dash, two short — from ONE pattern, `LINER_OUTLINE_PHANTOM_PT` / `linerOutlinePattern`
+(`geom/LinerOutlineMath.kt`), at sheet points on the PDF and scaled by
+`LINER_OUTLINE_CANVAS_PATTERN_SCALE` on the two canvases. Every piece opens on its long dash. The
+ink is black at alpha 200 on the PDF and `SheetInk.Outline` at `LINER_OUTLINE_CANVAS_ALPHA` on the
+canvases. Wherever this document says the outline is "dotted", read this line.
+
+A printed strips page whose printed sections retrace at least one piece of a liner carries a key on
+the AFT / FWD row, centred: a sample of the line and `LINER_OUTLINE_LEGEND` ("Original liner
+surface"), drawn by `drawUndercutDirectionRow(legendPaint)`. A sheet with the outline off, or with
+nothing retraced, prints the row as before. The canvases carry no key.
+
 ### Header: the shaft side
 
 On-device request (two shafts' sheets side by side at the welder: the side had to be searched

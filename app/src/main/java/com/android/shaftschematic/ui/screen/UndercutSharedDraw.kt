@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import com.android.shaftschematic.geom.LinerOutlineEdge
+import com.android.shaftschematic.geom.linerOutlinePattern
 import com.android.shaftschematic.geom.NOTCH_FACE_MIN_STEP_PX
 import com.android.shaftschematic.geom.UNDERCUT_SECTION_FILL_ALPHA
 import com.android.shaftschematic.geom.UndercutBlendCurve
@@ -171,10 +172,13 @@ internal fun DrawScope.drawUndercutNotches(
 }
 
 /** The liner outline's ink alpha on the white-sheet canvases (over `SheetInk.Outline`). */
-internal const val LINER_OUTLINE_CANVAS_ALPHA = 0.4f
+internal const val LINER_OUTLINE_CANVAS_ALPHA = 0.55f
+
+/** The canvases' px per sheet point for the liner outline's line pattern (`linerOutlinePattern`). */
+internal const val LINER_OUTLINE_CANVAS_PATTERN_SCALE = 1.5f
 
 /**
- * The liner outline (`PdfPrefs.undercutLinerOutline`): a fine DOTTED retrace of each liner's
+ * The liner outline (`PdfPrefs.undercutLinerOutline`): a fine PHANTOM-line retrace (long dash, two short) of each liner's
  * original OD and end faces over the stretches [notches] erased — the OD and shoulder steps
  * mirrored about [cy], an end face ONE full-height line from top OD to bottom OD through the
  * body — the pieces come from the ONE pure builder the PDF composer also runs
@@ -190,7 +194,7 @@ internal fun DrawScope.drawLinerOutlines(
     color: Color,
     strokeWidthPx: Float,
 ) {
-    val dots = PathEffect.dashPathEffect(floatArrayOf(2f, 4f))
+    val dots = PathEffect.dashPathEffect(linerOutlinePattern(LINER_OUTLINE_CANVAS_PATTERN_SCALE))
     liners.forEach { liner ->
         linerOutlineSegments(liner, notches).forEach { seg ->
             val r0 = rPx(seg.dia0Mm)
@@ -217,7 +221,7 @@ internal fun DrawScope.drawLinerOutlines(
 }
 
 /**
- * The blended body faces a cut took away, retraced in the liner outline's dotted ink — from the
+ * The blended body faces a cut took away, retraced in the liner outline's phantom-line ink — from the
  * cut's edge, where the solid ramp now stops, up to the face, where the liner outline's own
  * retrace stands — mirrored about [cy], from the ONE pure builder the PDF composer also runs
  * ([erasedBlendTraces]). Called with [drawLinerOutlines], after the notch passes. [knotsInside]
@@ -235,7 +239,7 @@ internal fun DrawScope.drawErasedBlendTraces(
     strokeWidthPx: Float,
     knotsInside: (Float, Float) -> List<Float> = { _, _ -> emptyList() },
 ) {
-    val dots = PathEffect.dashPathEffect(floatArrayOf(2f, 4f))
+    val dots = PathEffect.dashPathEffect(linerOutlinePattern(LINER_OUTLINE_CANVAS_PATTERN_SCALE))
     curves.forEach { curve ->
         erasedBlendTraces(curve, notches).forEach { trace ->
             val a = maxOf(trace.first().xMm, w0Mm)

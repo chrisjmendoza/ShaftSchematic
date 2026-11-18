@@ -46,6 +46,22 @@ enum class LinerOutlineEdge {
 }
 
 /**
+ * The liner outline's line pattern, in sheet points: a PHANTOM line — one long dash, two short —
+ * the drafting convention for material that has been machined away (on-device direction: a dotted
+ * line already means a hidden edge on a schematic). On, off, on, off… from a piece's start, so
+ * every piece opens on its long dash. ONE pattern behind the printed sheet and the canvases, which
+ * scale it by their own drawn size ([linerOutlinePattern]).
+ */
+val LINER_OUTLINE_PHANTOM_PT: List<Float> = listOf(7f, 2f, 1.5f, 2f, 1.5f, 2f)
+
+/** [LINER_OUTLINE_PHANTOM_PT] at [scale] drawn units per sheet point. */
+fun linerOutlinePattern(scale: Float = 1f): FloatArray =
+    FloatArray(LINER_OUTLINE_PHANTOM_PT.size) { LINER_OUTLINE_PHANTOM_PT[it] * scale }
+
+/** What the sheet's legend calls the liner outline. */
+const val LINER_OUTLINE_LEGEND = "Original liner surface"
+
+/**
  * One dotted piece. A [LinerOutlineEdge.SURFACE] piece runs `x0Mm → x1Mm` at `dia0Mm`
  * (`== dia1Mm`); a [LinerOutlineEdge.STEP] stands at `x0Mm` from `dia0Mm` to `dia1Mm`, mirrored
  * about the centreline; a [LinerOutlineEdge.FULL_FACE] stands at `x0Mm` across the whole Ø
