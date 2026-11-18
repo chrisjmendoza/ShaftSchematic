@@ -2685,7 +2685,11 @@ S.E.T. prints that shaft end too, across an S-break:
   `UNDERCUT_SET_BREAK_MIN_ELIDE_MM` (6") would be left out, the strip is carried to the end with no
   break.
 - **Layout.** `planUndercutDetailStrip` sizes the strip with the gap closed up, in the cell less
-  `UNDERCUT_SET_BREAK_GAP_PT`, then opens the gap in the map (`UndercutStripXMap.withBreakGap`).
+  the gap's drawn width, then opens the gap in the map (`UndercutStripXMap.withBreakGap`). The gap
+  is only as wide as the S pair needs — `undercutSetBreakGapPt`, the schematic's pair rule (the
+  curves' combined reach, the stroke, `BREAK_PAIR_DAYLIGHT_PT`); the curves' size follows the drawn
+  shaft height, so the draw pass plans once at `UNDERCUT_SET_BREAK_GAP_PT` (the widest), reads the
+  height, and plans again with the width it needs (on-device report: the fixed gap stood too wide).
   The map keeps `toScale`, so a break alone prints no "Not to scale" note; "Compress long sections"
   composes with it. Every dimension that crosses the gap prints its true value.
 - **Draw.** The strip draws each side of the gap as its own window — profile, fills clipped to the
@@ -2703,10 +2707,20 @@ long dash, two short — from ONE pattern, `LINER_OUTLINE_PHANTOM_PT` / `linerOu
 ink is black at alpha 200 on the PDF and `SheetInk.Outline` at `LINER_OUTLINE_CANVAS_ALPHA` on the
 canvases. Wherever this document says the outline is "dotted", read this line.
 
-A printed strips page whose printed sections retrace at least one piece of a liner carries a key on
-the AFT / FWD row, centred: a sample of the line and `LINER_OUTLINE_LEGEND` ("Original liner
-surface"), drawn by `drawUndercutDirectionRow(legendPaint)`. A sheet with the outline off, or with
-nothing retraced, prints the row as before. The canvases carry no key.
+A printed strips page whose printed sections retrace at least one piece of a liner carries a key at
+the foot of the page, right of the Notes line: a sample of the line and `LINER_OUTLINE_LEGEND`
+("Original liner surface"), drawn by `drawUndercutNotesRow(legendPaint)`, the notes rule stopping
+short of it. (It first stood on the AFT / FWD row, where it read as part of the drawing — on-device
+report.) A sheet with the outline off, or with nothing retraced, rules the Notes line edge to edge
+as before. The canvases carry no key.
+
+### Rail captions: where they stand
+
+`undercutRailCaptionSpot` — the ONE rule, printed strip and canvas — tries, in order: past the
+rail's station end on the rail's own height, on one line; the same place on two lines
+(`undercutCaptionTwoLines`, broken at the space nearest the middle, each line's edge toward the
+station); inboard of the arrowhead above the line. On-device report: "S.E.T. to liner end" on a
+lower section, moved above its line for want of room, overprinted the title of the section above.
 
 ### Header: the shaft side
 

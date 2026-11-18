@@ -6,6 +6,24 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-11-18
+
+### fix(undercut): the liner-outline key moves to the Notes line, captions wrap, the break gap closes up
+
+On-device reports on the printed undercut sheet:
+
+- The "Original liner surface" key stood between the AFT and FWD labels, where it read as part of
+  the drawing. It now stands at the foot of the page, right of the Notes line.
+- "S.E.T. to liner end" on a lower section printed over the title of the section above it. A
+  caption that does not fit beside the end of its dimension line on one line is now set there on
+  two lines; it moves above the line only when even that does not fit.
+- The gap between the two S-breaks of a section drawn out to the shaft end was wider than it had to
+  be. It is now only as wide as the two curves need, the same rule the schematic uses.
+
+The User Manual is brought up to date: the long-dash, two-short liner outline and its key, the
+section that prints the shaft end across a break, the larger PORT / STBD lettering, and "Seal areas
+on inspection sheets". Its sheet figures are re-rendered.
+
 ## 2026-11-17
 
 ### feat(undercut): the liner outline is a phantom line, with a key on the sheet
