@@ -610,11 +610,21 @@ live outside `ShaftSpec` in their own envelope field (`undercut_record`, sibling
 `startFromAftMm` (an undercut may cross a liner edge or span components), so there are no
 orphans and nothing is pruned at decode. The Distance field is authored against one of four
 references — `AFT_SET`/`FWD_SET` or a reference liner's `LINER_AFT`/`LINER_FWD` edge
-(display-only metadata; canonical never moves on a reference *switch* — the
+(canonical never moves on a reference *switch* — the
 `WearSpotReference` pattern, conversion pair in `geom/UndercutMath.kt`. A **Length edit**
 is different: it re-derives canonical at the new length (`undercutCanonicalForNewLength`)
 so the authored Distance never rewrites itself — under a FWD reference the cut's FWD end
-stays pinned and the cut grows AFT-ward). Detail strips are liner-anchored: a cut inside a liner draws
+stays pinned and the cut grows AFT-ward). **A cut keeps its reference position** (on-device
+ruling: "always the case"): when an edit to the ORIGINAL drawing moves the datum its Distance was
+typed against — a S.E.T. (OAL or end-taper change), its reference liner's edge, its parent cut's
+shoulder — `updateSpec(ORIGINAL)` re-derives `startFromAftMm` right after `followAutoBodyKeys`
+(`followUndercutDatums` → `UndercutRecord.reanchoredFor`, `geom/UndercutReanchorMath.kt`: the card's
+own conversion pair, parents before children), in the SAME undo step; length, Ø and the stored
+reference never change. It follows the STORED reference, never the card's display fallback
+(`effectiveUndercutReference`), and moves nothing when the liner or parent is missing, the datum
+moved ≤ `UNDERCUT_REANCHOR_EPS_MM`, or the write is a load, undo/redo, template, mate or FINAL edit;
+nothing is clamped (a cut carried off the shaft is the stale-overrun case). Do not write a second
+re-anchor path. Detail strips are liner-anchored: a cut inside a liner draws
 that liner's whole span (`buildUndercutStrips`), not just a padded window; bare-shaft cuts still
 cluster into padded windows. **A strip's window end always has room for its S-break**:
 `UNDERCUT_WINDOW_PAD_MM` is the MINIMUM pad, and every strip-range builder widens the DRAW range
@@ -642,7 +652,7 @@ invariant. Both undercut surfaces carry Undo/Redo bound to the ONE document hist
 detail page's confirm-free delete offers a snackbar Undo that restores the exact cut via
 `restoreUndercut` (verbatim, original index, no-op when the id is already back) — never a
 history step, which could fold in an edit coalesced with the delete. **No undercut field ever reverts a typed value**: Distance, Length and the Gap-to-Cut fields commit
-to the draft verbatim, and ALL span validity (bounds, length, overlap) is confirm-time — shown
+to the draft verbatim, and ALL span validity (bounds, length, duplicate, off-liner, overlap) is confirm-time — shown
 under the fields and on the pill, with the Keep-editing/Discard prompt on leave. The Wear tab's
 wear-spot Start/Length fields follow the same rule (verbatim commit, `wearSpotSpanIssue` shown under
 the fields and on the row, band clamped for DISPLAY only). Elsewhere, a
@@ -657,19 +667,20 @@ surface, so a cut typed past a liner end onto smaller stock its floor stands abo
 the edge, and the card's "isn't smaller than the shaft" check reads the HIGHEST surface a cut
 spans (`UndercutFloors.highestSurfaceDiaMm`) — on-device report): the card disables
 that Liner chip, `effectiveUndercutReference` falls back DISPLAY-ONLY to the nearer S.E.T.
-(stored reference and canonical untouched, the missing-liner posture), a new cut seeds from the
+(stored reference and canonical untouched by it, the missing-liner posture), a new cut seeds from the
 S.E.T., and the printed chain gets a node at the buried edge so the overhanging cut's shoulder is
 located against the liner edge the strip title places from the S.E.T. (on-device request). A nested cut may also author its Distance from its PARENT cut's shoulders
-(`PARENT_AFT`/`PARENT_FWD` + `Undercut.referenceCutId`, display metadata stored verbatim and never
+(`PARENT_AFT`/`PARENT_FWD` + `Undercut.referenceCutId`, stored verbatim and never
 pruned) — the liner formulas with the parent's span, offered only while the cut sits fully inside
 a stored cut, displayed from the nearer S.E.T. once that parent is gone or no longer contains it
-(canonical untouched). Two butted top-level cuts draw ONE step between their floors (a touching
+(canonical untouched by the display fallback). Two butted top-level cuts draw ONE step between their floors (a touching
 end's face top is the neighbour's DRAWN floor; a deeper neighbour leaves no face); an UNTOUCHED
-"New undercut" is discarded on leave, never recorded; the FIRST cut on a section opens with Distance
-and Length EMPTY (on-device request: the seeded guess was always wrong and had to be deleted) — the
-seed still places the preview, `undercutSeedBlankIssue` blocks Record until both are typed
-("Enter the distance and length"), and a butted seed (a section with cuts, "Next cut") keeps its
-values; the overlap message names the partner cut;
+"New undercut" is discarded on leave, never recorded; EVERY new cut opens with Length EMPTY and the
+FIRST cut on a section with Distance empty too (on-device requests: the seeded guess was always
+wrong, and a default 1" typed around recorded a cut nobody measured) — the seed still places the
+preview, `undercutSeedBlankIssue` blocks Record until both are typed ("Enter the distance and
+length" / "Enter the length"), and a butted seed (a section with cuts, "Next cut") keeps only its
+Distance, which sits on a real shoulder; the duplicate and overlap messages name the partner cut;
 containment, touching and duplicates share `UNDERCUT_TOUCH_EPS_MM`. A draft's id ALWAYS equals its card's page id (`writeDraft` refuses a write
 from a card with no page; Confirm and every leave flush the focused field first — a field still
 holding focus on a disposed "New undercut" card resurrected an invisible PENDING draft and lost
@@ -718,7 +729,7 @@ liner's OD in its display unit. "Next cut" (a full-width button at the card's fo
 PENDING cut butted to the end AWAY from its datum — FWD end under an AFT datum, AFT end under a FWD
 one (`isFwdUndercutReference`; a run is recorded outward from what it is measured from — on-device
 report: right to left from the FWD S.E.T., every next cut opened back toward the datum), stepping
-past cuts already there to the run's open end (`undercutNextCutSeed`; same datum, Ø empty; disabled
+past cuts already there to the run's open end (`undercutNextCutSeed`; same datum, Length and Ø empty; disabled
 while unconfirmable or with no stock that side); an add on a strip with cuts seeds butted to the
 FWD-most cut, or AFT of the AFT-most first when the strip's cuts all read from FWD datums
 (`undercutAddSeedSpan(aftFirst)`). **A
@@ -727,9 +738,15 @@ butted seed's Length edit holds the shared edge, not the seeded Distance**
 the ordinary length rule pins the FWD end, so typing the real length grew the new cut INTO the cut
 it was butted against (on-device report). It applies only while the pending cut still sits on the
 seed's own butted edge — a Distance the user typed is authored and keeps the ordinary rule; the tab's
-list delete offers the same `restoreUndercut` snackbar Undo as the detail page; a cut with no Ø is
-flagged on its row, counted above the list, and the tab's Print/Export confirm first
-(`undercutsMissingDia`; blank drafts exempt). The notch (void fill erasing surface stroke and fill — the mouth stays **OPEN**,
+list delete offers the same `restoreUndercut` snackbar Undo as the detail page; a cut with no Ø
+("Ø not entered") and a cut that partially overlaps or duplicates another ("Overlaps cut N",
+`undercutOverlapPartners` — the card's own predicate) are flagged on their rows and counted above
+the list. **Every Print and Export of the undercut sheet — tab body and preview, the section-only
+copy included — asks ONE question built by ONE `undercutPrePrintIssues`**: one line per problem, in
+order no Ø, overlap, past the end of the shaft, not on the shaft, Ø not below its surface, section
+will not fit (`undercutSheetPageSplit`); titled "Print without diameters?" only when a missing Ø is
+the sole issue, else "Print with these problems?" / "Export with these problems?"; nothing asked
+with no issue or under a blank draft; Preview never gated. Do not add a second pre-print check. The notch (void fill erasing surface stroke and fill — the mouth stays **OPEN**,
 never closed by a lid — plus a full-height **section face** at each end and the floor lines,
 so each cut is its own reduced-Ø rectangle **step in the silhouette**, cut against the
 **local outer-surface envelope**; the section's core fills one step **lighter** than the
@@ -757,15 +774,27 @@ the child's floor — the silhouette two separately-authored adjacent sections w
 (`nestedSurfacePoints` gives the child a zero-width step point at the outer surface there, so
 its own face redraws the sliver its void erased off the parent's; do not "fix" this in a draw
 site). `undercutNestingForest` parents each span to the smallest span containing it (ties to the
-first in record order), and `undercutOverlapIssue` flags only a PARTIAL overlap or a DUPLICATE
+first in record order), and the confirm check flags only a PARTIAL overlap or a DUPLICATE
 span at confirm (stored partial overlaps are tolerated as siblings and keep rendering; nothing
-is retroactively rejected). **An overlap ASKS, it does not refuse** (on-device report: one of two
-cuts sharing an edge could not be corrected before the other): while the overlap is the draft's ONLY
-issue (`undercutIssueIsOverlapOnly` — a shaft-bounds issue is never overridable) the blocked pill is
-tappable ("Overlaps cut 2 — tap to save anyway", `undercut_blocked_save`) and the leave prompt reads
-"Save with an overlap?" with **Save anyway** (`undercut_leave_save_anyway`) beside Keep editing /
-Discard; the acceptance is per card, consumed by that card's next confirm (`overlapAccepted`), and
-"Next cut" stays blocked. A RECORDED cut that overlaps another keeps the warning under its fields.
+is retroactively rejected). **ONE confirm check, `undercutConfirmCheck`** (`UndercutDetail.kt`),
+behind the pill, the canvas, the card's inline reason, "Next cut" and the leave decision, tries in
+order `UndercutIssueKind` SEED_BLANK → BOUNDS → DUPLICATE → OFF_LINER → OVERLAP and stops at the
+first. The last three run only when the draft's SPAN differs from its stored baseline (a new cut
+always), so a Ø or note edit on a stored overlapping cut records (on-device report). A DUPLICATE
+("Same span as cut N — entered twice?", `undercutDuplicatePartnerId`) is a hard block, like
+SEED_BLANK and BOUNDS. The two overridable kinds ASK: an OVERLAP (on-device report: one of two cuts
+sharing an edge could not be corrected before the other) — pill "Overlaps cut 2 — tap to save
+anyway" (`undercut_blocked_save`), "Save with an overlap?" with **Save anyway**; and, on a liner's
+page, OFF_LINER — a span touching neither the liner nor any of its section's cuts
+(`undercutOffLiner`; on-device report: a mirrored sketch entered from the wrong S.E.T. landed its
+cuts on bare shaft) — red warning on the card, pill "Not on this liner — tap to record anyway",
+question "Not on this liner" with **Record anyway** and, when the same typed Distance from the
+OPPOSITE S.E.T. lands on the liner (`undercutMirrorOntoLiner`), "Measure from AFT/FWD S.E.T.
+instead", which switches the reference AND moves the cut keeping the typed number — the one
+reference change that moves a cut, because the user chose it. Acceptance is per card PER KIND
+(`acceptedIssues`), consumed by that card's next confirm, and accepting one never accepts the other;
+"Next cut" stays blocked while an unaccepted issue stands. A RECORDED cut that overlaps another keeps the warning
+under its fields.
 A child is cut
 against its **parent's floor**, not the shaft surface: true floor via `effectiveNotchDiaMm` on
 that floor, drawn floor via `nestedNotchFloorDiaMm` — the exaggerated depth is RELATIVE to the
@@ -827,7 +856,10 @@ FWD — the mirror; coinciding stations one rail; nearest lowest), each its own 
 a break, open off the strip edge when the S.E.T. is off it, one shared datum witness when it is on
 it. The tier pitch is ONE number (`UndercutStripInnerLayout.setTierPitchPt`; the canvas's tightest pitch, `undercutSetTierMinPitch`)
 behind the reserved band and the drawn tiers, closed up toward the value's height + 3 pt only to
-keep the shaft at `UNDERCUT_CYL_MAX_FLOOR_PT`; no rail is ever dropped. CHAIN is byte-identical to
+keep the shaft at `UNDERCUT_CYL_MAX_FLOOR_PT`; no rail is ever dropped. On a PRINTED strip with air
+to spare the tiers open UP instead (`UndercutStripPlan.roomyTiers`: the widest of
+`UNDERCUT_SET_TIER_ROOMY_FACTORS` × the row metric that leaves the drawn shaft its height — paid
+from surplus air only; on-device report: the lines read tight on a one-section sheet). CHAIN is byte-identical to
 the sheet before the choice existed. Do not write a canvas-only or sheet-only version of either
 style. See `docs/contracts/UndercutDrawing.md` (Dimensions from the S.E.T.).
 
@@ -871,12 +903,27 @@ Pure geometry in `geom/UndercutBlendMath.kt`, drawn identically on the printed s
 strips are zoomed. The whole-shaft overview canvas keeps `ShaftRenderer`'s own blend and draws
 no dotted retrace.
 
-**Keyways print on the undercut detail strips** (on-device request: a strip ending on a body must
-read as the shaft end, as a taper end does): any STORED body or taper keyway a strip window holds
-≥ 90% of (`undercutStripShowsSpan`) draws through the schematic's own slot routine at the strip's
-two scales, clipped to the window; the strip's `docSpec` carries resolved bodies (no keyways), so
-the composer hands it the stored spec as `keywaySpec`. Printed sheet only so far — the canvases owe
-the mirror.
+**Keyways print on the undercut detail strips — only under `PdfPrefs.undercutKeyways`** (app-wide
+look pref "Keyways", default OFF — on-device request: handy on the one shaft with a body ending a
+strip, noise on a taper end; the Undercut tab's Drawing settings, the undercut PDF options' "Lines &
+text" group and Settings → PDF Export, profiles capture it): on, any STORED body or taper keyway a
+strip window holds ≥ 90% of (`undercutStripShowsSpan`) draws through the schematic's own slot
+routine at the strip's two scales, clipped to the window; the strip's `docSpec` carries resolved
+bodies (no keyways), so the composer hands it the stored spec as `keywaySpec`. Off draws no keyway on
+any strip. Printed sheet only so far — the canvases owe the mirror.
+
+**An undercut section that reaches a shaft end draws the end thread** (on-device request: the shop's
+sketches always show the thread "to make it clear which end it's on"): a strip DRAW range whose end
+is the shaft's flat physical end (`0` / the OAL) runs on to the drawn shaft's outer end there —
+`undercutDrawnShaftEndsMm` (`drawnExtentMm`), past the face by a thread EXCLUDED from the OAL; a
+thread counted in the OAL is already inside — through the ONE pure `withUndercutEndThreads`
+(`geom/UndercutMath.kt`), applied LAST in `linerStripFor`, `buildUndercutStrips`'s free strips,
+`undercutPreviewDrawRange`, the canvas's `undercutDetailLeadDrawRange` and the printed
+`planUndercutDetailStrip` (after the `[0, OAL]`-clamping pad widening). The thread draws through the
+strips' existing thread pass, the strip's physical end is the thread's outer end (flat, no S-break),
+and `sheetDrawsThread` follows from the widened range. Drawing only: chain datums, the S.E.T. lead,
+the overall dimension and every value are unchanged, cuts stay clamped to `[0, OAL]`, and a strip
+short of the end or a shaft with no thread past it is byte-identical. No toggle.
 
 **`PdfPrefs.undercutDiaInside`** (default OFF — on-device request, a toggle so both ways can be
 printed; line art and shaded sheets alike) writes each cut's Ø INSIDE the shaft on the printed strips as a vertical
@@ -908,7 +955,12 @@ side comes from ONE `undercutStripSetSide` (per-job `UndercutRecord.setDatum`) s
 strip title, because a title and a lead resolved separately could name different S.E.T.s. Which
 sections print is ONE filter, `isUndercutStripPrinted`, inside `undercutSheetStrips`, so page
 shape, layout and every caption count the same printed strips; every section off prints a note
-page and never falls back to the whole-shaft profile. The preview opened from a section's OWN page
+page and never falls back to the whole-shaft profile. Which printed strips FIT the page is ONE
+split too, `splitUndercutStripsForPage` (`pdf/UndercutStripLayout.kt`; `undercutSheetPageSplit`
+applies it on the page `undercutSheetOrientation` picks): the composer draws its `onPage` and notes
+the `overflow` as "+N more", and the tab reads the same split — the "Sections to print" caption names
+the overflow sections, their cuts read "Not on the printout" (`undercutCutIdsNotPrinted`) and the
+pre-print question lists them — so the tab can never promise a section the page leaves off. The preview opened from a section's OWN page
 shows that section alone (on-device request) by handing the composer a COPY of the record with every
 other section excluded (`undercutRecordForOnlySection`, session-only `previewSectionOnly`; Print and
 Export from that preview follow it) — never a write to the job's "Sections to print", and the tab's

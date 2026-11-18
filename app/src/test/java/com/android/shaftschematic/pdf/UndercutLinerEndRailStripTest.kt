@@ -92,7 +92,11 @@ class UndercutLinerEndRailStripTest {
         val (rails, inner) = plan.resolveRails(112f, 560f, dualStacked = false)
         assertTrue(rails.totalSpan != null)
         val rowH = undercutRailRowHeightPt(plan.dimText, false)
-        assertEquals(rowH, inner.setTierPitchPt, 0f)
+        // A strip with air to spare opens its tiers past the row metric, at one of the roomy
+        // pitches, and its shaft keeps the height the row-metric layout gives it.
+        assertTrue(UNDERCUT_SET_TIER_ROOMY_FACTORS.any { kotlin.math.abs(rowH * it - inner.setTierPitchPt) < 1e-3f })
+        val tight = plan.innerLayout(112f, 560f, dualStacked = false, lifted = rails !== plan.rails)
+        assertEquals(tight.cylBottom - tight.cylTop, inner.cylBottom - inner.cylTop, 0.02f)
         val ys = undercutSetRailLineYs(rails, inner.chainRailY, rowH, inner.setTierPitchPt, totalRailY = inner.totalRailY)
         assertTrue("tier 0 above the total's value", ys[0] <= inner.totalRailY - UNDERCUT_TOTAL_RAIL_ABOVE_PT - rowH + 1e-3f)
         assertTrue("the top tier stays inside the strip", ys.last() >= 112f - 1e-3f)

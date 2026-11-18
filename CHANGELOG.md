@@ -8,13 +8,76 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-17
 
+### feat(undercut): a section at the shaft end shows the thread
+
+On-device request: the shop's undercut sketches always draw the thread, so it is clear which end of
+the shaft the section is at. A section on the undercut sheet that runs out to the end of the shaft
+now draws the thread there too, hatched as on the schematic, with the flat end of the drawing at the
+end of the thread. It works for a thread left out of the overall length as well, which before was
+cut off at the taper's small end. Only the drawing grows: every dimension on the section reads
+exactly as before. The section's page on the Undercut tab draws the same thread.
+
+### feat(undercut): keyways on the undercut sheet are now a switch, off by default
+
+On-device request: a keyway on a section was handy on the one shaft with a body at its end, but
+cluttered the sections that end on a taper. A new "Keyways" switch (Undercut tab → Drawing
+settings, the undercut sheet's options under "Lines & text", and Settings → PDF Export) draws a
+keyway that falls in a section when it is on; off — the default — the undercut sheet draws none.
+It is app-wide and saved with drawing profiles.
+
+### fix(undercut): more room between the stacked dimension lines on a roomy sheet
+
+On-device report (Pacific Warrior PORT, MID liner on its own sheet): the dimension lines above the
+section stood a text height apart and read tight, with most of the page empty. Where a section has
+room to spare, the lines from the S.E.T. now stand up to one and a half times as far apart. The
+drawn shaft is never made smaller for it, so a crowded sheet prints as before.
+
+### fix(undercut): a cut keeps the distance you typed when the shaft changes
+
+On-device ruling: an undercut always stays where it was measured from. Before, changing the
+overall length, a taper or a liner moved the S.E.T. or the liner edge a cut was measured from, but
+left the cut where it was, so its Distance no longer read what had been typed. Now the cut moves
+with its datum: a cut measured from the FWD S.E.T. follows it when the shaft gets longer or
+shorter, a cut measured from a liner edge follows the liner when it is moved or resized, and a cut
+measured from the cut it sits inside follows that cut. The length and Ø never change, and Undo puts
+the shaft and the cuts back together. Switching "Measure From" on a card still never moves a cut.
+
+### feat(undercut): Print and Export say what is wrong with the sheet first
+
+On-device request: the undercut sheet could go to the printer with cuts on top of each other or a
+section missing. Print and Export on the Undercut tab, and on its preview, now ask one question
+that lists every problem the sheet has: cuts with no Ø, cuts that overlap another, a cut past the
+end of the shaft or not on it, a Ø that is not below the surface it is cut into, and sections that
+will not fit on the page. Choose "Print anyway" (or "Export anyway") or "Cancel". With only cuts
+missing their Ø it still reads "Print without diameters?"; with no problems nothing is asked. In
+the "Recorded undercuts" list a cut that overlaps another now says so ("Overlaps cut 2"), with a
+count above the list. When more sections are ticked under "Sections to print" than the page holds,
+the line under the list turns red and names the ones that will not print, and their cuts read "Not
+on the printout".
+
+### fix(undercut): the section page catches a cut entered from the wrong end or twice
+
+On-device report: cuts from a sketch drawn mirrored were entered from the FWD S.E.T. instead of the
+AFT one and landed on bare shaft, clear of the liner whose page they were typed on. On a liner's
+page, a cut that misses the liner and its cuts now shows "Not on this liner — 6 13/16 in FWD of it"
+in red under Length, and the pill reads "Not on this liner — tap to record anyway". The question
+offers "Record anyway" and, when the same distance from the other S.E.T. would put the cut on the
+liner, "Measure from AFT S.E.T. instead" (or FWD), which moves the cut there and keeps the number
+you typed; the card says so under the warning too. A cut with exactly the same span as another
+reads "Same span as cut 2 — entered twice?" and cannot be recorded. A cut saved on top of another
+with "Save anyway" can now have its Ø or note changed without being asked about the overlap again.
+"Next cut", and a new cut on a section that already has cuts, now open with the Length empty —
+the pill reads "Enter the length" — so a placeholder 1" is never recorded by mistake; the Distance
+is still filled in.
+
 ### feat(undercut): the first cut on a section opens with Distance and Length empty
 
 On-device request: the first cut's pre-filled position was always wrong and had to be deleted
 before typing. The first "New undercut" card on a liner or bare-shaft section now opens with
 Distance and Length empty; the pill reads "Enter the distance and length" until both are typed,
 and the card cannot be recorded before then. A cut added to a section that already has cuts, and
-"Next cut", still open butted to the neighbouring cut with their values filled in.
+"Next cut", still open butted to the neighbouring cut with the Distance filled in; their Length
+opens empty (see above).
 
 ### fix(undercut): a cut recorded off the liner from a liner's page no longer vanishes
 

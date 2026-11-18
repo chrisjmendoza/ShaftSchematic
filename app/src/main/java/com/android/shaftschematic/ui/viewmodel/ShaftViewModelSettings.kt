@@ -146,6 +146,17 @@ fun ShaftViewModel.setPdfUndercutDiaInside(v: Boolean, persist: Boolean = true) 
 }
 
 /**
+ * Wired to the "Keyways" rows in Settings → PDF Export, on the undercut PDF options panel and in
+ * the Undercut tab's Drawing settings: a keyway that falls in a section draws on the printed
+ * undercut drawing's strip.
+ */
+fun ShaftViewModel.setPdfUndercutKeyways(v: Boolean, persist: Boolean = true) {
+    _pdfUndercutKeyways.value = v
+    SettingsStore.updatePdfPrefs { it.copy(undercutKeyways = v) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfUndercutKeyways(getApplication(), v) }
+}
+
+/**
  * Wired to the undercut drawing's own "Liners" shade rows (Settings → PDF Export, the undercut PDF
  * options Shading group, the Undercut tab's Drawing settings). Never touches `shadedLiners`.
  */
@@ -544,6 +555,7 @@ fun ShaftViewModel.applyDrawingProfile(profile: DrawingProfile) {
     setPdfUndercutLinerOutline(prefs.undercutLinerOutline)
     setPdfUndercutDepthShade(prefs.undercutDepthShade)
     setPdfUndercutDiaInside(prefs.undercutDiaInside)
+    setPdfUndercutKeyways(prefs.undercutKeyways)
     setPdfUndercutShadeLiners(prefs.undercutShadeLiners)
     setPdfUndercutSplitAtLinerEdge(prefs.undercutSplitAtLinerEdge)
     setPdfUndercutTotalRail(prefs.undercutTotalRail)

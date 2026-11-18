@@ -84,11 +84,14 @@ class UndercutSetRailStripTest {
     }
 
     @Test
-    fun `a roomy strip stacks its tiers at the row metric`() {
+    fun `a roomy strip opens its tiers past the row metric without shrinking its shaft`() {
         val doc = fixture("undercut_crowded_royal_atlantic.shaft")
         val plan = planOf(doc.spec, doc.undercutRecord, UndercutAnchorSide.AFT_SET, fromSet = true)
         val (rails, inner) = plan.resolveRails(112f, 560f, dualStacked = false)
-        assertEquals(undercutRailRowHeightPt(plan.dimText, false), inner.setTierPitchPt, 0f)
+        val rowH = undercutRailRowHeightPt(plan.dimText, false)
+        assertTrue(UNDERCUT_SET_TIER_ROOMY_FACTORS.any { kotlin.math.abs(rowH * it - inner.setTierPitchPt) < 1e-3f })
+        val tight = plan.innerLayout(112f, 560f, dualStacked = false, lifted = rails !== plan.rails)
+        assertEquals(tight.cylBottom - tight.cylTop, inner.cylBottom - inner.cylTop, 0.02f)
         assertTrue(inner.cylBottom - inner.cylTop >= UNDERCUT_CYL_MAX_FLOOR_PT)
         val ys = undercutSetRailLineYs(rails, inner.chainRailY, undercutRailRowHeightPt(plan.dimText, false), inner.setTierPitchPt)
         assertEquals(rails.setRails.size, ys.size)

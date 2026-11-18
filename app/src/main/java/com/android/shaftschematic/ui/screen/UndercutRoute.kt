@@ -114,6 +114,7 @@ import com.android.shaftschematic.geom.undercutSetReachMm
 import com.android.shaftschematic.geom.effectiveUndercutTotalRail
 import com.android.shaftschematic.geom.maxOuterDiaOver
 import com.android.shaftschematic.geom.pickUndercutStripAt
+import com.android.shaftschematic.geom.undercutDrawnShaftEndsMm
 import com.android.shaftschematic.geom.undercutDisplayedDistanceMm
 import com.android.shaftschematic.geom.undercutReferenceParentSpan
 import com.android.shaftschematic.geom.undercutReferenceLabel
@@ -122,6 +123,9 @@ import com.android.shaftschematic.geom.undercutSetPositions
 import com.android.shaftschematic.geom.undercutSections
 import com.android.shaftschematic.geom.undercutMissingDiaMessage
 import com.android.shaftschematic.geom.undercutsMissingDia
+import com.android.shaftschematic.geom.UndercutNumberedSection
+import com.android.shaftschematic.geom.resolveUndercutFloors
+import com.android.shaftschematic.geom.undercutOverlapPartnerId
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.forSheet
 import com.android.shaftschematic.model.SheetDateSheet
@@ -157,6 +161,7 @@ import com.android.shaftschematic.ui.viewmodel.restoreUndercut
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutSplitAtLinerEdge
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutDepthShade
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutDiaInside
+import com.android.shaftschematic.ui.viewmodel.setPdfUndercutKeyways
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutShadeLiners
 import com.android.shaftschematic.ui.viewmodel.setUndercutDrawToSet
 import com.android.shaftschematic.ui.viewmodel.setUndercutShowTotalRail
@@ -222,7 +227,9 @@ internal const val UNDERCUT_TAB_TITLE_TAG = "undercut_tab_title"
  * - **Undercut list** — one compact row per recorded cut, grouped under its section's title
  *   (liner, or bare-shaft cluster) and numbered AFT → FWD from 1 within the section
  *   (`undercutSections` — the numbers that section's detail page shows; they print on no sheet): its
- *   distance under its own authored reference, length, Ø ("Ø not entered" when unmeasured), and a stale-overrun warning. Tapping a
+ *   distance under its own authored reference, length, Ø ("Ø not entered" when unmeasured), a
+ *   stale-overrun warning, and "Overlaps cut N" when it partially overlaps another cut
+ *   ([undercutOverlapPartners] — the card's own predicate). Tapping a
  *   row opens that cut's strip; the trailing icon deletes it confirm-free, with a "Cut N deleted —
  *   <section>" snackbar Undo (`restoreUndercut`).
  * - **Drawing settings** — collapsed under the list, out of the authoring flow (usability
@@ -232,8 +239,10 @@ internal const val UNDERCUT_TAB_TITLE_TAG = "undercut_tab_title"
  *   record — display-only styling for every notch draw site, never a stored or printed Ø),
  *   "Draw to the shaft end" (per job) and "Split cuts at liner edges" (app-wide).
  * - Blank-draft toggle, Preview, Print, Export — straight ports of the wear document's flows,
- *   all calling `composeUndercutPdf`. Print and Export (tab body and preview alike) first ask
- *   "Print without diameters?" while any cut has no Ø and no blank draft is elected.
+ *   all calling `composeUndercutPdf`. Print and Export (tab body and preview alike) first ask ONE
+ *   question listing every problem [undercutPrePrintIssues] finds — no Ø, overlaps, a cut past
+ *   the shaft end or off it, a Ø not below its surface, a ticked section the page has no room
+ *   for — unless a blank draft is elected; with none found, nothing is asked.
  *
  * Undercuts are reference-only data: nothing on this screen touches geometry, OAL, or
  * collision.
@@ -280,6 +289,8 @@ fun UndercutRoute(
     // Ø values inside the shaft on the printed sheet: a preview re-render key and an
     // options-sheet control.
     val pdfUndercutDiaInside by vm.pdfUndercutDiaInside.collectAsState()
+    // Keyways on the printed sheet's strips: a preview re-render key and an options-sheet control.
+    val pdfUndercutKeyways by vm.pdfUndercutKeyways.collectAsState()
     // The undercut drawing's own liner shading (never the schematic's): a preview re-render key, an
     // options-sheet control, and read by both canvases.
     val pdfUndercutShadeLiners by vm.pdfUndercutShadeLiners.collectAsState()
@@ -469,11 +480,18 @@ fun UndercutRoute(
     val (stripAftSetMm, stripFwdSetMm) = remember(spec) { undercutSetPositions(spec) }
     // Where that reach is measured to: the end tapers' inboard ends.
     val (stripAftReachMm, stripFwdReachMm) = remember(spec) { undercutSetReachAnchors(spec) }
-    val strips = remember(spans, linerSpans, oalMm, segs, setReachMm, stripAftSetMm, stripFwdSetMm, stripAftReachMm, stripFwdReachMm) {
+    // A strip that reaches a shaft end draws on over the end thread there, one excluded from the
+    // OAL included — the printed sheet's ends.
+    val (stripAftEndMm, stripFwdEndMm) = remember(spec) { undercutDrawnShaftEndsMm(spec) }
+    val strips = remember(
+        spans, linerSpans, oalMm, segs, setReachMm, stripAftSetMm, stripFwdSetMm, stripAftReachMm, stripFwdReachMm,
+        stripAftEndMm, stripFwdEndMm,
+    ) {
         buildUndercutStrips(
             spans, linerSpans, oalMm, segs = segs,
             reachToSetMm = setReachMm, aftSetMm = stripAftSetMm, fwdSetMm = stripFwdSetMm,
             aftReachFromMm = stripAftReachMm, fwdReachFromMm = stripFwdReachMm,
+            aftEndMm = stripAftEndMm, fwdEndMm = stripFwdEndMm,
         )
     }
     // Whether the printed sheet draws a thread anywhere — the gate on its options' Thread section.
@@ -490,6 +508,7 @@ fun UndercutRoute(
                     it, emptyList(), oalMm, segs = segs,
                     reachToSetMm = setReachMm, aftSetMm = stripAftSetMm, fwdSetMm = stripFwdSetMm,
                     aftReachFromMm = stripAftReachMm, fwdReachFromMm = stripFwdReachMm,
+                    aftEndMm = stripAftEndMm, fwdEndMm = stripFwdEndMm,
                 )
             }
         }
@@ -540,6 +559,7 @@ fun UndercutRoute(
             liner, members, oalMm, segs = segs, cutSpans = members,
             reachToSetMm = setReachMm, aftSetMm = stripAftSetMm, fwdSetMm = stripFwdSetMm,
             aftReachFromMm = stripAftReachMm, fwdReachFromMm = stripFwdReachMm,
+            aftEndMm = stripAftEndMm, fwdEndMm = stripFwdEndMm,
         )
     }
 
@@ -624,6 +644,11 @@ fun UndercutRoute(
     }
     // The cuts that would print with no Ø.
     val missingDia = remember(undercutRecord) { undercutsMissingDia(undercutRecord.undercuts) }
+    // The cuts that partially overlap (or duplicate) another — stored with "Save anyway"; the
+    // printed chain would trim one of each pair, so the list flags them.
+    val overlapPartners = remember(undercutRecord, oalMm) {
+        undercutOverlapPartners(undercutRecord.undercuts, oalMm)
+    }
 
     // The list's delete: confirm-free, with the detail page's snackbar Undo — the removed cut and
     // its record index are captured BEFORE the removal, so the Undo puts back that exact cut at
@@ -648,13 +673,27 @@ fun UndercutRoute(
         }
     }
 
-    // Print / Export with cuts that have no Ø: asked first, unless a blank draft is elected (a
-    // blank draft prints no values by design). [missingDiaAsk] holds the action waiting on the
-    // answer; Preview is never gated.
-    var missingDiaAsk by remember { mutableStateOf<UndercutMissingDiaAsk?>(null) }
-    fun guardMissingDia(export: Boolean, action: () -> Unit) {
-        if (!blankDraft && missingDia.isNotEmpty()) {
-            missingDiaAsk = UndercutMissingDiaAsk(count = missingDia.size, export = export, action = action)
+    // Print / Export with problems on the sheet: ONE question listing every one found
+    // (`undercutPrePrintIssues`) for the [record] about to print — the job's, or the section-only
+    // copy the section page's preview prints — unless a blank draft is elected (a blank draft
+    // prints no values by design). [printAsk] holds the action waiting on the answer; Preview is
+    // never gated.
+    var printAsk by remember { mutableStateOf<UndercutPrintAsk?>(null) }
+    fun guardPrint(export: Boolean, record: UndercutRecord = undercutRecord, action: () -> Unit) {
+        val issues = if (blankDraft) emptyList() else undercutPrePrintIssues(
+            undercuts = record.undercuts,
+            oalMm = oalMm,
+            segs = segs,
+            looseCutIds = listSections.filter { it.sectionIndex == null }
+                .flatMap { sec -> sec.cuts.map { it.id } }.toSet(),
+            overflowSectionLabels = undercutPrintSections(
+                spec, resolvedComponents, record, blankDraft = false,
+                DisplayUnits(unit, unitOverrides, dualUnits),
+            ).overflowLabels(),
+            blankDraft = blankDraft,
+        )
+        if (issues.isNotEmpty()) {
+            printAsk = UndercutPrintAsk(issues = issues, export = export, action = action)
         } else {
             action()
         }
@@ -714,6 +753,7 @@ fun UndercutRoute(
                 undercutLinerOutline = pdfUndercutLinerOutline,
                 undercutDepthShade = pdfUndercutDepthShade,
                 undercutDiaInside = pdfUndercutDiaInside,
+                undercutKeyways = pdfUndercutKeyways,
                 undercutShadeLiners = pdfUndercutShadeLiners,
                 undercutSplitAtLinerEdge = pdfUndercutSplitAtLinerEdge,
                 undercutTotalRail = pdfUndercutTotalRail,
@@ -1028,6 +1068,25 @@ fun UndercutRoute(
                         )
                     }
                 }
+                // Cuts overlapping another print a length nobody typed — said once, and on each row.
+                if (overlapPartners.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier.padding(bottom = 4.dp).testTag("undercut_overlap_note"),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            Icons.Filled.Warning,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(end = 6.dp),
+                        )
+                        Text(
+                            undercutOverlapCountMessage(overlapPartners.size),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
                 val setPositions = undercutSetPositions(spec)
                 val linerTitles = buildLinerTitleById(spec)
                 // One group per section, AFT → FWD, numbered from 1 within it (`undercutSections`),
@@ -1053,6 +1112,9 @@ fun UndercutRoute(
                             number = number,
                             undercut = u,
                             notPrinted = u.id in notPrintedCutIds,
+                            overlapText = overlapPartners[u.id]?.let { partner ->
+                                undercutOverlapRowText(u.id, partner, listSections, sectionTitles)
+                            },
                             unit = unit,
                             oalMm = oalMm,
                             linerSpans = linerSpans,
@@ -1189,6 +1251,13 @@ fun UndercutRoute(
                         testTag = "undercut_dia_inside_switch",
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
+                    // App-wide look, printed sheet only: a keyway that falls in a section draws.
+                    UndercutKeywaysRow(
+                        checked = pdfUndercutKeyways,
+                        onCheckedChange = { vm.setPdfUndercutKeyways(it) },
+                        testTag = "undercut_keyways_switch",
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
                     // The undercut drawing's OWN liner shading — the schematic's stays untouched.
                     UndercutShadeLinersRow(
                         checked = pdfUndercutShadeLiners,
@@ -1281,10 +1350,10 @@ fun UndercutRoute(
 
         DocumentActionButtons(
             documentName = "Undercut Drawing",
-            onPrint = { guardMissingDia(export = false) { printUndercutDrawing() } },
+            onPrint = { guardPrint(export = false) { printUndercutDrawing() } },
             onPreview = { showPreview = true },
             onExport = {
-                guardMissingDia(export = true) {
+                guardPrint(export = true) {
                     launcher.launchPicker(
                         buildOutputFilename(customer, vessel, jobNumber, shaftPosition, OutputDoc.UNDERCUT, blankDraft, currentDocumentName),
                         what = "undercut export",
@@ -1434,19 +1503,27 @@ fun UndercutRoute(
         }
     }
 
-    // ── "Print without diameters?" ───────────────────────────────────────────
-    // Cuts placed but never measured print with no Ø; the machinist decides whether that sheet
-    // goes out. Cancel, back and tap-outside all leave nothing printed or exported.
-    missingDiaAsk?.let { ask ->
+    // ── The pre-print question ───────────────────────────────────────────────
+    // Every problem found on the sheet about to print, one line each (cuts with no Ø, overlaps, a
+    // cut past the shaft end or off it, a Ø not below its surface, a ticked section the page has
+    // no room for); the machinist decides whether that sheet goes out. Cancel, back and
+    // tap-outside all leave nothing printed or exported.
+    printAsk?.let { ask ->
         AlertDialog(
-            onDismissRequest = { missingDiaAsk = null },
+            onDismissRequest = { printAsk = null },
             modifier = Modifier.testTag("undercut_missing_dia_dialog"),
-            title = { Text("Print without diameters?") },
-            text = { Text(undercutMissingDiaMessage(ask.count)) },
+            title = { Text(undercutPrintAskTitle(ask.issues, ask.export)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ask.issues.forEach { issue ->
+                        Text(issue.text, modifier = Modifier.testTag(issue.testTag))
+                    }
+                }
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        missingDiaAsk = null
+                        printAsk = null
                         ask.action()
                     },
                     modifier = Modifier.testTag("undercut_missing_dia_proceed"),
@@ -1456,7 +1533,7 @@ fun UndercutRoute(
             },
             dismissButton = {
                 TextButton(
-                    onClick = { missingDiaAsk = null },
+                    onClick = { printAsk = null },
                     modifier = Modifier.testTag("undercut_missing_dia_cancel"),
                 ) {
                     Text("Cancel")
@@ -1603,7 +1680,7 @@ fun UndercutRoute(
             title = "Undercut Drawing Preview",
             onClose = { closePreview() },
             onExport = {
-                guardMissingDia(export = true) {
+                guardPrint(export = true, record = sheetRecord) {
                     pendingExportRecord = sheetRecord
                     closePreview()
                     launcher.launchPicker(
@@ -1612,9 +1689,9 @@ fun UndercutRoute(
                     )
                 }
             },
-            // The tab body's Print action — one function behind both, behind the same missing-Ø
+            // The tab body's Print action — one function behind both, behind the same pre-print
             // question — printing the sheet this preview shows.
-            onPrint = { guardMissingDia(export = false) { printUndercutDrawing(sheetRecord) } },
+            onPrint = { guardPrint(export = false, record = sheetRecord) { printUndercutDrawing(sheetRecord) } },
             // Every section left off: the page previews its note, but there is nothing to print.
             actionsEnabled = !noSectionSelected,
             optionsSheet = {
@@ -1724,8 +1801,142 @@ internal const val UNDERCUT_LIST_LOOSE_TITLE = "Not on the shaft"
 internal fun undercutListDeletedMessage(number: Int, sectionTitle: String): String =
     "Cut $number deleted — $sectionTitle"
 
-/** A Print ([export] false) or Export waiting on "Print without diameters?" — [count] cuts lack a Ø. */
-private class UndercutMissingDiaAsk(val count: Int, val export: Boolean, val action: () -> Unit)
+/** A Print ([export] false) or Export waiting on the pre-print question about [issues]. */
+private class UndercutPrintAsk(val issues: List<UndercutPrintIssue>, val export: Boolean, val action: () -> Unit)
+
+// ── Before printing ──
+
+/**
+ * Every recorded cut that partially overlaps (or duplicates) another, mapped to the FIRST such
+ * cut — the card's own confirm predicate (`undercutOverlapPartnerId`) run for each cut against
+ * every OTHER cut's span clamped to [oalMm] (the pool the detail page's card checks). Nested cuts
+ * and cuts touching edge to edge are not overlaps. A cut may be stored overlapping ("Save
+ * anyway"), and the printed chain then trims one of the pair to where the other ends, so the
+ * sheet prints a length nobody typed.
+ */
+internal fun undercutOverlapPartners(undercuts: List<Undercut>, oalMm: Float): Map<String, String> {
+    val clamped = undercuts.mapNotNull { u ->
+        val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
+        if (c.isEmpty) null else UndercutSpanMm(u.id, c.startMm, c.endMm)
+    }
+    return undercuts.mapNotNull { u ->
+        undercutOverlapPartnerId(u.startFromAftMm, u.lengthMm, clamped.filter { it.id != u.id })
+            ?.let { u.id to it }
+    }.toMap()
+}
+
+/**
+ * The list row's overlap line for cut [cutId] overlapping [partnerId]: `Overlaps cut 2` (the
+ * partner's number within the section both sit in — the list's own numbering, [sections]), or
+ * `Overlaps a cut in FWD Liner Ø10.000"` when the partner sits in another section ([titles] by
+ * section index).
+ */
+internal fun undercutOverlapRowText(
+    cutId: String,
+    partnerId: String,
+    sections: List<UndercutNumberedSection>,
+    titles: List<String>,
+): String {
+    val own = sections.firstOrNull { sec -> sec.cuts.any { it.id == cutId } }
+    val theirs = sections.firstOrNull { sec -> sec.cuts.any { it.id == partnerId } }
+        ?: return "Overlaps another cut"
+    if (own != null && own.sectionIndex == theirs.sectionIndex) {
+        return "Overlaps cut ${theirs.numbers[partnerId]}"
+    }
+    val title = theirs.sectionIndex?.let { titles.getOrNull(it) } ?: UNDERCUT_LIST_LOOSE_TITLE
+    return "Overlaps a cut in $title"
+}
+
+/** The statement of [count] cuts overlapping another — the list's note and a pre-print line. */
+internal fun undercutOverlapCountMessage(count: Int): String =
+    if (count == 1) "1 cut overlaps another — its printed length will be short."
+    else "$count cuts overlap another cut — a printed length will be short."
+
+/** One kind of problem the pre-print question can list; [tag] names its line's test tag. */
+internal enum class UndercutPrintIssueKind(val tag: String) {
+    NO_DIA("no_dia"),
+    OVERLAP("overlap"),
+    PAST_END("past_end"),
+    OFF_SHAFT("off_shaft"),
+    DIA_AT_SURFACE("dia_at_surface"),
+    OVERFLOW("overflow"),
+}
+
+/** One line of the pre-print question: what is wrong, counted, in plain words. */
+internal data class UndercutPrintIssue(val kind: UndercutPrintIssueKind, val text: String) {
+    /** `undercut_print_issue_<kind>` — e.g. `undercut_print_issue_overlap`. */
+    val testTag: String get() = "undercut_print_issue_" + kind.tag
+}
+
+/**
+ * Every problem the undercut sheet about to print carries, one line each in this order, or none:
+ * - cuts with no Ø (`undercutsMissingDia` — they print without one);
+ * - cuts that overlap another ([undercutOverlapPartners] — one printed length will be short);
+ * - cuts that run past the end of the shaft (`isUndercutStaleOverrun` against [oalMm]; a cut wholly
+ *   off the shaft is counted only under the next line);
+ * - cuts on no section ([looseCutIds] — the list's "Not on the shaft" group; they do not print);
+ * - cuts whose Ø is not below the surface they are cut into — the card's own check, read off the
+ *   true-scale floors over [segs] (`resolveUndercutFloors`' `highestSurfaceDiaMm`);
+ * - ticked sections the page has no room for ([overflowSectionLabels], `undercutSheetPageSplit`).
+ *
+ * A [blankDraft] prints no values by design and is never asked about: it yields no lines.
+ */
+internal fun undercutPrePrintIssues(
+    undercuts: List<Undercut>,
+    oalMm: Float,
+    segs: List<SurfaceSeg>,
+    looseCutIds: Set<String>,
+    overflowSectionLabels: List<String>,
+    blankDraft: Boolean,
+): List<UndercutPrintIssue> {
+    if (blankDraft) return emptyList()
+    val issues = mutableListOf<UndercutPrintIssue>()
+    fun add(kind: UndercutPrintIssueKind, count: Int, one: String, many: (Int) -> String) {
+        if (count > 0) issues += UndercutPrintIssue(kind, if (count == 1) one else many(count))
+    }
+    val noDia = undercutsMissingDia(undercuts).size
+    if (noDia > 0) issues += UndercutPrintIssue(UndercutPrintIssueKind.NO_DIA, undercutMissingDiaMessage(noDia))
+    val overlaps = undercutOverlapPartners(undercuts, oalMm).size
+    if (overlaps > 0) issues += UndercutPrintIssue(UndercutPrintIssueKind.OVERLAP, undercutOverlapCountMessage(overlaps))
+    add(
+        UndercutPrintIssueKind.PAST_END,
+        undercuts.count { it.id !in looseCutIds && isUndercutStaleOverrun(it.startFromAftMm, it.lengthMm, oalMm) },
+        "1 cut runs past the end of the shaft.",
+    ) { "$it cuts run past the end of the shaft." }
+    add(
+        UndercutPrintIssueKind.OFF_SHAFT,
+        undercuts.count { it.id in looseCutIds },
+        "1 cut is not on the shaft and will not print.",
+    ) { "$it cuts are not on the shaft and will not print." }
+    val byId = undercuts.associateBy { it.id }
+    val atSurface = resolveUndercutFloors(undercuts, segs, oalMm, exaggerationFrac = 0f).count { f ->
+        val dia = byId[f.span.id]?.diaMm ?: 0f
+        dia > 0f && f.highestSurfaceDiaMm > 0f && dia >= f.highestSurfaceDiaMm
+    }
+    add(
+        UndercutPrintIssueKind.DIA_AT_SURFACE,
+        atSurface,
+        "1 cut's Ø is not below the surface it is cut into.",
+    ) { "$it cuts have a Ø that is not below the surface they are cut into." }
+    if (overflowSectionLabels.isNotEmpty()) {
+        issues += UndercutPrintIssue(
+            UndercutPrintIssueKind.OVERFLOW,
+            undercutJoinedNames(overflowSectionLabels) + " will not fit on the page.",
+        )
+    }
+    return issues
+}
+
+/**
+ * The pre-print question's title: "Print without diameters?" while a missing Ø is the only
+ * problem (Print or Export alike), else "Print with these problems?" / "Export with these
+ * problems?".
+ */
+internal fun undercutPrintAskTitle(issues: List<UndercutPrintIssue>, export: Boolean): String = when {
+    issues.all { it.kind == UndercutPrintIssueKind.NO_DIA } -> "Print without diameters?"
+    export -> "Export with these problems?"
+    else -> "Print with these problems?"
+}
 
 /**
  * Everything one composed undercut preview page depends on, in one structural-equality value —
@@ -1754,6 +1965,8 @@ private data class UndercutRenderInputs(
     val undercutDepthShade: Boolean,
     /** `PdfPrefs.undercutDiaInside` — a key only; the composer reads it off the `PdfPrefs` snapshot. */
     val undercutDiaInside: Boolean,
+    /** `PdfPrefs.undercutKeyways` — a key only; the composer reads it off the `PdfPrefs` snapshot. */
+    val undercutKeyways: Boolean,
     val undercutShadeLiners: Boolean,
     val undercutSplitAtLinerEdge: Boolean,
     val undercutTotalRail: Boolean,
@@ -1846,6 +2059,7 @@ internal fun UndercutOptionsSheet(
     val pdfUndercutLinerOutline by vm.pdfUndercutLinerOutline.collectAsState()
     val pdfUndercutDepthShade by vm.pdfUndercutDepthShade.collectAsState()
     val pdfUndercutDiaInside by vm.pdfUndercutDiaInside.collectAsState()
+    val pdfUndercutKeyways by vm.pdfUndercutKeyways.collectAsState()
     val pdfUndercutShadeLiners by vm.pdfUndercutShadeLiners.collectAsState()
     val pdfUndercutSplitAtLinerEdge by vm.pdfUndercutSplitAtLinerEdge.collectAsState()
     val pdfUndercutTotalRail by vm.pdfUndercutTotalRail.collectAsState()
@@ -1886,6 +2100,7 @@ internal fun UndercutOptionsSheet(
         undercutLinerOutline = pdfUndercutLinerOutline,
         undercutDepthShade = pdfUndercutDepthShade,
         undercutDiaInside = pdfUndercutDiaInside,
+        undercutKeyways = pdfUndercutKeyways,
         undercutShadeLiners = pdfUndercutShadeLiners,
         vm = vm,
         dateSheet = SheetDateSheet.UNDERCUT,
@@ -1997,7 +2212,8 @@ private fun openUndercutPdf(context: Context, uri: Uri) {
  * reference's short tag), its length, and its Ø — "—" while unmeasured, with a "Ø not entered" note
  * under it, since such a cut prints with no diameter. A cut whose span no longer fits the shaft
  * (`isUndercutStaleOverrun`) leads with a warning icon, the same non-blocking classifier the card
- * shows in full.
+ * shows in full; so does a cut that partially overlaps another, with an "Overlaps cut N" line
+ * ([undercutOverlapRowText]) — the printed chain would trim one of the pair.
  *
  * The whole row opens the cut's strip; the trailing icon deletes it outright — confirm-free, with a
  * snackbar Undo from the caller. Neither path touches canonical values.
@@ -2006,8 +2222,10 @@ private fun openUndercutPdf(context: Context, uri: Uri) {
 private fun UndercutListRow(
     number: Int,
     undercut: Undercut,
-    /** The cut sits in a section the job leaves off the printout ("Sections to print"). */
+    /** The cut sits in a section the job leaves off the printout ("Sections to print"), or one the page has no room for. */
     notPrinted: Boolean = false,
+    /** "Overlaps cut N" while the cut partially overlaps another ([undercutOverlapRowText]); null otherwise. */
+    overlapText: String? = null,
     unit: UnitSystem,
     oalMm: Float,
     linerSpans: List<UndercutLinerSpan>,
@@ -2058,6 +2276,13 @@ private fun UndercutListRow(
                 tint = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(end = 8.dp),
             )
+        } else if (overlapText != null) {
+            Icon(
+                Icons.Filled.Warning,
+                contentDescription = "Overlaps another cut",
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(end = 8.dp),
+            )
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -2075,6 +2300,14 @@ private fun UndercutListRow(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.testTag("undercut_row_not_printed_${undercut.id}"),
+                )
+            }
+            if (overlapText != null) {
+                Text(
+                    text = overlapText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.testTag("undercut_row_overlap_${undercut.id}"),
                 )
             }
             if (undercut.diaMm <= 0f) {

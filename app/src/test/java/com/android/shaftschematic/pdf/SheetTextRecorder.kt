@@ -26,6 +26,13 @@ internal class SheetTextRecorder(widthPt: Float, heightPt: Float) :
     val texts = mutableListOf<RecordedText>()
     val rects = mutableListOf<RecordedRect>()
     val lines = mutableListOf<RecordedLine>()
+    /** Every arc's oval — the keyway slot's mill ends and spoon bowl are the arcs a sheet draws. */
+    val arcs = mutableListOf<RectF>()
+
+    override fun drawArc(oval: RectF, startAngle: Float, sweepAngle: Float, useCenter: Boolean, paint: Paint) {
+        arcs += RectF(oval)
+        super.drawArc(oval, startAngle, sweepAngle, useCenter, paint)
+    }
 
     override fun drawRect(left: Float, top: Float, right: Float, bottom: Float, paint: Paint) {
         rects += RecordedRect(RectF(left, top, right, bottom), paint.style, paint.color, paint.alpha)

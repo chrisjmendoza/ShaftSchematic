@@ -710,9 +710,18 @@ internal val helpSections: List<HelpSection> = listOf(
                     "changed: a value that would put a cut off the shaft or partly over " +
                     "another cut (sit fully inside it or fully clear) stays in the card, and " +
                     "the status pill says why it cannot be recorded yet. An overlap can be " +
-                    "saved anyway — tap the pill — so the other cut can be corrected next. " +
-                    "Tap \"Record cut\" " +
+                    "saved anyway — tap the pill — so the other cut can be corrected next; " +
+                    "a cut typed twice (\"Same span as cut N — entered twice?\") cannot. On a " +
+                    "liner's page, a cut that misses the liner and its cuts reads \"Not on " +
+                    "this liner\": tap the pill to record it anyway, or, when the same " +
+                    "distance from the other S.E.T. lands on the liner, \"Measure from … " +
+                    "S.E.T. instead\" moves it there and keeps your number. Changing only " +
+                    "the Ø or the note of a recorded cut always saves. Tap \"Record cut\" " +
                     "on the pill to put a new cut in the record.\n\n" +
+                    "A recorded cut keeps the distance you typed from its datum: when the " +
+                    "shaft length, a taper or its liner changes and that S.E.T., liner edge " +
+                    "or parent cut moves, the cut moves with it. Switching \"Measure From\" " +
+                    "never moves a cut.\n\n" +
                     "Undo and Redo sit in the " +
                     "top bar, beside Preview and Drawing options — the preview of the sheet " +
                     "and its options panel, without leaving the zoomed page (the tab has the " +
@@ -720,7 +729,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "from the tab's list alike.\n\n" +
                     "\"Next cut\" at the foot of the card confirms the cut and " +
                     "opens a new one butted to its end away from the datum (FWD from an AFT " +
-                    "datum, AFT from a FWD one); \"More ways to place this cut\" " +
+                    "datum, AFT from a FWD one), its Distance filled in and its Length empty " +
+                    "for you to type; \"More ways to place this cut\" " +
                     "below it holds the whole-liner shortcut (offered only while the liner " +
                     "has no other cut) and the \"On the AFT side of\" / \"On the FWD side " +
                     "of\" butt-against chips. How far a cut runs past its liner shows as " +
@@ -730,8 +740,12 @@ internal val helpSections: List<HelpSection> = listOf(
                     "bare-shaft area; a cut no section holds sits under \"Not on the " +
                     "shaft\") and numbers them from 1 within each section — the same numbers " +
                     "that section's zoomed detail page shows inside each cut, to help you " +
-                    "find it; they never print — and flags a cut with no Ø (\"Ø not entered\"); printing or " +
-                    "exporting while one has no Ø asks first (\"Print without diameters?\").\n\n" +
+                    "find it; they never print — and flags a cut with no Ø (\"Ø not entered\") " +
+                    "and a cut that overlaps another (\"Overlaps cut N\"). Print and Export " +
+                    "ask first, in one question that lists every problem the sheet has — " +
+                    "cuts with no Ø, overlaps, a cut past the end of the shaft or not on it, " +
+                    "a Ø not below its surface, a section that will not fit on the page " +
+                    "(\"Print without diameters?\" when a missing Ø is the only one).\n\n" +
                     "Cut depth on the drawing " +
                     "is exaggerated for visibility (real cuts are hairline-thin at scale) — " +
                     "the printed Ø values are always your typed numbers. The \"Drawn depth\" " +
@@ -756,7 +770,9 @@ internal val helpSections: List<HelpSection> = listOf(
                     "to print\" (above the Print buttons when the sheet has two or more " +
                     "sections) is a checkbox per section; untick the ones you do not want on " +
                     "this printout, for example to send one liner's cuts to the welder by " +
-                    "itself.\n\n" +
+                    "itself. When more sections are ticked than the page holds, the line " +
+                    "under the list names the ones that will not print, and their cuts read " +
+                    "\"Not on the printout\" in the list.\n\n" +
                     "A short cut whose value does not fit its span is set above the " +
                     "chain line, under the overall dimension, with a leader down to its span " +
                     "when the strip has room; on a crowded sheet it drops below the line.",
@@ -1383,7 +1399,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "settings\", beside the Drawn depth slider. On unless turned off: a liner strip whose cuts end " +
                     "within 24 in of the end taper or its S.E.T. draws out to the shaft end, taper " +
                     "whole, and its dimension chain finishes with the run from the last cut to the " +
-                    "S.E.T. Saved with this job.\n" +
+                    "S.E.T. Saved with this job. A section that reaches the shaft end also draws " +
+                    "the thread there, so it is clear which end it is.\n" +
                     "• \"Overall dimension\" — on the Undercut Drawing, under \"Drawing " +
                     "settings\", and in its PDF options. Whether each section prints one " +
                     "dimension from the S.E.T. above the cut lengths; \"Overall dimension to\" " +
@@ -1431,7 +1448,10 @@ internal val helpSections: List<HelpSection> = listOf(
                     "angle. This one applies when you let go rather than while you drag.\n" +
                     "• \"Thread density\" — beside it. How many of the thread's crests the " +
                     "hatch draws, 100% being every crest at true pitch; fine threads stay at a " +
-                    "legible minimum spacing. It also applies when you let go.\n\n" +
+                    "legible minimum spacing. It also applies when you let go.\n" +
+                    "• \"Keyways\" — the undercut sheet's \"Lines & text\", also under the " +
+                    "Undercut Drawing's \"Drawing settings\". Off unless turned on: a keyway that " +
+                    "falls in a section draws on the printed sheet.\n\n" +
                     "• Drag any of those sliders and the preview updates as you drag — the " +
                     "sheet stops dimming the page and the drawing reshapes under your finger, " +
                     "so there is no need to pick a value, close the sheet, look, and reopen it. " +

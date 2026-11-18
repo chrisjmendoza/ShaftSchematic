@@ -207,6 +207,8 @@ object SettingsStore {
     private val KEY_PDF_UNDERCUT_DEPTH_SHADE = booleanPreferencesKey("pdf_undercut_depth_shade")
     // Undercut Ø values written inside the shaft (PdfPrefs.undercutDiaInside).
     private val KEY_PDF_UNDERCUT_DIA_INSIDE = booleanPreferencesKey("pdf_undercut_dia_inside")
+    // Keyways on the undercut drawing's detail strips (PdfPrefs.undercutKeyways).
+    private val KEY_PDF_UNDERCUT_KEYWAYS = booleanPreferencesKey("pdf_undercut_keyways")
     // Liner shading on the undercut drawing only (PdfPrefs.undercutShadeLiners) — never shadedLiners.
     private val KEY_PDF_UNDERCUT_SHADE_LINERS = booleanPreferencesKey("pdf_undercut_shade_liners")
     // Chain-rail node at each liner edge a cut runs past, on the undercut drawing's strips.
@@ -342,6 +344,13 @@ object SettingsStore {
         ctx.settingsPrefs.map { p -> p[KEY_PDF_UNDERCUT_DIA_INSIDE] ?: PdfPrefs().undercutDiaInside }
     suspend fun setPdfUndercutDiaInside(ctx: Context, v: Boolean) {
         ctx.editSettings { it[KEY_PDF_UNDERCUT_DIA_INSIDE] = v }
+    }
+
+    /** Keyways on the undercut drawing's strips — see the key's comment. */
+    fun pdfUndercutKeywaysFlow(ctx: Context): Flow<Boolean> =
+        ctx.settingsPrefs.map { p -> p[KEY_PDF_UNDERCUT_KEYWAYS] ?: PdfPrefs().undercutKeyways }
+    suspend fun setPdfUndercutKeyways(ctx: Context, v: Boolean) {
+        ctx.editSettings { it[KEY_PDF_UNDERCUT_KEYWAYS] = v }
     }
 
     /** Liner shading on the undercut drawing only — see the key's comment. */

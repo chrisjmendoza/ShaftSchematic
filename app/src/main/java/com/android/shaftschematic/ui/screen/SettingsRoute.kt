@@ -167,6 +167,7 @@ fun SettingsRoute(
     val pdfUndercutLinerOutline by vm.pdfUndercutLinerOutline.collectAsState()
     val pdfUndercutDepthShade by vm.pdfUndercutDepthShade.collectAsState()
     val pdfUndercutDiaInside by vm.pdfUndercutDiaInside.collectAsState()
+    val pdfUndercutKeyways by vm.pdfUndercutKeyways.collectAsState()
     val pdfUndercutShadeLiners by vm.pdfUndercutShadeLiners.collectAsState()
     val pdfUndercutSplitAtLinerEdge by vm.pdfUndercutSplitAtLinerEdge.collectAsState()
     val pdfUndercutTotalRail by vm.pdfUndercutTotalRail.collectAsState()
@@ -1094,6 +1095,22 @@ fun SettingsRoute(
                             )
                             Text(
                                 UNDERCUT_DIA_INSIDE_CAPTION,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = pdfUndercutKeyways,
+                            onCheckedChange = { vm.setPdfUndercutKeyways(it) },
+                            modifier = Modifier.testTag("pdf_undercut_keyways"),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text("Undercut drawing: keyways")
+                            Text(
+                                UNDERCUT_KEYWAYS_CAPTION,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

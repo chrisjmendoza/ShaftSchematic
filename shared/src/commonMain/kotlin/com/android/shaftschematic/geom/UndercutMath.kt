@@ -231,6 +231,37 @@ fun withUndercutBreakRoom(
 }
 
 /**
+ * The draw range `[startMm, endMm]` carried on over the end thread at each shaft end it reaches
+ * (on-device request: the shop's hand sketches always draw the thread on an undercut section that
+ * shows the shaft end, "to make it clear which end it's on"). An end AT the shaft's physical end —
+ * `0` / [oalMm], the flat end [withUndercutBreakRoom] gives a range that reaches it — runs on to
+ * [aftEndMm] / [fwdEndMm], the drawn shaft's outer ends ([undercutDrawnShaftEndsMm]: past `0` or the
+ * OAL by a thread excluded from the OAL), so the whole thread draws and the strip's physical end is
+ * the thread's outer end, still flat. A thread counted IN the OAL already lies inside `[0, oalMm]`,
+ * so a range at the end holds it as it stands.
+ *
+ * The ONE rule behind every undercut strip range — the strip builders ([linerStripFor],
+ * [buildUndercutStrips]), the detail canvas's previewed range ([undercutPreviewDrawRange]) and the
+ * printed strip's final range — applied LAST, after every step that clamps to `[0, oalMm]`.
+ * Drawing only: chain datums, the S.E.T. lead and every dimension value are untouched, and cut
+ * spans stay clamped to the shaft. An end short of the shaft end, or a shaft with no thread past
+ * it (the defaults), returns the range unchanged.
+ */
+fun withUndercutEndThreads(
+    startMm: Float,
+    endMm: Float,
+    oalMm: Float,
+    aftEndMm: Float = 0f,
+    fwdEndMm: Float = oalMm,
+): Pair<Float, Float> {
+    val eps = UNDERCUT_SPAN_EPS_MM
+    val hi = oalMm.coerceAtLeast(0f)
+    val start = if (startMm <= eps && aftEndMm < -eps) min(startMm, aftEndMm) else startMm
+    val end = if (endMm >= hi - eps && fwdEndMm > hi + eps) max(endMm, fwdEndMm) else endMm
+    return start to end
+}
+
+/**
  * [pieces] cut at every shoulder of [cuts] that falls strictly inside a piece, the Ø interpolated
  * linearly to the split — the walk in [withUndercutBreakRoom] then meets each shoulder as a face.
  * No cuts returns [pieces] itself.
@@ -1300,6 +1331,9 @@ fun assignUndercutLiners(
  * [fwdReachFromMm] — the inboard end of the end taper ([undercutSetReachAnchors]), the S.E.T.
  * itself when there is none — so a liner butted against a long taper draws through it rather than
  * putting a break in the taper (on-device report).
+ *
+ * A draw range that reaches a shaft end then runs on over the end thread there, to [aftEndMm] /
+ * [fwdEndMm] ([withUndercutEndThreads]); the chain is never touched by it.
  */
 fun linerStripFor(
     liner: UndercutLinerSpan,
@@ -1319,6 +1353,10 @@ fun linerStripFor(
     aftReachFromMm: Float = aftSetMm,
     /** Where the FWD reach is measured to — the FWD end taper's inboard end. */
     fwdReachFromMm: Float = fwdSetMm,
+    /** The drawn shaft's AFT outer end ([undercutDrawnShaftEndsMm]) — [withUndercutEndThreads]. */
+    aftEndMm: Float = 0f,
+    /** The drawn shaft's FWD outer end — [withUndercutEndThreads]. */
+    fwdEndMm: Float = oalMm,
 ): UndercutStrip.LinerStrip {
     val hi = oalMm.coerceAtLeast(0f)
     val cutsMin = assignedSpans.minOfOrNull { it.startMm } ?: liner.startMm
@@ -1341,7 +1379,7 @@ fun linerStripFor(
         if (drawToAftEnd) 0f else (chainStart - padMm).coerceIn(0f, hi),
         if (drawToFwdEnd) hi else (chainEnd + padMm).coerceIn(0f, hi),
         segs, oalMm, cutSpans,
-    )
+    ).let { (s, e) -> withUndercutEndThreads(s, e, oalMm, aftEndMm, fwdEndMm) }
     return UndercutStrip.LinerStrip(
         linerId = liner.id,
         linerStartMm = liner.startMm,
@@ -1363,8 +1401,9 @@ fun linerStripFor(
  * [clusterUndercuts] rebuild the strip on commit. Never narrowing keeps the window stable
  * while a draft shrinks a cut that had extended it; the rebuild on confirm re-tightens.
  * Clamped to `[0, oalMm]`, then given break room against [segs] ([withUndercutBreakRoom] —
- * widening only, so the never-narrow rule holds; empty [segs] skips it). Spans must already be
- * render-clamped ([clampUndercutSpan]).
+ * widening only, so the never-narrow rule holds; empty [segs] skips it), then carried over an end
+ * thread at a shaft end it reaches ([withUndercutEndThreads], [aftEndMm] / [fwdEndMm]). Spans must
+ * already be render-clamped ([clampUndercutSpan]).
  */
 fun undercutPreviewDrawRange(
     strip: UndercutStrip,
@@ -1374,16 +1413,23 @@ fun undercutPreviewDrawRange(
     segs: List<SurfaceSeg> = emptyList(),
     /** The strip's own previewed cuts, whose shoulders the window-end breaks also clear. */
     cutSpans: List<UndercutSpanMm> = emptyList(),
+    /** The drawn shaft's outer ends — the strip's own ([withUndercutEndThreads]). */
+    aftEndMm: Float = 0f,
+    fwdEndMm: Float = oalMm,
 ): Pair<Float, Float> {
     val hi = oalMm.coerceAtLeast(0f)
     val spansMin = previewSpans.minOfOrNull { it.startMm }
-        ?: return withUndercutBreakRoom(strip.drawStartMm, strip.drawEndMm, segs, oalMm, cutSpans)
-    val spansMax = previewSpans.maxOf { it.endMm }
-    return withUndercutBreakRoom(
-        min(strip.drawStartMm, spansMin - padMm).coerceIn(0f, hi),
-        max(strip.drawEndMm, spansMax + padMm).coerceIn(0f, hi),
-        segs, oalMm, cutSpans,
-    )
+    val (start, end) = if (spansMin == null) {
+        withUndercutBreakRoom(strip.drawStartMm, strip.drawEndMm, segs, oalMm, cutSpans)
+    } else {
+        val spansMax = previewSpans.maxOf { it.endMm }
+        withUndercutBreakRoom(
+            min(strip.drawStartMm, spansMin - padMm).coerceIn(0f, hi),
+            max(strip.drawEndMm, spansMax + padMm).coerceIn(0f, hi),
+            segs, oalMm, cutSpans,
+        )
+    }
+    return withUndercutEndThreads(start, end, oalMm, aftEndMm, fwdEndMm)
 }
 
 /**
@@ -1458,6 +1504,9 @@ fun buildUndercutStrips(
     fwdSetMm: Float = oalMm,
     aftReachFromMm: Float = aftSetMm,
     fwdReachFromMm: Float = fwdSetMm,
+    /** The drawn shaft's outer ends ([undercutDrawnShaftEndsMm]) — every strip's [withUndercutEndThreads]. */
+    aftEndMm: Float = 0f,
+    fwdEndMm: Float = oalMm,
 ): List<UndercutStrip> {
     val live = spans.filter { it.endMm > it.startMm }
     val linerOf = assignUndercutLiners(live, liners)
@@ -1469,12 +1518,14 @@ fun buildUndercutStrips(
             liner, assigned, oalMm, padMm, segs, cutSpans = assigned,
             reachToSetMm = reachToSetMm, aftSetMm = aftSetMm, fwdSetMm = fwdSetMm,
             aftReachFromMm = aftReachFromMm, fwdReachFromMm = fwdReachFromMm,
+            aftEndMm = aftEndMm, fwdEndMm = fwdEndMm,
         )
     }
     for (window in clusterUndercuts(byLiner[null].orEmpty(), oalMm, gapMm, padMm)) {
         val members = live.filter { it.id in window.undercutIds }
         val (drawStart, drawEnd) =
             withUndercutBreakRoom(window.startMm, window.endMm, segs, oalMm, cutSpans = members)
+                .let { (s, e) -> withUndercutEndThreads(s, e, oalMm, aftEndMm, fwdEndMm) }
         strips += UndercutStrip.FreeStrip(window, drawStart, drawEnd)
     }
     // Section order is CUT order: a draw range is padded and, under "Draw to the shaft end",
@@ -1695,3 +1746,131 @@ fun undercutStripsReachThread(
 ): Boolean = threadSpansMm.any { (a, b) ->
     b > a && strips.any { st -> st.drawStartMm < b && st.drawEndMm > a }
 }
+
+// ── Duplicate spans ──
+
+/**
+ * The id of the first cut in [otherSpans] whose span is the SAME as `[canonicalStartMm,
+ * canonicalStartMm + lengthMm]` — both ends within [epsMm] — or `null` when none is. One cut
+ * entered twice, not a cut inside a cut ([undercutSpanContains] excludes it): the confirm check
+ * blocks it outright, where a partial overlap may be saved on request.
+ */
+fun undercutDuplicatePartnerId(
+    canonicalStartMm: Float,
+    lengthMm: Float,
+    otherSpans: List<UndercutSpanMm>,
+    epsMm: Float = UNDERCUT_TOUCH_EPS_MM,
+): String? {
+    val endMm = canonicalStartMm + lengthMm
+    return otherSpans.firstOrNull { o ->
+        abs(o.startMm - canonicalStartMm) <= epsMm && abs(o.endMm - endMm) <= epsMm
+    }?.id
+}
+
+/**
+ * The blocked-duplicate wording: `"Same span as cut N — entered twice?"` with [partnerPosition]
+ * the partner's 1-based page position, the generic `"another cut"` when it has none here.
+ */
+fun undercutDuplicateMessage(partnerPosition: Int?): String =
+    if (partnerPosition != null) "Same span as cut $partnerPosition — entered twice?"
+    else "Same span as another cut — entered twice?"
+
+// ── A cut typed off its liner's section ──
+
+/** Which side of a liner a span lies on. */
+enum class UndercutLinerSide { AFT, FWD }
+
+/** A span wholly clear of a liner: the [side] it lies on and the [gapMm] from the liner's nearer edge. */
+data class UndercutOffLiner(val side: UndercutLinerSide, val gapMm: Float)
+
+/**
+ * True when the span `[startMm, startMm + lengthMm]` touches or overlaps [liner] — ends within
+ * [epsMm] of each other count.
+ */
+fun undercutSpanTouchesLiner(
+    startMm: Float,
+    lengthMm: Float,
+    liner: UndercutLinerSpan,
+    epsMm: Float = UNDERCUT_TOUCH_EPS_MM,
+): Boolean = startMm <= liner.endMm + epsMm && liner.startMm <= startMm + lengthMm + epsMm
+
+/**
+ * Where the span `[startMm, startMm + lengthMm]` lies when it is wholly off a liner section's
+ * page: it touches [liner] nowhere AND touches, overlaps or nests with none of [sectionCuts] —
+ * the OTHER cuts on that liner's strip, which already chain to it ([assignUndercutLiners]), so a
+ * cut run on from them into the body is still on the section. `null` when the span is on the
+ * section by either test, or has no length.
+ *
+ * On-device report: a sketch drawn mirrored was entered from the FWD S.E.T. instead of the AFT
+ * one, and the cuts landed on bare shaft clear of the liner they were typed on. Pure; nothing is
+ * stored — the confirm check asks about it before the cut is recorded.
+ */
+fun undercutOffLiner(
+    startMm: Float,
+    lengthMm: Float,
+    liner: UndercutLinerSpan,
+    sectionCuts: List<UndercutSpanMm>,
+    epsMm: Float = UNDERCUT_TOUCH_EPS_MM,
+): UndercutOffLiner? {
+    if (lengthMm <= 0f) return null
+    if (undercutSpanTouchesLiner(startMm, lengthMm, liner, epsMm)) return null
+    val endMm = startMm + lengthMm
+    if (sectionCuts.any { c -> c.endMm > c.startMm && startMm <= c.endMm + epsMm && c.startMm <= endMm + epsMm }) {
+        return null
+    }
+    return if (startMm >= liner.endMm) {
+        UndercutOffLiner(UndercutLinerSide.FWD, startMm - liner.endMm)
+    } else {
+        UndercutOffLiner(UndercutLinerSide.AFT, liner.startMm - endMm)
+    }
+}
+
+/**
+ * The same typed Distance read from the OPPOSITE S.E.T.: [reference] is that S.E.T., [startMm]
+ * the canonical start that keeps the displayed distance under it, and [distanceMm] that distance.
+ */
+data class UndercutMirroredStart(
+    val reference: UndercutReference,
+    val startMm: Float,
+    val distanceMm: Float,
+)
+
+/**
+ * [UndercutMirroredStart] for a span authored against an S.E.T. — the displayed distance under
+ * [reference] carried to the opposite S.E.T. through the conversion pair
+ * ([canonicalToUndercutStartMm] / [undercutStartToCanonicalMm]) at [lengthMm]; `null` for any
+ * other datum.
+ */
+fun undercutMirroredSetStart(
+    reference: UndercutReference,
+    canonicalStartMm: Float,
+    lengthMm: Float,
+    aftSetXMm: Float,
+    fwdSetXMm: Float,
+): UndercutMirroredStart? {
+    val opposite = when (reference) {
+        UndercutReference.AFT_SET -> UndercutReference.FWD_SET
+        UndercutReference.FWD_SET -> UndercutReference.AFT_SET
+        else -> return null
+    }
+    val distanceMm = canonicalToUndercutStartMm(reference, canonicalStartMm, lengthMm, aftSetXMm, fwdSetXMm)
+    val startMm = undercutStartToCanonicalMm(opposite, distanceMm, lengthMm, aftSetXMm, fwdSetXMm)
+    return UndercutMirroredStart(opposite, startMm, distanceMm)
+}
+
+/**
+ * The mirrored reading ([undercutMirroredSetStart]) of a span that lands on [liner] — the fix for
+ * a Distance measured from the wrong S.E.T. — or `null` when the span is not S.E.T.-authored or
+ * its mirror misses the liner too.
+ */
+fun undercutMirrorOntoLiner(
+    reference: UndercutReference,
+    canonicalStartMm: Float,
+    lengthMm: Float,
+    aftSetXMm: Float,
+    fwdSetXMm: Float,
+    liner: UndercutLinerSpan,
+    epsMm: Float = UNDERCUT_TOUCH_EPS_MM,
+): UndercutMirroredStart? =
+    undercutMirroredSetStart(reference, canonicalStartMm, lengthMm, aftSetXMm, fwdSetXMm)
+        ?.takeIf { undercutSpanTouchesLiner(it.startMm, lengthMm, liner, epsMm) }

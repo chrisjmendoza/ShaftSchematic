@@ -695,3 +695,12 @@ fun undercutSetPositions(spec: ShaftSpec): Pair<Float, Float> {
     val set = computeSetPositionsInMeasureSpace(win, spec)
     return set.aftSETxMm.toFloat() to set.fwdSETxMm.toFloat()
 }
+
+/**
+ * The drawn shaft's AFT / FWD outer ends, physical mm — `0` / the OAL, or past them by an end
+ * thread EXCLUDED from the OAL ([drawnExtentMm], the one builder for "the drawing spans more than
+ * the OAL"). What an undercut strip that reaches a shaft end draws on to ([withUndercutEndThreads]),
+ * so the printed strip and the detail canvas read the same ends.
+ */
+fun undercutDrawnShaftEndsMm(spec: ShaftSpec): Pair<Float, Float> =
+    spec.drawnExtentMm().let { it.startMm to it.endMm }

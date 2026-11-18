@@ -15,8 +15,10 @@ import com.android.shaftschematic.util.randomUuidString
  * Authoring reference for an undercut's *distance* value (UI display only — see
  * `geom/UndercutMath.kt`'s `undercutStartToCanonicalMm`/`canonicalToUndercutStartMm`).
  *
- * Same role as [WearSpotReference]: it never changes canonical storage
- * ([Undercut.startFromAftMm]), only how the "Distance" field is entered and re-displayed.
+ * Same role as [WearSpotReference]: switching it never changes canonical storage
+ * ([Undercut.startFromAftMm]), only how the "Distance" field is entered and re-displayed. Unlike
+ * a wear spot's, the datum it names carries the cut when a shaft edit moves that datum (see
+ * [Undercut]).
  * Four references mirror the wear spot's set — two S.E.T. (Small End of Taper) datums plus the
  * edges of an associated liner ([Undercut.referenceLinerId]); the liner pair is offered only
  * while such a liner exists, since converting against it needs its edges. The parent pair
@@ -63,15 +65,16 @@ enum class UndercutReference { AFT_SET, FWD_SET, LINER_AFT, LINER_FWD, PARENT_AF
  * so component-local storage would constrain what the shop can record. With no component
  * key there are no orphans and nothing to prune at decode; the only staleness is a span
  * extending past the current shaft extent (OAL shrank), which is a non-blocking warning
- * plus a render-layer clamp — the record itself is never mutated.
+ * plus a render-layer clamp — the clamp never mutates the record.
  *
  * [authoredReference] records which reference point the machinist entered the distance
  * against, purely so the "Distance" field can re-display the same authored number on the
  * next visit. Switching it in the UI re-projects the displayed value only —
  * [startFromAftMm] never moves as a result. Editing the shaft later (moving a taper,
- * changing OAL, repositioning the reference liner) moves the reference point, so the
- * *displayed* distance changes; the canonical position stays where it was authored, same
- * rule as [WearSpot].
+ * changing OAL, repositioning the reference liner) moves the reference point, and the cut
+ * keeps its reference position (on-device ruling): the editor re-derives [startFromAftMm] so
+ * the Distance against the stored reference still reads as typed
+ * (`geom/UndercutReanchorMath.kt`); [lengthMm] never changes.
  *
  * Units: mm.
  *
@@ -86,14 +89,14 @@ enum class UndercutReference { AFT_SET, FWD_SET, LINER_AFT, LINER_FWD, PARENT_AF
  * @property authoredReference Which reference point the distance was authored against
  *   (display-only; see [UndercutReference]).
  * @property referenceLinerId The [Liner.id] the distance converts against when
- *   [authoredReference] is a `LINER_*` value — display metadata only, never a geometry
- *   key: the undercut still lives in shaft space and renders wherever it is regardless
- *   of this liner. If the liner is later deleted, the Distance field falls back to the
+ *   [authoredReference] is a `LINER_*` value — never a geometry key: the undercut still
+ *   lives in shaft space, and the liner is read only to convert the Distance and to carry
+ *   the cut with that edge when the liner moves. If the liner is later deleted, the Distance field falls back to the
  *   [UndercutReference.AFT_SET] projection (canonical untouched); empty for SET-authored
  *   undercuts.
  * @property referenceCutId The id of the cut this one is nested in, which the distance converts
- *   against when [authoredReference] is a `PARENT_*` value — display metadata only, like
- *   [referenceLinerId]. If that cut is later deleted, or no longer contains this one, the
+ *   against when [authoredReference] is a `PARENT_*` value — read like [referenceLinerId]: a
+ *   cut whose parent moves follows that shoulder. If that cut is later deleted, or no longer contains this one, the
  *   Distance field displays from the nearer S.E.T. (canonical untouched, the stored value never
  *   rewritten); empty for every other reference. Additive + defaulted: older files decode to "".
  * @property note Free-text note (e.g. "weld undercut", "cleanup pass").

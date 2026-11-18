@@ -1,0 +1,345 @@
+{
+    "version": 1,
+    "preferred_unit": "INCHES",
+    "unit_locked": true,
+    "job_number": "935067",
+    "customer": "",
+    "vessel": "Pacific Warrior",
+    "item": "",
+    "sheet_date_mode": "TODAY",
+    "sheet_date_text": "",
+    "sheet_date_sheets": {},
+    "sheet_notes_sheets": {},
+    "sheet_sections": [],
+    "shaft_position": "PORT",
+    "notes": "",
+    "spec": {
+        "overallLengthMm": 8858.25,
+        "bodies": [],
+        "tapers": [
+            {
+                "id": "403782dc-8969-46f7-aa8e-6bada3c86581",
+                "startFromAftMm": 8486.775,
+                "lengthMm": 371.475,
+                "startDiaMm": 215.6206,
+                "endDiaMm": 184.7596,
+                "keywayWidthMm": 41.275,
+                "keywayDepthMm": 15.875,
+                "keywayLengthMm": 314.325,
+                "keywayOffsetFromSetMm": 0.0,
+                "keywaySpooned": true,
+                "taperRateText": "1:12",
+                "authoredReference": "FWD",
+                "label": null,
+                "showNameOnDrawing": null,
+                "shadeOnDrawing": null,
+                "taperRateManual": false
+            },
+            {
+                "id": "6aa5f433-f89c-4e62-a997-248c57bfe7a9",
+                "startFromAftMm": 0.0,
+                "lengthMm": 466.725,
+                "startDiaMm": 189.7888,
+                "endDiaMm": 228.6762,
+                "keywayWidthMm": 50.8,
+                "keywayDepthMm": 14.2875,
+                "keywayLengthMm": 412.75,
+                "keywayOffsetFromSetMm": 0.0,
+                "keywaySpooned": true,
+                "taperRateText": "1:12",
+                "authoredReference": "AFT",
+                "label": null,
+                "showNameOnDrawing": null,
+                "shadeOnDrawing": null,
+                "taperRateManual": false
+            }
+        ],
+        "threads": [
+            {
+                "id": "13c9ae4d-769e-4ab1-8b29-4ece220af4e7",
+                "startFromAftMm": -155.575,
+                "majorDiaMm": 139.7,
+                "pitchMm": 6.35,
+                "lengthMm": 155.575,
+                "excludeFromOAL": true,
+                "isAftEnd": true,
+                "tpi": 4.0,
+                "metricDesignation": null,
+                "label": null,
+                "showNameOnDrawing": null,
+                "reliefLenMm": 9.525,
+                "reliefDiaMm": 131.44499,
+                "reliefAtAft": false
+            }
+        ],
+        "liners": [
+            {
+                "id": "3fd00406-2675-4dd1-88af-7ec01c4f6d57",
+                "startMmPhysical": 6981.8247,
+                "lengthMm": 625.475,
+                "odMm": 228.5492,
+                "label": null,
+                "authoredReference": "FWD",
+                "endMmPhysical": 7607.3,
+                "showDiaOnDrawing": true,
+                "showNameOnDrawing": null,
+                "shadeOnDrawing": null,
+                "shoulderAftLenMm": 0.0,
+                "shoulderAftOdMm": 0.0,
+                "shoulderAftRadiusMm": 0.0,
+                "shoulderFwdLenMm": 0.0,
+                "shoulderFwdOdMm": 0.0,
+                "shoulderFwdRadiusMm": 0.0
+            },
+            {
+                "id": "2a06140d-afaf-459c-9c49-34d42ca0214e",
+                "startMmPhysical": 3749.675,
+                "lengthMm": 1036.6375,
+                "odMm": 228.6,
+                "label": null,
+                "authoredReference": "AFT",
+                "endMmPhysical": 4786.3125,
+                "showDiaOnDrawing": true,
+                "showNameOnDrawing": null,
+                "shadeOnDrawing": null,
+                "shoulderAftLenMm": 0.0,
+                "shoulderAftOdMm": 0.0,
+                "shoulderAftRadiusMm": 0.0,
+                "shoulderFwdLenMm": 0.0,
+                "shoulderFwdOdMm": 0.0,
+                "shoulderFwdRadiusMm": 0.0
+            },
+            {
+                "id": "54c0a773-e300-453e-b7b5-0d5da9152894",
+                "startMmPhysical": 466.725,
+                "lengthMm": 919.1625,
+                "odMm": 228.6254,
+                "label": null,
+                "authoredReference": "AFT",
+                "endMmPhysical": 1385.8875,
+                "showDiaOnDrawing": true,
+                "showNameOnDrawing": null,
+                "shadeOnDrawing": null,
+                "shoulderAftLenMm": 0.0,
+                "shoulderAftOdMm": 0.0,
+                "shoulderAftRadiusMm": 0.0,
+                "shoulderFwdLenMm": 0.0,
+                "shoulderFwdOdMm": 0.0,
+                "shoulderFwdRadiusMm": 0.0
+            }
+        ],
+        "couplerBoltSlots": [],
+        "keyways180Apart": false,
+        "keyways90Apart": false,
+        "keyways90Cw": true,
+        "autoBodyDiaMm": 215.9,
+        "showAutoBodyDia": false,
+        "autoDiaOverrides": [],
+        "autoBlends": [],
+        "autoDiaCallouts": [],
+        "aftEndHoles": {
+            "drawPlateCount": 0,
+            "drawPlateSize": "",
+            "drawPlateBoltCircleMm": 0.0,
+            "drawPlateSeries": "NC"
+        },
+        "fwdEndHoles": {
+            "drawPlateCount": 0,
+            "drawPlateSize": "",
+            "drawPlateBoltCircleMm": 0.0,
+            "drawPlateSeries": "NC"
+        }
+    },
+    "final_spec": null,
+    "runout_config": {
+        "componentOverrides": {
+            "auto_body_1385.887_3749.675": 4,
+            "2a06140d-afaf-459c-9c49-34d42ca0214e": 2,
+            "auto_body_7607.300_8486.775": 1,
+            "auto_body_4786.313_6981.825": 4
+        },
+        "tirDirection": "UNSET",
+        "heightScale": 0.66651917,
+        "linersProportional": true,
+        "linerCompression": 1.0,
+        "showCouplingFace": false,
+        "showDyePenTest": true,
+        "showSparkTest": false
+    },
+    "wear_record": {
+        "spots": [
+            {
+                "id": "e4d7de75-c959-4d00-bc9b-1a0004d4b2d1",
+                "linerId": "54c0a773-e300-453e-b7b5-0d5da9152894",
+                "startMm": 50.8,
+                "lengthMm": 846.1375,
+                "minDiaMm": 0.0,
+                "note": "",
+                "authoredReference": "LINER_AFT"
+            },
+            {
+                "id": "4ef4e1fe-f59a-4b1d-a4ae-318b1cbeec5d",
+                "linerId": "2a06140d-afaf-459c-9c49-34d42ca0214e",
+                "startMm": 158.75,
+                "lengthMm": 850.9,
+                "minDiaMm": 0.0,
+                "note": "",
+                "authoredReference": "LINER_AFT"
+            }
+        ],
+        "pits": [],
+        "diaReadings": [
+            {
+                "id": "039a6c20-7123-4116-acc5-2c4935652b45",
+                "componentId": "54c0a773-e300-453e-b7b5-0d5da9152894",
+                "axialMm": 181.6782,
+                "diaMm": 228.3206
+            },
+            {
+                "id": "448831ef-c98b-4dcd-96ac-95c66b6bc78c",
+                "componentId": "54c0a773-e300-453e-b7b5-0d5da9152894",
+                "axialMm": 373.0507,
+                "diaMm": 227.838
+            },
+            {
+                "id": "4dafc3bf-ca75-47d5-af86-b4821f605206",
+                "componentId": "54c0a773-e300-453e-b7b5-0d5da9152894",
+                "axialMm": 631.20605,
+                "diaMm": 228.0412
+            },
+            {
+                "id": "4c18c7b0-e861-4a89-9fc5-8fcd3b5c1427",
+                "componentId": "54c0a773-e300-453e-b7b5-0d5da9152894",
+                "axialMm": 816.1157,
+                "diaMm": 228.4476
+            },
+            {
+                "id": "bca3e153-2c0a-4972-9f37-11b729fe3fbe",
+                "componentId": "2a06140d-afaf-459c-9c49-34d42ca0214e",
+                "axialMm": 325.16403,
+                "diaMm": 228.4222
+            },
+            {
+                "id": "d47de87d-6c0e-4622-a09b-f5ceb1407f09",
+                "componentId": "2a06140d-afaf-459c-9c49-34d42ca0214e",
+                "axialMm": 487.94852,
+                "diaMm": 228.346
+            },
+            {
+                "id": "5506505d-4f51-4898-8d67-b4df9cb6cf50",
+                "componentId": "2a06140d-afaf-459c-9c49-34d42ca0214e",
+                "axialMm": 776.6682,
+                "diaMm": 228.1174
+            },
+            {
+                "id": "231c52d0-b420-4aff-883b-31c291f492b0",
+                "componentId": "2a06140d-afaf-459c-9c49-34d42ca0214e",
+                "axialMm": 919.61084,
+                "diaMm": 228.092
+            }
+        ],
+        "wornSections": [],
+        "traceDepthFrac": 0.1,
+        "dyePenResult": null,
+        "stripComponentIds": null,
+        "showShaftProfile": true,
+        "compactStrips": false,
+        "stripSizeFrac": 1.0,
+        "sparkTestResult": null
+    },
+    "runout_readings": {
+        "readings": []
+    },
+    "runout_stations": {
+        "placements": [
+            {
+                "componentId": "54c0a773-e300-453e-b7b5-0d5da9152894",
+                "stationIndex": 0,
+                "axialMm": 103.105865
+            },
+            {
+                "componentId": "54c0a773-e300-453e-b7b5-0d5da9152894",
+                "stationIndex": 1,
+                "axialMm": 862.8456
+            },
+            {
+                "componentId": "2a06140d-afaf-459c-9c49-34d42ca0214e",
+                "stationIndex": 1,
+                "axialMm": 954.136
+            },
+            {
+                "componentId": "2a06140d-afaf-459c-9c49-34d42ca0214e",
+                "stationIndex": 0,
+                "axialMm": 74.595215
+            }
+        ]
+    },
+    "undercut_record": {
+        "undercuts": [
+            {
+                "id": "92e6411e-42ef-4520-b1a7-e0423fe64002",
+                "startFromAftMm": 492.125,
+                "lengthMm": 476.25,
+                "diaMm": 225.806,
+                "authoredReference": "AFT_SET",
+                "referenceLinerId": "",
+                "note": "",
+                "referenceCutId": ""
+            },
+            {
+                "id": "244d2874-a09c-4896-97ee-0b527f96db48",
+                "startFromAftMm": 968.375,
+                "lengthMm": 403.225,
+                "diaMm": 228.473,
+                "authoredReference": "AFT_SET",
+                "referenceLinerId": "",
+                "note": "",
+                "referenceCutId": ""
+            },
+            {
+                "id": "8cafcd90-b819-4959-ac35-bfc0156ed3a1",
+                "startFromAftMm": 1371.6,
+                "lengthMm": 61.9125,
+                "diaMm": 215.392,
+                "authoredReference": "AFT_SET",
+                "referenceLinerId": "",
+                "note": "",
+                "referenceCutId": ""
+            },
+            {
+                "id": "e9268327-16da-4013-8058-e7e168fa037a",
+                "startFromAftMm": 5108.5747,
+                "lengthMm": 46.0375,
+                "diaMm": 214.884,
+                "authoredReference": "FWD_SET",
+                "referenceLinerId": "",
+                "note": "",
+                "referenceCutId": ""
+            },
+            {
+                "id": "816aeaf3-c072-40b6-98c9-b237471e0e42",
+                "startFromAftMm": 4959.3496,
+                "lengthMm": 149.225,
+                "diaMm": 224.282,
+                "authoredReference": "FWD_SET",
+                "referenceLinerId": "",
+                "note": "",
+                "referenceCutId": ""
+            }
+        ],
+        "exaggerationFrac": 0.25,
+        "draw_to_shaft_end": true,
+        "showTotalRail": null,
+        "pageOrientation": "AUTO",
+        "setDatum": "NEAREST",
+        "excludedLinerIds": [],
+        "excludedFreeCutIds": [],
+        "railStyle": "CHAIN",
+        "linerEndsFromSet": false,
+        "longCompressFrac": 0.0,
+        "overallTo": "LINER_END"
+    },
+    "station_interval_version": 1,
+    "unit_overrides": {},
+    "dual_units": false
+}

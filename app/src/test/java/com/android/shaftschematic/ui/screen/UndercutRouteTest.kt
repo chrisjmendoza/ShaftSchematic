@@ -150,7 +150,10 @@ class UndercutRouteTest {
         // Far FWD of the liner's end, whichever datum and unit the card opened on.
         typeField(hasText("Distance from", substring = true), "600")
         typeField(hasText("Length (", substring = true), "25")
-        rule.onNodeWithTag("undercut_confirm", useUnmergedTree = true).performClick()
+        // A cut that misses the liner asks first; "Record anyway" is the deliberate answer.
+        rule.onNodeWithTag("undercut_blocked_save", useUnmergedTree = true).performClick()
+        rule.waitForIdle()
+        rule.onNodeWithTag("undercut_leave_record_off_liner").performClick()
         rule.waitForIdle()
 
         val cut = vm.undercutRecord.value.undercuts.single()
@@ -417,6 +420,92 @@ class UndercutRouteTest {
         rule.onNodeWithTag("undercut_row_not_printed_${inFirst.id}", useUnmergedTree = true)
             .assertTextContains("Not on the printout")
         rule.onAllNodesWithTag("undercut_row_not_printed_${inSecond.id}", useUnmergedTree = true).assertCountEquals(0)
+    }
+
+    /** Five liners, one cut on each: five printed sections, one more than a page holds. */
+    private fun vmFiveSections(): ShaftViewModel =
+        ShaftViewModel(ApplicationProvider.getApplicationContext<Application>()).also { v ->
+            v.onSetOverallLengthMm(5000f)
+            v.addBodyAt(startMm = 0f, lengthMm = 5000f, diaMm = 152.4f)
+            listOf(300f, 1200f, 2100f, 3000f, 3900f).forEach { s ->
+                v.addLinerAt(startMm = s, lengthMm = 300f, odMm = 170f)
+                v.addUndercut(s + 50f, 25.4f)
+            }
+        }
+
+    @Test
+    fun `more sections than the page holds names the one that will not print`() {
+        val vm = vmFiveSections()
+        host(vm)
+        val sections = undercutPrintSections(
+            vm.spec.value, vm.resolvedComponents.value, vm.undercutRecord.value, blankDraft = false,
+            DisplayUnits.single(vm.unit.value),
+        )
+        assertEquals(5, sections.size)
+        val off = sections.filterNot { it.fitsOnPage }
+        assertEquals("the FWD-most section is the one the page has no room for", listOf(sections.last()), off)
+
+        rule.onNodeWithTag("undercut_print_sections_caption").performScrollTo().assertTextContains(
+            "4 of 5 sections fit on the page — ${off.single().label} will not print. Saved with this job.",
+        )
+        // Its cut reads like a cut in an unticked section; the others print.
+        val fwdCut = vm.undercutRecord.value.undercuts.maxBy { it.startFromAftMm }
+        val aftCut = vm.undercutRecord.value.undercuts.minBy { it.startFromAftMm }
+        rule.onNodeWithTag("undercut_row_not_printed_${fwdCut.id}", useUnmergedTree = true)
+            .assertTextContains("Not on the printout")
+        rule.onAllNodesWithTag("undercut_row_not_printed_${aftCut.id}", useUnmergedTree = true).assertCountEquals(0)
+    }
+
+    @Test
+    fun `an overlapping pair is flagged on both rows by the partner's number`() {
+        val vm = vm()
+        val first = vm.addUndercut(500f, 50f)
+        val second = vm.addUndercut(530f, 50f)
+        host(vm)
+
+        rule.onNodeWithTag("undercut_overlap_note").assertExists()
+        rule.onNodeWithText("2 cuts overlap another cut — a printed length will be short.").assertExists()
+        rule.onNodeWithTag("undercut_row_overlap_$first", useUnmergedTree = true).assertTextContains("Overlaps cut 2")
+        rule.onNodeWithTag("undercut_row_overlap_$second", useUnmergedTree = true).assertTextContains("Overlaps cut 1")
+    }
+
+    @Test
+    fun `cuts that do not overlap carry no overlap flag`() {
+        val vm = vm()
+        val first = vm.addUndercut(500f, 25.4f)
+        vm.addUndercut(600f, 25.4f)
+        host(vm)
+
+        rule.onAllNodesWithTag("undercut_overlap_note", useUnmergedTree = true).assertCountEquals(0)
+        rule.onAllNodesWithTag("undercut_row_overlap_$first", useUnmergedTree = true).assertCountEquals(0)
+    }
+
+    @Test
+    fun `print asks ONE question listing every problem, and cancel prints nothing`() {
+        // Two overlapping cuts and one running past the shaft end, none of them measured.
+        val vm = vm().also {
+            it.addUndercut(500f, 50f)
+            it.addUndercut(530f, 50f)
+            it.addUndercut(2950f, 100f)
+        }
+        host(vm)
+
+        rule.onNodeWithTag(DOC_ACTION_PRINT_TAG).performScrollTo().performClick()
+        rule.waitForIdle()
+
+        rule.onNodeWithTag("undercut_missing_dia_dialog").assertExists()
+        rule.onNodeWithText("Print with these problems?").assertExists()
+        rule.onNodeWithTag("undercut_print_issue_no_dia")
+            .assertTextContains("3 cuts have no diameter and will print without one.")
+        rule.onNodeWithTag("undercut_print_issue_overlap")
+            .assertTextContains("2 cuts overlap another cut — a printed length will be short.")
+        rule.onNodeWithTag("undercut_print_issue_past_end")
+            .assertTextContains("1 cut runs past the end of the shaft.")
+        rule.onNodeWithTag("undercut_missing_dia_proceed").assertTextContains("Print anyway")
+
+        rule.onNodeWithTag("undercut_missing_dia_cancel").performClick()
+        rule.waitForIdle()
+        rule.onAllNodesWithTag("undercut_missing_dia_dialog").assertCountEquals(0)
     }
 
     @Test

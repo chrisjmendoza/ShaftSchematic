@@ -1560,6 +1560,16 @@ internal const val UNDERCUT_DIA_INSIDE_LABEL = "Diameters inside the shaft"
 internal const val UNDERCUT_DIA_INSIDE_CAPTION =
     "Each cut's diameter is written inside the shaft; cuts too thin keep the pointer."
 
+/** The undercut keyways row's label — the options sheet, Settings and the Undercut tab say the same thing. */
+internal const val UNDERCUT_KEYWAYS_LABEL = "Keyways"
+
+/**
+ * The undercut keyways row's caption — the options sheet, Settings and the Undercut tab say the
+ * same thing.
+ */
+internal const val UNDERCUT_KEYWAYS_CAPTION =
+    "Draw a keyway that falls in a section on the printed sheet."
+
 /** The depth-shade row's caption — the options sheet and Settings say the same thing. */
 internal const val UNDERCUT_DEPTH_SHADE_CAPTION =
     "Shallow cuts shade light, the deepest cut dark; a cut inside a cut shades darker"

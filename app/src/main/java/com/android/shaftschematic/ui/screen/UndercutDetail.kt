@@ -149,6 +149,8 @@ import com.android.shaftschematic.geom.undercutOverlapIssue
 import com.android.shaftschematic.geom.undercutPartialOverlapsMm
 import com.android.shaftschematic.geom.undercutPreviewChainMm
 import com.android.shaftschematic.geom.undercutPreviewDrawRange
+import com.android.shaftschematic.geom.undercutDrawnShaftEndsMm
+import com.android.shaftschematic.geom.withUndercutEndThreads
 import com.android.shaftschematic.geom.undercutSetReachMm
 import com.android.shaftschematic.geom.undercutSetReachAnchors
 import com.android.shaftschematic.geom.withChainMm
@@ -162,6 +164,13 @@ import com.android.shaftschematic.geom.undercutGapBeforeMm
 import com.android.shaftschematic.geom.undercutEndAtStartOf
 import com.android.shaftschematic.geom.undercutOverlapMessage
 import com.android.shaftschematic.geom.undercutOverlapPartnerId
+import com.android.shaftschematic.geom.UNDERCUT_PARTIAL_OVERLAP_MSG
+import com.android.shaftschematic.geom.UndercutLinerSide
+import com.android.shaftschematic.geom.UndercutMirroredStart
+import com.android.shaftschematic.geom.undercutDuplicateMessage
+import com.android.shaftschematic.geom.undercutDuplicatePartnerId
+import com.android.shaftschematic.geom.undercutMirrorOntoLiner
+import com.android.shaftschematic.geom.undercutOffLiner
 import com.android.shaftschematic.geom.isParentUndercutReference
 import com.android.shaftschematic.geom.undercutParentCandidate
 import com.android.shaftschematic.geom.undercutReferenceParentSpan
@@ -278,8 +287,10 @@ import kotlin.math.min
  * per `docs/contracts/NumberField.md`), the "Measure From" chips, and the note all land in the draft, and
  * the canvas previews the SELECTED card's draft in place of its stored notch. Nothing reaches
  * `UndercutRecord` until the draft is **confirmed**, which requires it to differ from stored AND
- * to clear both blocking checks — [undercutSpanIssue] (shaft bounds) and [undercutOverlapIssue]
- * (no intruding into another cut's bounds). Because page order is keyed on **stored** starts,
+ * to clear the confirm check ([undercutConfirmCheck]: a new cut's empty Distance or Length, the
+ * shaft bounds, a duplicate span, a span off this page's liner, a partial overlap). The last two
+ * are overridable — tapping the blocked pill, or leaving the card, asks "Save anyway" / "Record
+ * anyway". Because page order is keyed on **stored** starts,
  * cards reorder only on confirm — and the carousel then follows the confirmed cut to its new
  * aft → fwd position. "Add undercut" opens a **draft-only** page: it previews and orders like any
  * other card but enters the record only on confirm, so a discarded add leaves no ghost cut behind.
@@ -298,8 +309,8 @@ import kotlin.math.min
  * AlertDialog stating the blocking reason, with **Keep editing** (return to the card, cancelling
  * the close) and **Discard** (drop the draft and go). An "Add undercut" card left exactly as it
  * was seeded is DISCARDED, never committed: the machinist typed nothing, and committing the seeded
- * default span recorded stray cuts nobody authored (on-device report). Only the pill's explicit
- * Confirm records an untouched add. [undercutLeaveAction] is that decision.
+ * default span recorded stray cuts nobody authored (on-device report). A new cut's Length opens
+ * empty, so nothing records one until its Length is typed. [undercutLeaveAction] is that decision.
  *
  * Selection and paging are one thing: swiping a card highlights its notch, and tapping a notch
  * pages the carousel to its card. A swipe changes the selection only once the pager SETTLES (a
@@ -504,17 +515,19 @@ fun UndercutWindowDetailOverlay(
     // ── Leave handling: the card being left is the card being saved ───────────
     // Set while a blocked draft is being asked about; null means no dialog.
     var leavePrompt by remember(stripKey) { mutableStateOf<UndercutLeavePrompt?>(null) }
-    // Cards whose OVERLAP the machinist chose to save anyway ("Save anyway" on the question) —
-    // consumed by that card's next confirm. Correcting one of two cuts that share an edge leaves
-    // them overlapping until the second is corrected, so the overlap check asks instead of
-    // refusing (on-device report: a cut could not be saved before the other was fixed).
-    var overlapAccepted by remember(stripKey) { mutableStateOf(emptySet<String>()) }
-    // The FIRST cut on a section opens with Distance and Length EMPTY: its default position is a
-    // guess that was always wrong and had to be deleted before typing (on-device request). These
-    // say which of the two the machinist has not typed yet on the pending card; the seeded span
-    // still places the preview, and the card cannot be recorded until both are typed
-    // ([undercutSeedBlankIssue]). A butted seed (a strip with cuts, "Next cut") keeps its values —
-    // they sit on a real shoulder.
+    // The OVERRIDABLE issues ([UndercutIssueKind.overridable]) the machinist chose to record anyway,
+    // per card — consumed by that card's next confirm, each kind on its own: accepting one never
+    // accepts the other. An OVERLAP asks instead of refusing because correcting one of two cuts
+    // that share an edge leaves them overlapping until the second is corrected (on-device report:
+    // a cut could not be saved before the other was fixed); a cut OFF this liner asks because a
+    // Distance read from the wrong datum lands it on bare shaft (on-device report).
+    var acceptedIssues by remember(stripKey) { mutableStateOf(emptyMap<String, Set<UndercutIssueKind>>()) }
+    // A new cut opens with Length EMPTY, and the FIRST cut on a section with Distance empty too:
+    // a default nobody typed was always wrong and, typed around, recorded a 1 in cut nobody
+    // measured (on-device requests). These say which of the two the machinist has not typed yet
+    // on the pending card; the seeded span still places the preview, and the card cannot be
+    // recorded until both are typed ([undercutSeedBlankIssue]). A butted seed (a strip with cuts,
+    // "Next cut") keeps its Distance — it sits on a real shoulder.
     var seedDistanceBlank by rememberSaveable(stripKey) { mutableStateOf(false) }
     var seedLengthBlank by rememberSaveable(stripKey) { mutableStateOf(false) }
     fun seedBlankIssueOf(id: String?): String? =
@@ -608,36 +621,14 @@ fun UndercutWindowDetailOverlay(
     // widens the drawing live, with the standard pad of neighbour stock beyond it — the same
     // range a confirmed overhang gets when the strip rebuilds. Never narrows while editing. The
     // canvas widens it once more on the S.E.T. lead's side, where its width is known.
-    val (previewDrawStartMm, previewDrawEndMm) = remember(strip, spans, oalMm, segs) {
-        undercutPreviewDrawRange(strip, spans, oalMm, segs = segs, cutSpans = spans)
-    }
-    // Confirm-blocking status of the previewed draft: its notch draws dashed in the selection
-    // color while valid, in the error color while this is non-null, and the status pill states
-    // the same reason — one check over the whole sheet, so the drawing, the pill, and what
-    // leaving the card does can never disagree.
-    val activeDraftIssue = remember(
-        activeDraft, selectedId, oalMm, undercutRecord, pagePositionById, seedDistanceBlank, seedLengthBlank,
-    ) {
-        activeDraft?.let { d ->
-            seedBlankIssueOf(selectedId) ?: undercutConfirmIssue(
-                d, oalMm, undercutDraftPool(undercutRecord.undercuts, d, selectedId, oalMm),
-                pagePositionById,
-            )
-        }
-    }
-    // The overlap itself, while that is what blocks the draft (on-device report: the message
-    // alone did not show where the cuts collide) — one shaft-space interval per partner the
-    // draft partially overlaps, the same partners the confirm check blocks on.
-    val activeOverlapBandsMm = remember(activeDraft, selectedId, oalMm, undercutRecord) {
-        val d = activeDraft
-        // The shaft-bounds check outranks the overlap check, exactly as in [undercutConfirmIssue].
-        if (d == null || undercutSpanIssue(d.startFromAftMm, d.lengthMm, oalMm) != null) emptyList()
-        else undercutPartialOverlapsMm(
-            d.startFromAftMm, d.lengthMm,
-            undercutDraftPool(undercutRecord.undercuts, d, selectedId, oalMm),
+    // A range that reaches a shaft end draws on over the end thread there, as the printed strip does.
+    val drawnShaftEnds = remember(spec) { undercutDrawnShaftEndsMm(spec) }
+    val (previewDrawStartMm, previewDrawEndMm) = remember(strip, spans, oalMm, segs, drawnShaftEnds) {
+        undercutPreviewDrawRange(
+            strip, spans, oalMm, segs = segs, cutSpans = spans,
+            aftEndMm = drawnShaftEnds.first, fwdEndMm = drawnShaftEnds.second,
         )
     }
-
     // SET positions for the cards' "Measure From" re-projection. Physical shaft space already
     // (computeOalWindow's measureStartMm is always 0), so no further offset is applied.
     val setPositions = remember(spec) { undercutSetPositions(spec) }
@@ -645,6 +636,61 @@ fun UndercutWindowDetailOverlay(
     val reachAnchors = remember(spec) { undercutSetReachAnchors(spec) }
     val aftSetXMm = setPositions.first
     val fwdSetXMm = setPositions.second
+
+    // This page's STORED cuts, render-clamped — what a draft on a liner's page may chain to and
+    // still be on that liner's section ([undercutOffLiner]).
+    val sectionCutSpans = remember(undercuts, oalMm) {
+        undercuts.map { u ->
+            val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
+            UndercutSpanMm(u.id, c.startMm, c.endMm)
+        }.filter { it.endMm > it.startMm }
+    }
+    fun amountText(mm: Float): String = "${disp(mm, unit)} ${abbr(unit)}"
+
+    // The confirm check for the card with page id [id], run on [draft] as it stands — ONE
+    // implementation behind the pill, the canvas, the card's inline reason, Next cut and the leave
+    // decision. [honorAccepted] drops the issues the machinist already chose to record anyway; the
+    // card's inline reason passes false, so an accepted issue stays stated until it is gone.
+    fun issueOf(id: String?, draft: UndercutDraft, honorAccepted: Boolean = true): UndercutIssue? =
+        undercutConfirmCheck(
+            draft = draft,
+            oalMm = oalMm,
+            otherSpans = undercutDraftPool(undercutRecord.undercuts, draft, id, oalMm),
+            pagePositionById = pagePositionById,
+            baseline = id?.let { baselines[it] },
+            seedBlankIssue = seedBlankIssueOf(id),
+            stripLiner = stripLiner,
+            sectionCuts = sectionCutSpans,
+            amountText = ::amountText,
+            accepted = if (honorAccepted && id != null) acceptedIssues[id].orEmpty() else emptySet(),
+        )
+
+    // The mirrored-datum fix for a draft that is off this liner: the same typed Distance from the
+    // OTHER S.E.T., offered only when that reading lands on the liner.
+    fun mirrorOf(draft: UndercutDraft): UndercutMirroredStart? = stripLiner?.let { liner ->
+        undercutMirrorOntoLiner(
+            draft.reference, draft.startFromAftMm, draft.lengthMm, aftSetXMm, fwdSetXMm, liner,
+        )
+    }
+
+    // Confirm-blocking status of the previewed draft: its notch draws dashed in the selection
+    // color while valid, in the error color while this is non-null, and the status pill states
+    // the same reason — one check over the whole sheet, so the drawing, the pill, and what
+    // leaving the card does can never disagree.
+    val activeIssue = activeDraft?.let { issueOf(selectedId, it) }
+    val activeDraftIssue = activeIssue?.reason
+    // The overlap itself, while that is what blocks the draft (on-device report: the message
+    // alone did not show where the cuts collide) — one shaft-space interval per partner the
+    // draft overlaps or duplicates, the same partners the confirm check blocks on.
+    val activeOverlapBandsMm = remember(activeDraft, activeIssue?.kind, selectedId, oalMm, undercutRecord) {
+        val d = activeDraft
+        val kind = activeIssue?.kind
+        if (d == null || (kind != UndercutIssueKind.OVERLAP && kind != UndercutIssueKind.DUPLICATE)) emptyList()
+        else undercutPartialOverlapsMm(
+            d.startFromAftMm, d.lengthMm,
+            undercutDraftPool(undercutRecord.undercuts, d, selectedId, oalMm),
+        )
+    }
 
     // The strip the rail and the S.E.T. lead measure: while a draft is previewed, its chain is the
     // one confirming the draft would rebuild ([undercutPreviewChainMm], the strip builder's datums
@@ -848,6 +894,11 @@ fun UndercutWindowDetailOverlay(
         then: UndercutAfterOverhang,
     ): UndercutOverlayOverhangAsk? {
         if (before == null) return null
+        // A cut wholly off this liner is asked about as such ([UndercutIssueKind.OFF_LINER]):
+        // how far it runs "past the edge" is the wrong question for it.
+        if (stripLiner != null &&
+            undercutOffLiner(after.startFromAftMm, after.lengthMm, stripLiner, sectionCutSpans.filter { it.id != id }) != null
+        ) return null
         val liner = stripLiner
             ?: undercutReferenceLinerFor(before.toUndercut(), linerSpans, null, oalMm)
             ?: return null
@@ -859,23 +910,22 @@ fun UndercutWindowDetailOverlay(
         val (aftMm, fwdMm) = undercutLinerExtensionsMm(
             after.startFromAftMm, after.lengthMm, liner.startMm, liner.endMm,
         )
-        fun amount(mm: Float) = "${disp(mm, unit)} ${abbr(unit)}"
         return UndercutOverlayOverhangAsk(
             draftId = id,
             ends = UndercutLinerEnds(aft, fwd),
-            aftAmount = if (aft) amount(aftMm) else null,
-            fwdAmount = if (fwd) amount(fwdMm) else null,
+            aftAmount = if (aft) amountText(aftMm) else null,
+            fwdAmount = if (fwd) amountText(fwdMm) else null,
             then = then,
         )
     }
 
     // The confirm check, run on the draft as it stands NOW — after a flush landed a typed value.
-    // An overlap the machinist accepted for this card no longer blocks; a bounds issue always does.
-    fun confirmIssueOf(id: String, draft: UndercutDraft): String? = seedBlankIssueOf(id) ?: undercutConfirmIssue(
-        draft, oalMm, undercutDraftPool(undercutRecord.undercuts, draft, id, oalMm), pagePositionById,
-    )?.takeUnless { id in overlapAccepted && undercutIssueIsOverlapOnly(draft, oalMm) }
+    // An overridable issue the machinist accepted for this card no longer blocks; a blank field,
+    // a bounds issue or a duplicate always does.
+    fun confirmIssueOf(id: String, draft: UndercutDraft): UndercutIssue? = issueOf(id, draft)
 
     fun cancelDraft(id: String) {
+        acceptedIssues = acceptedIssues - id
         drafts = drafts - id
         discardCounts = discardCounts + (id to (discardCounts[id] ?: 0) + 1)
         if (id == PENDING_UNDERCUT_ID) {
@@ -894,7 +944,7 @@ fun UndercutWindowDetailOverlay(
     // selection already belongs to the card being moved to, and stealing it back would land the
     // carousel on the card the machinist just left.
     fun confirmDraft(draft: UndercutDraft, follow: Boolean = true) {
-        overlapAccepted = overlapAccepted - draft.id
+        acceptedIssues = acceptedIssues - draft.id
         if (draft.isPending) {
             val newId = onAddUndercut(
                 draft.startFromAftMm, draft.lengthMm, draft.reference, draft.referenceLinerId,
@@ -927,12 +977,24 @@ fun UndercutWindowDetailOverlay(
 
     // What leaving the card with id [id] should do, plus the blocking reason behind a PROMPT.
     // The overlap check runs against the whole sheet, exactly as the pill and the canvas run it.
-    fun leaveActionOf(id: String): Pair<UndercutLeaveAction, String?> {
+    fun leaveActionOf(id: String): Pair<UndercutLeaveAction, UndercutIssue?> {
         val draft = drafts[id]
         val issue = draft?.let { confirmIssueOf(id, it) }
         val seed = if (id == PENDING_UNDERCUT_ID) pendingSeed else null
-        return undercutLeaveAction(draft, baselines[id], issue, pendingSeed = seed) to issue
+        return undercutLeaveAction(draft, baselines[id], issue?.reason, pendingSeed = seed) to issue
     }
+
+    // The question for a blocked draft: Keep editing / Discard, plus the override its issue
+    // offers ("Save anyway", "Record anyway") and, off this liner, the mirrored-datum fix.
+    fun leavePromptFor(id: String, draft: UndercutDraft, issue: UndercutIssue?, closing: Boolean, fromPill: Boolean) =
+        UndercutLeavePrompt(
+            draftId = id,
+            reason = issue?.reason.orEmpty(),
+            closing = closing,
+            overridable = issue?.kind?.takeIf { it.overridable },
+            fromPill = fromPill,
+            mirror = if (issue?.kind == UndercutIssueKind.OFF_LINER) mirrorOf(draft) else null,
+        )
 
     /**
      * Settle every draft except [keepId]'s: commit each one that clears its confirm check, and
@@ -986,10 +1048,7 @@ fun UndercutWindowDetailOverlay(
                     if (id == PENDING_UNDERCUT_ID) pendingSeed = null
                 }
                 UndercutLeaveAction.PROMPT -> return UndercutSettleResult.Prompt(
-                    UndercutLeavePrompt(
-                        draftId = id, reason = issue.orEmpty(), closing = closing,
-                        overlapOnly = seedBlankIssueOf(id) == null && undercutIssueIsOverlapOnly(draft, oalMm),
-                    ),
+                    leavePromptFor(id, draft, issue, closing = closing, fromPill = false),
                 )
             }
         }
@@ -1076,8 +1135,10 @@ fun UndercutWindowDetailOverlay(
         )
         drafts = drafts + (PENDING_UNDERCUT_ID to seed)
         pendingSeed = seed
+        // The Distance sits on the shoulder just recorded; the Length is the next cut's own
+        // measurement and opens empty — the seed's placeholder length is never recorded.
         seedDistanceBlank = false
-        seedLengthBlank = false
+        seedLengthBlank = true
         selectedId = PENDING_UNDERCUT_ID
     }
 
@@ -1144,7 +1205,7 @@ fun UndercutWindowDetailOverlay(
     // discarded on leave. The default span takes the first free gap in the strip so it doesn't
     // land on top of an existing cut.
     fun seedPendingCut() {
-        val addRange = undercutAddRangeOf(strip, stripLiner)
+        val addRange = undercutAddRangeOf(strip, stripLiner, oalMm)
         val occupied = undercutRecord.undercuts.map { u ->
             val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
             UndercutSpanMm(u.id, c.startMm, c.endMm)
@@ -1204,9 +1265,9 @@ fun UndercutWindowDetailOverlay(
             )
         drafts = drafts + (PENDING_UNDERCUT_ID to seed)
         pendingSeed = seed
-        val guessed = butted == null || neighbour == null
-        seedDistanceBlank = guessed
-        seedLengthBlank = guessed
+        // A butted seed's Distance sits on a real shoulder; every new cut's Length is typed.
+        seedDistanceBlank = butted == null || neighbour == null
+        seedLengthBlank = true
         selectedId = PENDING_UNDERCUT_ID
     }
 
@@ -2042,21 +2103,19 @@ fun UndercutWindowDetailOverlay(
                             },
                             onConfirm = { confirmSelected() },
                             onDiscard = { activeDraft?.let { cancelDraft(it.id) } },
-                            // An overlap asks rather than refuses: tapping the blocked pill opens
-                            // the "Save anyway" question for the selected card.
+                            // An overridable issue asks rather than refuses: tapping the blocked
+                            // pill opens its question ("Save anyway", "Record anyway") for the
+                            // selected card.
                             onBlockedTap = activeDraft
-                                ?.takeIf {
-                                    activeDraftIssue != null && seedBlankIssueOf(it.id) == null &&
-                                        undercutIssueIsOverlapOnly(it, oalMm)
-                                }
+                                ?.takeIf { activeIssue?.kind?.overridable == true }
                                 ?.let { d ->
                                     {
-                                        leavePrompt = UndercutLeavePrompt(
-                                            draftId = d.id, reason = activeDraftIssue.orEmpty(),
-                                            closing = false, overlapOnly = true, fromPill = true,
+                                        leavePrompt = leavePromptFor(
+                                            d.id, d, activeIssue, closing = false, fromPill = true,
                                         )
                                     }
                                 },
+                            blockedTapLabel = activeIssue?.let { undercutBlockedTapLabel(it) },
                             modifier = Modifier
                                 .align(Alignment.Center)
                                 .padding(horizontal = 56.dp),
@@ -2134,6 +2193,9 @@ fun UndercutWindowDetailOverlay(
                                 },
                                 buttTargets = pageButtTargets.filter { (_, s) -> s.id != id },
                                 pagePositionById = pagePositionById,
+                                issue = if (draft != baseline) issueOf(id, draft, honorAccepted = false) else null,
+                                mirror = mirrorOf(draft),
+                                sectionCuts = sectionCutSpans.filter { it.id != id },
                                 nextCut = undercutNextCutState(
                                     draft = draft,
                                     blocked = draft != baseline && confirmIssueOf(id, draft) != null,
@@ -2259,62 +2321,121 @@ fun UndercutWindowDetailOverlay(
                 selectedId = prompt.draftId
             }
         }
+        // Recording anyway accepts THIS issue only, then resumes what the question held up: the
+        // pill's confirm, or the leave sweep — which asks again if another issue still stands.
+        val acceptAndResume = { kind: UndercutIssueKind ->
+            acceptedIssues = acceptedIssues +
+                (prompt.draftId to (acceptedIssues[prompt.draftId].orEmpty() + kind))
+            leavePrompt = null
+            if (prompt.fromPill) confirmSelected()
+            else finishSettle(
+                settleDraftsExcept(
+                    keepId = if (prompt.closing) null else selectedId,
+                    closing = prompt.closing,
+                ),
+                prompt.closing,
+            )
+        }
+        val discardButton: @Composable () -> Unit = {
+            TextButton(
+                onClick = {
+                    cancelDraft(prompt.draftId)
+                    // Dropping this one RESUMES the sweep it interrupted: a second unsettled
+                    // draft gets its own question rather than riding out on this answer.
+                    finishSettle(
+                        settleDraftsExcept(
+                            keepId = if (prompt.closing) null else selectedId,
+                            closing = prompt.closing,
+                        ),
+                        prompt.closing,
+                    )
+                },
+                modifier = Modifier.testTag("undercut_leave_discard"),
+            ) {
+                Text("Discard")
+            }
+        }
+        // The off-liner question carries up to four choices, one of them a long label: side by
+        // side they ran into each other on a phone, so they stack, one per line, Discard last.
+        val stacked = prompt.overridable == UndercutIssueKind.OFF_LINER
         AlertDialog(
             onDismissRequest = keepEditing,
-            title = { Text(if (prompt.overlapOnly) "Save with an overlap?" else "Undercut can't be saved") },
+            title = {
+                Text(
+                    when (prompt.overridable) {
+                        UndercutIssueKind.OVERLAP -> "Save with an overlap?"
+                        UndercutIssueKind.OFF_LINER -> UNDERCUT_OFF_LINER_TITLE
+                        else -> "Undercut can't be saved"
+                    },
+                )
+            },
             text = {
                 Text(
-                    if (prompt.overlapOnly) {
-                        prompt.reason + ".\n\nSave anyway keeps this cut as typed so the other " +
-                            "cut can be corrected next. Both cards show the overlap until it is gone."
-                    } else prompt.reason,
+                    when (prompt.overridable) {
+                        UndercutIssueKind.OVERLAP ->
+                            prompt.reason + ".\n\nSave anyway keeps this cut as typed so the other " +
+                                "cut can be corrected next. Both cards show the overlap until it is gone."
+                        UndercutIssueKind.OFF_LINER -> undercutOffLinerQuestion(prompt.reason)
+                        else -> prompt.reason
+                    },
                 )
             },
             confirmButton = {
-                Row {
-                    if (prompt.overlapOnly) {
+                val choices: @Composable () -> Unit = {
+                    // The likely fix first: the same Distance, read from the other S.E.T.
+                    // A direct choice, so the cut moves and the typed number stays; the draft
+                    // stays open on its card for a look before it is recorded.
+                    prompt.mirror?.let { m ->
                         TextButton(
                             onClick = {
-                                overlapAccepted = overlapAccepted + prompt.draftId
-                                leavePrompt = null
-                                if (prompt.fromPill) confirmSelected()
-                                else finishSettle(
-                                    settleDraftsExcept(
-                                        keepId = if (prompt.closing) null else selectedId,
-                                        closing = prompt.closing,
-                                    ),
-                                    prompt.closing,
-                                )
+                                val draft = drafts[prompt.draftId]
+                                keepEditing()
+                                if (draft != null) {
+                                    writeDraft(
+                                        prompt.draftId,
+                                        draft.copy(
+                                            startFromAftMm = m.startMm,
+                                            reference = m.reference,
+                                            referenceLinerId = "",
+                                            referenceCutId = "",
+                                        ),
+                                    )
+                                }
                             },
+                            modifier = Modifier.testTag("undercut_leave_mirror_datum"),
+                        ) {
+                            Text(undercutMirrorButtonLabel(m.reference))
+                        }
+                    }
+                    when (prompt.overridable) {
+                        UndercutIssueKind.OVERLAP -> TextButton(
+                            onClick = { acceptAndResume(UndercutIssueKind.OVERLAP) },
                             modifier = Modifier.testTag("undercut_leave_save_anyway"),
                         ) {
                             Text("Save anyway")
                         }
+                        UndercutIssueKind.OFF_LINER -> TextButton(
+                            onClick = { acceptAndResume(UndercutIssueKind.OFF_LINER) },
+                            modifier = Modifier.testTag("undercut_leave_record_off_liner"),
+                        ) {
+                            Text("Record anyway")
+                        }
+                        else -> Unit
                     }
                     TextButton(onClick = keepEditing, modifier = Modifier.testTag("undercut_leave_keep")) {
                         Text("Keep editing")
                     }
                 }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        cancelDraft(prompt.draftId)
-                        // Dropping this one RESUMES the sweep it interrupted: a second unsettled
-                        // draft gets its own question rather than riding out on this answer.
-                        finishSettle(
-                            settleDraftsExcept(
-                                keepId = if (prompt.closing) null else selectedId,
-                                closing = prompt.closing,
-                            ),
-                            prompt.closing,
-                        )
-                    },
-                    modifier = Modifier.testTag("undercut_leave_discard"),
-                ) {
-                    Text("Discard")
+                if (stacked) {
+                    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
+                        choices()
+                        discardButton()
+                    }
+                } else {
+                    FlowRow(horizontalArrangement = Arrangement.End) { choices() }
                 }
             },
+            dismissButton = if (stacked) null else discardButton,
         )
     }
 }
@@ -2789,39 +2910,133 @@ internal fun undercutSeedBlankIssue(distanceBlank: Boolean, lengthBlank: Boolean
 }
 
 /**
- * Whether a draft with a confirm issue is blocked by an OVERLAP alone — its span is fine on the
- * shaft ([undercutSpanIssue] clear). An overlap can be saved on request ("Save anyway"): fixing
- * one of two cuts that share an edge leaves them overlapping until the second is fixed, and a
- * stored partial overlap already renders. A bounds issue is never overridable.
+ * What blocks a draft from being recorded, in the order the confirm check tries them. An
+ * [overridable] kind asks instead of refusing — the machinist may record past it, each kind on its
+ * own acceptance; the rest are fixed by editing the card.
  */
-internal fun undercutIssueIsOverlapOnly(draft: UndercutDraft, oalMm: Float): Boolean =
-    undercutSpanIssue(draft.startFromAftMm, draft.lengthMm, oalMm) == null
+internal enum class UndercutIssueKind(val overridable: Boolean) {
+    /** A new cut's Distance or Length not typed yet ([undercutSeedBlankIssue]). */
+    SEED_BLANK(false),
+
+    /** The span leaves the shaft, or has no length ([undercutSpanIssue]). */
+    BOUNDS(false),
+
+    /** The same span as another cut — one cut entered twice ([undercutDuplicatePartnerId]). */
+    DUPLICATE(false),
+
+    /**
+     * On a liner's page, a span that touches neither the liner nor any cut of its section
+     * ([undercutOffLiner]) — recorded anyway, it lists under its own bare-shaft section.
+     */
+    OFF_LINER(true),
+
+    /**
+     * A PARTIAL overlap with another cut ([undercutOverlapPartnerId]). Saved on request: fixing one
+     * of two cuts that share an edge leaves them overlapping until the second is fixed, and a
+     * stored partial overlap already renders.
+     */
+    OVERLAP(true),
+}
+
+/** One blocking issue: its [kind] and the [reason] the pill, the card and the question state. */
+internal data class UndercutIssue(val kind: UndercutIssueKind, val reason: String)
 
 /**
- * The blocking reason a draft cannot be confirmed, or `null` when it can: the shaft-bounds check
- * ([undercutSpanIssue]) first, then the adjacency check ([undercutOverlapIssue]) against every
- * OTHER cut on the sheet — which passes a cut sitting fully INSIDE another (a nested relief) or
- * fully clear of it, and blocks only a partial intrusion. Both are confirm-time gates on new
- * values only — nothing already stored is retroactively rejected.
+ * Why [draft] cannot be recorded, or `null` when it can — the first of, in order: a new cut's
+ * blank field ([seedBlankIssue]), the shaft bounds ([undercutSpanIssue]), a duplicate of another
+ * cut's span, a span off this page's liner ([stripLiner], [sectionCuts] — [undercutOffLiner]), a
+ * partial overlap with another cut. The overlap checks run against every OTHER cut on the sheet
+ * ([otherSpans]), which passes a cut fully INSIDE another (a nested relief) or fully clear of it.
  *
- * With [pagePositionById] (each stored cut's 1-based page position) the overlap reason NAMES the
- * partner ([undercutOverlapMessage] — "Overlaps cut 3 …", or "a cut outside this strip" when the
- * partner has no page here). The pill, the card's inline warning and the leave prompt all read
- * this one result, so all three say the same thing. Without it, the generic wording.
+ * Every check after the bounds runs only when the draft's SPAN differs from its stored [baseline]
+ * (a new cut has none, so always): they are confirm-time gates on new placements, and nothing
+ * already stored is retroactively rejected — a Ø or a note typed on a recorded cut that overlaps
+ * another records as usual. [accepted] are the overridable kinds the machinist chose to record
+ * anyway; the check passes over them to the next issue, so accepting one never accepts another.
+ *
+ * With [pagePositionById] (each stored cut's 1-based page position) the duplicate and overlap
+ * reasons NAME the partner ("Overlaps cut 3 …"), or say it lies outside this strip; without it,
+ * the generic wording. [amountText] formats the off-liner gap in the card's unit.
+ */
+internal fun undercutConfirmCheck(
+    draft: UndercutDraft,
+    oalMm: Float,
+    otherSpans: List<UndercutSpanMm>,
+    pagePositionById: Map<String, Int>? = null,
+    baseline: UndercutDraft? = null,
+    seedBlankIssue: String? = null,
+    stripLiner: UndercutLinerSpan? = null,
+    sectionCuts: List<UndercutSpanMm> = emptyList(),
+    amountText: (Float) -> String = { "$it mm" },
+    accepted: Set<UndercutIssueKind> = emptySet(),
+): UndercutIssue? {
+    seedBlankIssue?.let { return UndercutIssue(UndercutIssueKind.SEED_BLANK, it) }
+    undercutSpanIssue(draft.startFromAftMm, draft.lengthMm, oalMm)
+        ?.let { return UndercutIssue(UndercutIssueKind.BOUNDS, it) }
+    val spanChanged = baseline == null ||
+        baseline.startFromAftMm != draft.startFromAftMm || baseline.lengthMm != draft.lengthMm
+    if (!spanChanged) return null
+    undercutDuplicatePartnerId(draft.startFromAftMm, draft.lengthMm, otherSpans)?.let { id ->
+        return UndercutIssue(UndercutIssueKind.DUPLICATE, undercutDuplicateMessage(pagePositionById?.get(id)))
+    }
+    if (stripLiner != null && UndercutIssueKind.OFF_LINER !in accepted) {
+        undercutOffLiner(
+            draft.startFromAftMm, draft.lengthMm, stripLiner, sectionCuts.filter { it.id != draft.id },
+        )?.let { off ->
+            return UndercutIssue(UndercutIssueKind.OFF_LINER, undercutOffLinerMessage(amountText(off.gapMm), off.side))
+        }
+    }
+    if (UndercutIssueKind.OVERLAP !in accepted) {
+        undercutOverlapPartnerId(draft.startFromAftMm, draft.lengthMm, otherSpans)?.let { id ->
+            val reason = if (pagePositionById == null) UNDERCUT_PARTIAL_OVERLAP_MSG
+                         else undercutOverlapMessage(pagePositionById[id])
+            return UndercutIssue(UndercutIssueKind.OVERLAP, reason)
+        }
+    }
+    return null
+}
+
+/**
+ * The blocking reason of [undercutConfirmCheck] for a draft with no stored baseline and no page
+ * liner — the shaft bounds, then a duplicate, then a partial overlap — or `null`.
  */
 internal fun undercutConfirmIssue(
     draft: UndercutDraft,
     oalMm: Float,
     otherSpans: List<UndercutSpanMm>,
     pagePositionById: Map<String, Int>? = null,
-): String? {
-    undercutSpanIssue(draft.startFromAftMm, draft.lengthMm, oalMm)?.let { return it }
-    if (pagePositionById == null) {
-        return undercutOverlapIssue(draft.startFromAftMm, draft.lengthMm, otherSpans)
-    }
-    val partnerId = undercutOverlapPartnerId(draft.startFromAftMm, draft.lengthMm, otherSpans)
-        ?: return null
-    return undercutOverlapMessage(pagePositionById[partnerId])
+): String? = undercutConfirmCheck(draft, oalMm, otherSpans, pagePositionById)?.reason
+
+/** The reason a cut off this page's liner is held: `"Not on this liner — 6 13/16 in FWD of it"`. */
+internal fun undercutOffLinerMessage(amount: String, side: UndercutLinerSide): String =
+    "Not on this liner — $amount ${side.name} of it"
+
+/** The off-liner question's title, which the pill's tap and a leave both raise. */
+internal const val UNDERCUT_OFF_LINER_TITLE = "Not on this liner"
+
+/** The off-liner question's body: the reason, then what recording it anyway does. */
+internal fun undercutOffLinerQuestion(reason: String): String =
+    "$reason.\n\nRecorded anyway, it is listed under its own bare-shaft section, not this liner's."
+
+/** The off-liner question's mirrored-datum button: measure from [reference] (an S.E.T.) instead. */
+internal fun undercutMirrorButtonLabel(reference: UndercutReference): String =
+    "Measure from ${undercutReferenceLabel(reference)} instead"
+
+/**
+ * The card's line under the off-liner warning when the other S.E.T. would put the cut on the
+ * liner — [distance] the typed Distance, formatted with its unit, [reference] that other S.E.T.
+ */
+internal fun undercutMirrorHint(distance: String, reference: UndercutReference): String =
+    "$distance from the ${undercutReferenceLabel(reference)} would be on this liner"
+
+/**
+ * The blocked pill's text when [issue] can be recorded past by tapping it, else `null` (the pill
+ * then states the reason itself).
+ */
+internal fun undercutBlockedTapLabel(issue: UndercutIssue): String? = when (issue.kind) {
+    UndercutIssueKind.OVERLAP -> issue.reason.substringBefore(" — ") + " — tap to save anyway"
+    UndercutIssueKind.OFF_LINER -> "$UNDERCUT_OFF_LINER_TITLE — tap to record anyway"
+    else -> null
 }
 
 /**
@@ -2901,13 +3116,17 @@ internal fun undercutLeaveAction(
     else -> UndercutLeaveAction.COMMIT
 }
 
-/** The shaft-space range a new cut is drafted into: a liner strip's liner, else its window. */
+/**
+ * The shaft-space range a new cut is drafted into: a liner strip's liner, else its window — held to
+ * the shaft `[0, oalMm]`, since a window at a shaft end also draws the end thread past it.
+ */
 private fun undercutAddRangeOf(
     strip: UndercutStrip,
     stripLiner: UndercutLinerSpan?,
+    oalMm: Float,
 ): Pair<Float, Float> = when {
     stripLiner != null -> stripLiner.startMm to stripLiner.endMm
-    else -> strip.drawStartMm to strip.drawEndMm
+    else -> strip.drawStartMm.coerceAtLeast(0f) to strip.drawEndMm.coerceAtMost(oalMm.coerceAtLeast(0f))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2974,6 +3193,15 @@ private fun UndercutDraftCard(
     buttTargets: List<Pair<Int, UndercutSpanMm>>,
     /** Every stored cut's page position, so an overlap reason names its partner. */
     pagePositionById: Map<String, Int>,
+    /**
+     * The overlay's confirm check on this card's DIRTY draft ([undercutConfirmCheck], accepted
+     * issues included so the card keeps stating them); null on a clean card.
+     */
+    issue: UndercutIssue? = null,
+    /** Off this liner: the same Distance from the other S.E.T., when that lands on the liner. */
+    mirror: UndercutMirroredStart? = null,
+    /** The OTHER stored cuts of this page's section — what this cut may chain to and stay on it. */
+    sectionCuts: List<UndercutSpanMm> = emptyList(),
     /** The "Next cut" button's state ([undercutNextCutState]); [onNextCut] runs it. */
     nextCut: UndercutNextCutState,
     onNextCut: () -> Unit,
@@ -3043,6 +3271,12 @@ private fun UndercutDraftCard(
     val (overhangAftMm, overhangFwdMm) = overhangLiner?.let {
         undercutLinerExtensionsMm(draft.startFromAftMm, draft.lengthMm, it.startMm, it.endMm)
     } ?: (0f to 0f)
+    // A cut wholly off this page's liner (and clear of its section's cuts) does not run "past the
+    // edge" — it misses the liner. The overhang line, its question and its warning say nothing
+    // for it; the off-liner reason states it instead.
+    fun offThisLiner(d: UndercutDraft): Boolean = stripLiner != null &&
+        undercutOffLiner(d.startFromAftMm, d.lengthMm, stripLiner, sectionCuts) != null
+    val offLiner = offThisLiner(draft)
     val overhangsAft = overhangAftMm > UNDERCUT_TOUCH_EPS_MM
     val overhangsFwd = overhangFwdMm > UNDERCUT_TOUCH_EPS_MM
     var overhangQuestion by remember(draft.id) { mutableStateOf<UndercutLinerEnds?>(null) }
@@ -3068,7 +3302,7 @@ private fun UndercutDraftCard(
     }
     fun commitSpanEdit(updated: UndercutDraft) {
         // A commit the overlay's flush drove is asked about at overlay level instead.
-        if (!flushActive()) overhangLiner?.let { l ->
+        if (!flushActive() && !offThisLiner(updated)) overhangLiner?.let { l ->
             val (aft, fwd) = newLinerOverhangs(
                 draft.startFromAftMm, draft.lengthMm,
                 updated.startFromAftMm, updated.lengthMm,
@@ -3106,7 +3340,16 @@ private fun UndercutDraftCard(
     val otherSpans = remember(sheetUndercuts, oalMm, draft.id) {
         undercutOtherSpans(sheetUndercuts, draft.id, oalMm)
     }
-    val confirmIssue = undercutConfirmIssue(draft, oalMm, otherSpans, pagePositionById)
+    // A RECORDED cut that overlaps or duplicates another states it whether or not the card is
+    // being edited: the confirm check passes over a stored span nobody moved, and an overlap
+    // saved on the way to correcting the other cut must not be forgotten.
+    val recordedOverlap = if (!draft.isPending && !staleOverrun) {
+        undercutConfirmIssue(draft, oalMm, otherSpans, pagePositionById)
+    } else {
+        null
+    }
+    // The reason shown inline: the check's own on a dirty card, else the recorded overlap.
+    val inlineIssue = issue?.reason ?: recordedOverlap
 
     // ── "More ways to place this cut" ──────────────────────────────────────────────────
     // The span presets — Whole liner and the side-named edge-to-edge chips with their gap fields —
@@ -3367,21 +3610,37 @@ private fun UndercutDraftCard(
             // the end(s) that run off; nothing stored, nothing editable. An end whose declined
             // "Past the liner edge" warning is showing below is left to that warning — it states
             // the same amount, and two lines for one overhang read as a mistake.
-            if (overhangLiner != null) {
+            if (overhangLiner != null && !offLiner) {
                 undercutOverhangInfo(
                     aft = if (overhangsAft && !overhangFlagged.aft) overhangAmount(overhangAftMm) else null,
                     fwd = if (overhangsFwd && !overhangFlagged.fwd) overhangAmount(overhangFwdMm) else null,
                 )?.let { UndercutCaption(it, Modifier.testTag("undercut_overhang_info")) }
             }
+            // A cut that misses this liner altogether says so where the numbers are, with the
+            // other S.E.T.'s reading when that would put it on the liner — the likely slip is a
+            // Distance measured from the wrong end (on-device report).
+            if (offLiner) {
+                val offReason = issue?.takeIf { it.kind == UndercutIssueKind.OFF_LINER }?.reason
+                    ?: stripLiner?.let { l ->
+                        undercutOffLiner(draft.startFromAftMm, draft.lengthMm, l, sectionCuts)
+                    }?.let { undercutOffLinerMessage(overhangAmount(it.gapMm), it.side) }
+                offReason?.let { UndercutWarning(it, Modifier.testTag("undercut_off_liner_warning")) }
+                mirror?.let { m ->
+                    UndercutCaption(
+                        undercutMirrorHint(overhangAmount(m.distanceMm), m.reference),
+                        Modifier.testTag("undercut_off_liner_mirror_hint"),
+                    )
+                }
+            }
             // A declined "Past the liner edge" question, beside the numbers it is about — shown
             // while that end still runs off the liner.
-            if (overhangFlagged.aft && overhangsAft) {
+            if (overhangFlagged.aft && overhangsAft && !offLiner) {
                 UndercutWarning(
                     undercutOverhangWarning(overhangAmount(overhangAftMm), "AFT"),
                     Modifier.testTag("undercut_overhang_warning"),
                 )
             }
-            if (overhangFlagged.fwd && overhangsFwd) {
+            if (overhangFlagged.fwd && overhangsFwd && !offLiner) {
                 UndercutWarning(
                     undercutOverhangWarning(overhangAmount(overhangFwdMm), "FWD"),
                     Modifier.testTag("undercut_overhang_warning"),
@@ -3416,9 +3675,13 @@ private fun UndercutDraftCard(
             // carousel states it too — this one survives being scrolled to, that one survives the
             // card being scrolled.
             // A RECORDED cut that overlaps another keeps the warning too — an overlap saved on
-            // the way to correcting the other cut must not be forgotten.
-            if (confirmIssue != null && (dirty || undercutIssueIsOverlapOnly(draft, oalMm))) {
-                UndercutWarning(confirmIssue)
+            // the way to correcting the other cut must not be forgotten. A cut off this liner is
+            // stated under Length instead, beside the numbers that put it there; an empty field
+            // waiting to be typed is the pill's to state, not a warning.
+            if (inlineIssue != null && issue?.kind != UndercutIssueKind.OFF_LINER &&
+                issue?.kind != UndercutIssueKind.SEED_BLANK
+            ) {
+                UndercutWarning(inlineIssue)
             }
 
             // "Next cut": confirm this card and open a new cut butted on its FWD end — the
@@ -3694,10 +3957,15 @@ private data class UndercutLeavePrompt(
     val draftId: String,
     val reason: String,
     val closing: Boolean,
-    /** The reason is an overlap with another cut and nothing else: "Save anyway" is offered. */
-    val overlapOnly: Boolean = false,
+    /**
+     * The blocking issue when the machinist may record past it — "Save anyway" for an overlap,
+     * "Record anyway" for a cut off this liner; null when only Keep editing / Discard apply.
+     */
+    val overridable: UndercutIssueKind? = null,
     /** Raised by a tap on the blocked pill, not by leaving the card: saving confirms in place. */
     val fromPill: Boolean = false,
+    /** Off this liner: the same Distance from the other S.E.T., when that lands on the liner. */
+    val mirror: UndercutMirroredStart? = null,
 )
 
 /**
@@ -3723,8 +3991,10 @@ private fun UndercutStatusPill(
     onConfirm: () -> Unit,
     onDiscard: () -> Unit,
     modifier: Modifier = Modifier,
-    /** Non-null while the blocking reason can be overridden (an overlap): the reason is tappable. */
+    /** Non-null while the blocking reason can be overridden (an overlap, a cut off this liner): the reason is tappable. */
     onBlockedTap: (() -> Unit)? = null,
+    /** The blocked pill's text while [onBlockedTap] is offered ([undercutBlockedTapLabel]). */
+    blockedTapLabel: String? = null,
 ) {
     val container = when (state) {
         UndercutPillState.Saved -> MaterialTheme.colorScheme.surfaceVariant
@@ -3795,7 +4065,7 @@ private fun UndercutStatusPill(
                             modifier = Modifier.padding(end = 6.dp),
                         )
                         Text(
-                            if (onBlockedTap != null) state.reason.substringBefore(" — ") + " — tap to save anyway"
+                            if (onBlockedTap != null && blockedTapLabel != null) blockedTapLabel
                             else state.reason,
                             style = MaterialTheme.typography.labelLarge,
                             maxLines = 2,
@@ -4116,13 +4386,17 @@ internal fun undercutDetailLeadDrawRange(
             labelWidthPx(formatLenDimDualLabel(value.toDouble(), unit, false)), arrowSizePt, scale,
         )
     }
-    return undercutWidenForSetLead(
+    val widened = undercutWidenForSetLead(
         previewStartMm, previewEndMm, strip.chainStartMm, strip.chainEndMm, lead.side, room,
         otherMinPadPt = room,
         availPt = availPx,
         oalMm = oalMm,
         maxPtPerMm = if (maxOdMm > 0f) profileRowHeightPx * 0.72f / maxOdMm else Float.MAX_VALUE,
     )
+    // The lead's widening can carry an end onto the shaft end: it then draws the end thread there.
+    val (aftEndMm, fwdEndMm) = undercutDrawnShaftEndsMm(spec)
+    val (s, e) = withUndercutEndThreads(widened.startMm, widened.endMm, oalMm, aftEndMm, fwdEndMm)
+    return if (s == widened.startMm && e == widened.endMm) widened else UndercutStripDrawRangeMm(s, e)
 }
 
 /**
@@ -4264,8 +4538,10 @@ private fun undercutStripTitle(
     unit: UnitSystem,
     displayUnits: DisplayUnits = DisplayUnits.single(unit),
 ): String {
-    val rangeText =
-        "Undercuts ${disp(strip.drawStartMm, unit)}–${disp(strip.drawEndMm, unit)} ${abbr(unit)} from AFT"
+    // The shaft's own stretch: a window at a shaft end also draws the end thread past it.
+    val oal = spec.overallLengthMm.coerceAtLeast(0f)
+    val rangeText = "Undercuts ${disp(strip.drawStartMm.coerceIn(0f, oal), unit)}–" +
+        "${disp(strip.drawEndMm.coerceIn(0f, oal), unit)} ${abbr(unit)} from AFT"
     return when (strip) {
         is UndercutStrip.FreeStrip -> rangeText
         is UndercutStrip.LinerStrip -> buildLinerTitleById(spec)[strip.linerId]?.let { name ->

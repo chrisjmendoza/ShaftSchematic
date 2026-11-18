@@ -563,7 +563,11 @@ can never affect geometry resolution:
   authored Distance reference (AFT/FWD SET, a reference liner's edge, or — for a cut sitting fully
   inside another — that parent cut's AFT/FWD shoulder: `UndercutReference.PARENT_AFT`/`PARENT_FWD`
   with the parent's id in the additive `Undercut.referenceCutId`, empty for every other reference)
-  is display-only metadata; canonical geometry never moves on a reference switch. `diaMm` is a typed
+  decides how the Distance is entered and shown; canonical geometry never moves on a reference
+  switch. The datum it names does carry the cut: when an ORIGINAL edit moves that S.E.T., liner
+  edge or parent shoulder, the editor's spec seam re-derives `startFromAftMm` so the typed Distance
+  still reads true, in the same undo step (`geom/UndercutReanchorMath.kt`; length, Ø and the stored
+  reference unchanged; nothing moves at decode, undo or on a FINAL edit). `diaMm` is a typed
   measurement stored verbatim (`0` = placed-but-empty, never printed).
   `exaggerationFrac` (`0..UNDERCUT_EXAGGERATION_MAX_FRAC` = 0.25, default 0.25) is a
   per-sheet **drawn-depth** exaggeration only — printed Ø values stay the stored numbers.

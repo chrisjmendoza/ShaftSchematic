@@ -213,6 +213,14 @@ Two specs, one editor
   in the SAME synchronous call, so the recorder (which reads `currentEditState()` at collection
   time) takes the edit and the re-key as one undo step. A no-op when no stored key names an auto
   body. See `RunoutSheet.md` (Runout Bubble Editor, "Auto-body keys follow their body").
+  Right after it, `followUndercutDatums(before, after)` re-anchors the undercut record
+  (`UndercutRecord.reanchoredFor`, `geom/UndercutReanchorMath.kt`): a cut whose STORED datum — a
+  S.E.T., its reference liner's edge, its parent cut's shoulder — the edit moved gets the
+  `startFromAftMm` that keeps its typed Distance, in the same synchronous call and so the same undo
+  step (on-device ruling: an undercut always keeps its reference position). A record none of whose
+  cuts moved is left as the same instance, so nothing is dirtied or recorded. Loads, undo/redo and
+  the other boundaries write `_spec` directly and never re-anchor; a `FINAL` write never touches
+  the undercut record. See `UndercutDrawing.md` ("A cut keeps its reference position").
 - `finalResolvedComponents: StateFlow<List<ResolvedComponent>>` — derived from `finalSpec` by
   the same `resolveComponents` the original uses, empty while there is no final, so every
   presentational surface works over either without knowing which.
