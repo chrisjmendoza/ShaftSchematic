@@ -34,6 +34,7 @@ import com.android.shaftschematic.model.LinerAuthoredReference
 import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.model.autoBlendFor
 import com.android.shaftschematic.model.showsAutoSectionDia
+import com.android.shaftschematic.model.autoSectionFiberglass
 import com.android.shaftschematic.model.hasAnyKeywayValue
 import com.android.shaftschematic.model.hasKeyway
 import com.android.shaftschematic.model.suggestedBodyKeywayEnd
@@ -108,6 +109,8 @@ internal fun BodyPagerCard(
     /** An auto span's face entry: angle (null = Length mode) and corner radius, stored verbatim. */
     onSetAutoBlendAngle: (spanStartMm: Float, spanEndMm: Float, end: LinerAuthoredReference, angleDeg: Float?, radiusMm: Float) -> Unit = { _, _, _, _, _ -> },
     onSetAutoSectionShowDia: (startMm: Float, endMm: Float, show: Boolean) -> Unit,
+    onSetAutoFiberglass: (startMm: Float, endMm: Float, on: Boolean, aftSealLenMm: Float, fwdSealLenMm: Float) -> Unit = { _, _, _, _, _ -> },
+    onSetBodyFiberglass: (index: Int, on: Boolean, aftSealLenMm: Float, fwdSealLenMm: Float) -> Unit = { _, _, _, _ -> },
     onUpdateBody: (Int, Float, Float, Float) -> Unit,
     /** Sets an explicit body's "Measure From" reference — never moves its stored start. */
     onUpdateBodyReference: (Int, LinerAuthoredReference) -> Unit,
@@ -445,6 +448,16 @@ internal fun BodyPagerCard(
                         )
                     }
                 }.orEmpty(),
+                // The wrap is keyed to this bare-shaft section like its seal areas, so it stays on
+                // the section when the liners or the overall length move.
+                fiberglass = spec.autoSectionFiberglass(component.startMmPhysical, component.endMmPhysical),
+                onSetFiberglass = { on ->
+                    onSetAutoFiberglass(
+                        component.startMmPhysical, component.endMmPhysical, on,
+                        sealLenForSeal(true, aftBlend?.sealLenMm ?: 0f, lengthMm),
+                        sealLenForSeal(true, fwdBlend?.sealLenMm ?: 0f, lengthMm),
+                    )
+                },
             )
         }
         return
@@ -769,6 +782,14 @@ internal fun BodyPagerCard(
                     unit, ::disp,
                 )
             }.orEmpty(),
+            fiberglass = b.fiberglass,
+            onSetFiberglass = { on ->
+                onSetBodyFiberglass(
+                    idx, on,
+                    sealLenForSeal(true, b.blendAftSealLenMm, b.lengthMm),
+                    sealLenForSeal(true, b.blendFwdSealLenMm, b.lengthMm),
+                )
+            },
         )
 
         // Keyway — the whole section is gated behind the shared "Keyway" checkbox, so the

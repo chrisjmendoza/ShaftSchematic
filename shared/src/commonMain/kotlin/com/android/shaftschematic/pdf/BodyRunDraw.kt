@@ -297,7 +297,10 @@ internal fun bodyRunBreak(
         strokeWidthPt = strokeWidthPt,
     ) else null
     val gapCenter = pair?.let {
-        breakGapCenter(minOf(fx0, fx1), maxOf(fx0, fx1), it.gapPt, avoidX + edges.sealSpansX)
+        breakGapCenter(
+            minOf(fx0, fx1), maxOf(fx0, fx1), it.gapPt, avoidX + edges.sealSpansX,
+            edgeReachPt = breakEdgeReachPt(it.amplitudePt, strokeWidthPt),
+        )
     }
     return BodyRunBreak(edges, pair, gapCenter)
 }

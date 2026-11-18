@@ -124,6 +124,21 @@ class SchematicRenderReviewTest {
         }
     }
 
+    /** The Final tab's Full length sheet: the port tailshaft with its three fiberglass sections. */
+    @Test
+    fun `full length fiberglass sheet`() {
+        val spec = FiberglassShaftFixture.spec()
+        val (bmp, c) = bitmapPage()
+        composeFullLengthPdfOnCanvas(
+            c, PDF_PAGE_WIDTH_PT.toFloat(), PDF_PAGE_HEIGHT_PT.toFloat(),
+            spec = spec, unit = UnitSystem.INCHES,
+            project = ProjectInfo(customer = "Sound Propeller", vessel = "M/V Malolo", jobNumber = "933376", drawingLabel = "Final"),
+            appVersion = "review", filename = "full_length_fiberglass.png", pdfPrefs = PdfPrefs(),
+            resolvedComponents = resolveComponents(spec),
+        )
+        save("full_length_fiberglass.png", bmp)
+    }
+
     /** Section sheets: the hand sketch's "FWD end finish" stretch of the Kelley C job, and others. */
     @Test
     fun `section sheets`() {

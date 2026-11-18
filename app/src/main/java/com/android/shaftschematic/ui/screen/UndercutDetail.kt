@@ -182,6 +182,8 @@ import com.android.shaftschematic.pdf.buildUndercutStripTitle
 import com.android.shaftschematic.geom.undercutSectionCuts
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.pdf.UNDERCUT_RAIL_WITNESS_GAP_PT
+import com.android.shaftschematic.pdf.UNDERCUT_RAIL_LABEL_GAP_PT
+import com.android.shaftschematic.pdf.UNDERCUT_RAIL_HALO_PAD_Y_PT
 import com.android.shaftschematic.pdf.UNDERCUT_TOTAL_RAIL_ABOVE_PT
 import com.android.shaftschematic.pdf.UNDERCUT_TOTAL_RAIL_BAND_PT
 import com.android.shaftschematic.pdf.UndercutStripRails
@@ -1222,16 +1224,20 @@ fun UndercutWindowDetailOverlay(
     }
     val cardShape = MaterialTheme.shapes.medium
 
-    // Pinch-to-zoom + two-finger pan — the ComponentWearDetailOverlay transform pattern:
+    // Pinch-to-zoom + pan — the ComponentWearDetailOverlay transform pattern:
     // transformable state drives the Canvas graphicsLayer, and the tap handler inverts it.
     var zoomScale by remember(stripKey) { mutableFloatStateOf(1f) }
     // The drawing Box's laid-out width, so the chain rail can be planned (and its band sized)
     // before the canvas draws.
     var canvasWidthPx by remember { mutableIntStateOf(0) }
     var zoomOffset by remember(stripKey) { mutableStateOf(Offset.Zero) }
+    // A one-finger drag moves the drawing at EVERY zoom, the PDF previews' and the Runout
+    // canvas's posture: an offset locked to zero at 1× or below left a drag at the fitted view
+    // doing nothing until a pinch zoomed in (on-device report). Double-tap or the corner button
+    // brings it back.
     val zoomTransformState = rememberTransformableState { zoomChange, panChange, _ ->
         zoomScale = (zoomScale * zoomChange).coerceIn(0.5f, 6f)
-        zoomOffset = if (zoomScale <= 1f) Offset.Zero else zoomOffset + panChange
+        zoomOffset += panChange
     }
     // Back to the fitted view — double-tap or the corner button, the schematic preview's pair
     // (on-device request: the section view zoomed but had no way back).
@@ -1468,8 +1474,12 @@ fun UndercutWindowDetailOverlay(
                     val setTierPitchPx = undercutSetTierMinPitch(
                         railTextPaint.fontMetrics.let { it.descent - it.ascent }, railScale,
                     ).coerceAtMost(railRowStepPx)
-                    val railBand = remember(rails, railScale, railRowStepPx, setTierPitchPx) {
-                        undercutDetailRailBand(rails, railScale, railRowStepPx, setTierPitchPx)
+                    // Room for a rail caption set above its line at the drawing's edge — the
+                    // caption's own measure in the rail paint, its gap and its halo pad.
+                    val captionRoomPx = railTextPaint.fontMetrics.let { it.descent - it.ascent } +
+                        (UNDERCUT_RAIL_LABEL_GAP_PT + UNDERCUT_RAIL_HALO_PAD_Y_PT) * railScale
+                    val railBand = remember(rails, railScale, railRowStepPx, setTierPitchPx, captionRoomPx) {
+                        undercutDetailRailBand(rails, railScale, railRowStepPx, setTierPitchPx, captionRoomPx)
                     }
                     // The cylinder's top sits on the rail band's bottom, the printed strip's
                     // `cylTop = chainRailY + belowRows × row + headroom`: the profile row starts
@@ -4091,6 +4101,13 @@ internal data class UndercutDetailRailBand(
  * line, then the plan's `belowRows` rows (clear air, any below-line fallbacks and every nested
  * row) and [UNDERCUT_DETAIL_RAIL_HEADROOM_PT], ending on the cylinder top. A strip with no rail
  * (no plan yet, or no cuts) keeps only the top pad.
+ *
+ * A baseline rail that carries a caption ("S.E.T. to liner end") sets it ABOVE its line when the
+ * station end has no room beside it (`undercutRailCaptionSpot`) — at the drawing's edge, which is
+ * where a liner end usually is. [captionRoomPx] (the caption's own height, gap and halo) is added
+ * to the top pad whenever any rail is captioned, so that caption is never cut off by the top of
+ * the card at the fitted view (on-device report: it could only be seen by dragging the drawing
+ * down).
  */
 internal fun undercutDetailRailBand(
     rails: UndercutStripRails?,
@@ -4098,8 +4115,10 @@ internal fun undercutDetailRailBand(
     rowStepPx: Float,
     /** The pitch the From-S.E.T. tiers stack at — the draw's `setTierPitch`, the same number. */
     setTierPitchPx: Float = rowStepPx,
+    captionRoomPx: Float = 0f,
 ): UndercutDetailRailBand {
-    val topPad = UNDERCUT_DETAIL_RAIL_TOP_PAD_PT * scale
+    val captioned = rails?.setRailSpans?.any { it.caption != null } == true
+    val topPad = UNDERCUT_DETAIL_RAIL_TOP_PAD_PT * scale + (if (captioned) captionRoomPx.coerceAtLeast(0f) else 0f)
     if (rails == null || rails.chainSpans.isEmpty()) return UndercutDetailRailBand(topPad, topPad, topPad)
     val totalY: Float
     val chainY: Float

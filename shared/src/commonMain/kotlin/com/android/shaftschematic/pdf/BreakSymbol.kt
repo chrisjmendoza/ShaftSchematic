@@ -6,6 +6,7 @@ import com.android.shaftschematic.gfx.Paint
 import com.android.shaftschematic.gfx.PaintStyle
 import com.android.shaftschematic.gfx.Path
 import com.android.shaftschematic.gfx.style
+import com.android.shaftschematic.geom.BREAK_EDGE_OUTWARD_REACH_FRAC
 import com.android.shaftschematic.geom.BREAK_PAIR_REACH_FRAC
 import com.android.shaftschematic.geom.RETURN_SWEEP_FULLNESS
 
@@ -228,6 +229,12 @@ internal const val BREAK_GAP_MIN_STUB_PT = 6f
  * avoid range shifts the minimal distance that clears every range while keeping
  * [minStubPt] of stub at both ends. Returns null when no clear placement exists — the
  * caller prints the run plain rather than break inside a protected span.
+ *
+ * [edgeReachPt] is how far each break edge's drawn curves reach past the gap's edge lines
+ * ([BREAK_EDGE_OUTWARD_REACH_FRAC] of the amplitude, plus the stroke): the avoid ranges keep
+ * that much more clearance, so the glyph's lobes never cross a seal area's dashed lines or a
+ * protected window (on-device report: on a short compressed fiberglass section the S lobes lay
+ * over both seal areas). `0` keeps only the gap itself clear.
  */
 fun breakGapCenter(
     flatX0: Float,
@@ -235,8 +242,10 @@ fun breakGapCenter(
     gapPt: Float,
     avoidRanges: List<ClosedFloatingPointRange<Float>>,
     minStubPt: Float = BREAK_GAP_MIN_STUB_PT,
+    edgeReachPt: Float = 0f,
 ): Float? {
     val half = gapPt / 2f
+    val clearHalf = half + edgeReachPt.coerceAtLeast(0f)
     val lo = flatX0 + minStubPt + half
     val hi = flatX1 - minStubPt - half
     if (hi < lo) return null
@@ -245,7 +254,7 @@ fun breakGapCenter(
     val blocked = avoidRanges.mapNotNull { r ->
         val s = maxOf(r.start, flatX0)
         val e = minOf(r.endInclusive, flatX1)
-        if (e > s) (s - half)..(e + half) else null
+        if (e > s) (s - clearHalf)..(e + clearHalf) else null
     }
     fun clear(c: Float) = blocked.none { c in it }
     if (clear(mid)) return mid
@@ -258,6 +267,15 @@ fun breakGapCenter(
 }
 
 data class BreakPairLayout(val gapPt: Float, val amplitudePt: Float)
+
+/**
+ * How far one break edge's strokes reach past its own x line, either way: the larger of the main
+ * S's √3/6 and the return sweep's ([BREAK_EDGE_OUTWARD_REACH_FRAC]) of [amplitudePt], plus half
+ * the stroke and [BREAK_PAIR_MIN_CLEAR_PT] of daylight — the clearance [breakGapCenter] keeps
+ * between the glyph and an avoid range.
+ */
+fun breakEdgeReachPt(amplitudePt: Float, strokeWidthPt: Float): Float =
+    BREAK_EDGE_OUTWARD_REACH_FRAC * amplitudePt + strokeWidthPt / 2f + BREAK_PAIR_MIN_CLEAR_PT
 
 /**
  * Gap and amplitude for the paired break glyph on a compressed body run. A pair set

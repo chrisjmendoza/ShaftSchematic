@@ -95,4 +95,20 @@ class FinalSheetComposeTest {
         assertEquals(names.size, names.toSet().size)
         assertNotEquals(FINAL_FILENAME_SUFFIX, FINAL_BEFORE_AFTER_FILENAME_SUFFIX)
     }
+
+    @Test
+    fun `full length wins over before-after, and bubbles win over full length`() {
+        assertEquals(FinalSheetKind.FULL_LENGTH, finalSheetKind(SpecTarget.FINAL, false, true, true))
+        assertEquals(FinalSheetKind.FULL_LENGTH, finalSheetKind(SpecTarget.FINAL, false, false, true))
+        assertEquals(FinalSheetKind.WITH_BUBBLES, finalSheetKind(SpecTarget.FINAL, true, true, true))
+        assertEquals(FinalSheetKind.PLAIN, finalSheetKind(SpecTarget.ORIGINAL, false, false, true))
+        assertEquals(FinalSheetKind.PLAIN, sectionSheetKind(true, SpecTarget.FINAL, false, false, true))
+    }
+
+    @Test
+    fun `the full length sheet has its own file name`() {
+        assertEquals(FINAL_FULL_LENGTH_FILENAME_SUFFIX, finalDrawingSuffix(false, true, true))
+        assertEquals(FINAL_BUBBLES_FILENAME_SUFFIX, finalDrawingSuffix(true, true, true))
+        assertNotEquals(FINAL_BEFORE_AFTER_FILENAME_SUFFIX, FINAL_FULL_LENGTH_FILENAME_SUFFIX)
+    }
 }

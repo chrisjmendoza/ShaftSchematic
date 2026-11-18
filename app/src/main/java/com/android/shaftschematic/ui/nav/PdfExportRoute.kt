@@ -102,7 +102,9 @@ fun PdfExportRoute(
     val finalRunoutBubbles by vm.finalRunoutBubbles.collectAsState()
     // The final drawing's before/after election — session-only, ON by default.
     val finalBeforeAfter by vm.finalBeforeAfter.collectAsState()
-    val sheetKind = sectionSheetKind(sectionId != null, target, finalRunoutBubbles, finalBeforeAfter)
+    // The final drawing's Full length election — session-only, off by default.
+    val finalFullLength by vm.finalFullLength.collectAsState()
+    val sheetKind = sectionSheetKind(sectionId != null, target, finalRunoutBubbles, finalBeforeAfter, finalFullLength)
     val sheetSections by vm.sheetSections.collectAsState()
     val sectionDef = sheetSections.firstOrNull { it.id == sectionId }
     // Resolved when the file is written, against the drawing as it then stands.
@@ -111,7 +113,7 @@ fun PdfExportRoute(
     }
     val drawingSuffix = when {
         target != SpecTarget.FINAL -> ""
-        else -> finalDrawingSuffix(finalRunoutBubbles, finalBeforeAfter)
+        else -> finalDrawingSuffix(finalRunoutBubbles, finalBeforeAfter, finalFullLength)
     }
     // The before/after sheet's top band is the ORIGINAL drawing; read only on the FINAL target.
     val exportOriginalSpec: () -> ShaftSpec? = {
@@ -365,13 +367,20 @@ internal const val FINAL_BUBBLES_FILENAME_SUFFIX = "_Final_Runout"
 internal const val FINAL_BEFORE_AFTER_FILENAME_SUFFIX = "_Final_BeforeAfter"
 
 /**
- * The filename suffix a final schematic takes, given its elections — the same precedence as
- * [finalSheetKind]: stations win, then the before/after sheet, else the final drawing alone.
- * With the banner's `_Final_RunoutSheet` that makes FOUR distinct final documents, never
- * collapsed onto one name.
+ * The final schematic's suffix as the Full length sheet — the whole shaft unbroken, fiberglass
+ * coloured, above the final drawing. Its own document, so its own name.
  */
-internal fun finalDrawingSuffix(runoutBubbles: Boolean, beforeAfter: Boolean): String = when {
+internal const val FINAL_FULL_LENGTH_FILENAME_SUFFIX = "_Final_FullLength"
+
+/**
+ * The filename suffix a final schematic takes, given its elections — the same precedence as
+ * [finalSheetKind]: stations win, then the Full length sheet, then the before/after sheet, else the
+ * final drawing alone. With the banner's `_Final_RunoutSheet` that makes FIVE distinct final
+ * documents, never collapsed onto one name.
+ */
+internal fun finalDrawingSuffix(runoutBubbles: Boolean, beforeAfter: Boolean, fullLength: Boolean = false): String = when {
     runoutBubbles -> FINAL_BUBBLES_FILENAME_SUFFIX
+    fullLength -> FINAL_FULL_LENGTH_FILENAME_SUFFIX
     beforeAfter -> FINAL_BEFORE_AFTER_FILENAME_SUFFIX
     else -> FINAL_FILENAME_SUFFIX
 }

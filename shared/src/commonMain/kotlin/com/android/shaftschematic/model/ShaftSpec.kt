@@ -58,6 +58,10 @@ import kotlinx.serialization.Serializable
  *           keyed in shaft space by anchor exactly as [autoDiaOverrides] is (aft-most wins,
  *           dormant under a component, dropped with its section on a component add/remove).
  *           Draw-only and additive/defaulted — see [AutoDiaCallout].
+ * @property autoFiberglass Bare-shaft sections wrapped in fiberglass, keyed in shaft space by
+ *           anchor — the [autoBlends] posture (never pruned, dormant under a component), so a
+ *           wrap stays on its section when the liners or the overall length move. Draw-only and
+ *           additive/defaulted — see [AutoFiberglass].
  * @property aftEndHoles The draw-plate holes tapped into the AFT end face — a
  *           reference feature printed only as footer text; never affects OAL, resolve,
  *           collision or the drawing. Additive/defaulted — see [ShaftEndHoles].
@@ -79,6 +83,7 @@ data class ShaftSpec(
     val autoDiaOverrides: List<AutoDiaOverride> = emptyList(),
     val autoBlends: List<AutoBlend> = emptyList(),
     val autoDiaCallouts: List<AutoDiaCallout> = emptyList(),
+    val autoFiberglass: List<AutoFiberglass> = emptyList(),
     val aftEndHoles: ShaftEndHoles = ShaftEndHoles(),
     val fwdEndHoles: ShaftEndHoles = ShaftEndHoles(),
 )

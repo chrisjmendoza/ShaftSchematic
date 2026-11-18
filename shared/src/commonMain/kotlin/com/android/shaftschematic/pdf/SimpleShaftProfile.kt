@@ -86,17 +86,30 @@ fun drawSimpleShaftProfile(
      * on the shaft). Empty — every caller but the wear document — draws plain cylinders.
      */
     linerTraces: Map<String, List<WearTraceVertex>> = emptyMap(),
+    /**
+     * Whether a long body run draws its centre S-break. The Final tab's Full length band passes
+     * false — its whole point is the shaft at true length, unbroken — and draws every run plain.
+     */
+    breakLongRuns: Boolean = true,
+    /**
+     * Body runs (by drawn id) the [bodyFill] pre-pass skips: the Full length band paints its
+     * fiberglass sections itself, under the outlines, and a grey wash over them would muddy the
+     * colour. Empty — every other caller — fills every run.
+     */
+    unfilledBodyIds: Set<String> = emptySet(),
 ) {
+    fun brk(x0: Float, x1: Float, r: Float, sw: Float): SimpleBodyBreak? =
+        if (breakLongRuns) simpleBodyBreak(x0, x1, r, sw, geomRect) else null
     // ── Shade fills first (drawn under all outlines) ──────────────────────
     bodyFill?.let { f ->
         spec.bodies.forEach { b ->
-            if (b.lengthMm <= 0f || b.diaMm <= 0f) return@forEach
+            if (b.lengthMm <= 0f || b.diaMm <= 0f || b.id in unfilledBodyIds) return@forEach
             val x0 = xAt(b.startFromAftMm); val x1 = xAt(b.startFromAftMm + b.lengthMm)
             val r = rPx(b.diaMm); val top = cy - r; val bot = cy + r
             // A broken run fills as two stubs, each ending on the very S the outline pass
             // strokes. One rectangle across the whole run laid grey through the break gap —
             // which reads as bare paper — and squared off the curves at both stub ends.
-            val brk = simpleBodyBreak(x0, x1, r, outline.strokeWidth, geomRect)
+            val brk = brk(x0, x1, r, outline.strokeWidth)
             if (brk == null) {
                 c.drawRect(x0, top, x1, bot, f)
             } else {
@@ -141,7 +154,7 @@ fun drawSimpleShaftProfile(
         if (b.lengthMm <= 0f || b.diaMm <= 0f) return@forEach
         val x0 = xAt(b.startFromAftMm); val x1 = xAt(b.startFromAftMm + b.lengthMm)
         val r = rPx(b.diaMm); val top = cy - r; val bot = cy + r
-        val brk = simpleBodyBreak(x0, x1, r, capPaint.strokeWidth, geomRect)
+        val brk = brk(x0, x1, r, capPaint.strokeWidth)
         if (brk == null) {
             c.drawLine(x0, top, x1, top, outline); c.drawLine(x0, bot, x1, bot, outline)
             c.drawLine(x0, top, x0, bot, outline); c.drawLine(x1, top, x1, bot, outline)

@@ -446,6 +446,15 @@ fun ShaftViewModel.setFinalBeforeAfter(enabled: Boolean) {
     _finalBeforeAfter.value = enabled
 }
 
+/**
+ * Elects the Full length sheet as the FINAL drawing's schematic sheet: the whole shaft at true
+ * length, unbroken, its fiberglass sections coloured and labelled, above the final schematic.
+ * Session-only, default OFF; wins over the before/after sheet, and runout bubbles win over it.
+ */
+fun ShaftViewModel.setFinalFullLength(enabled: Boolean) {
+    _finalFullLength.value = enabled
+}
+
 // ── Appearance (app-wide theme) ──────────────────────────────────────────────
 
 fun ShaftViewModel.setThemeMode(mode: AppThemeMode, persist: Boolean = true) {

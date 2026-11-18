@@ -255,7 +255,7 @@ fun AddBodyDialog(
                blendAftSeal: Boolean, blendFwdSeal: Boolean,
                blendAftSealLenMm: Float, blendFwdSealLenMm: Float,
                blendAftToLinerOd: Boolean, blendFwdToLinerOd: Boolean,
-               blendAngles: BlendAngleDraft) -> Unit,
+               blendAngles: BlendAngleDraft, fiberglass: Boolean) -> Unit,
     onCancel: () -> Unit,
 ) {
     val d = rememberAddDialogDefaults(spec)
@@ -282,6 +282,7 @@ fun AddBodyDialog(
     val blendFwd = remember { SeededMmField.empty() }
     var sealAft by remember { mutableStateOf(false) }
     var sealFwd by remember { mutableStateOf(false) }
+    var fiberglass by remember { mutableStateOf(false) }
     val blendAftSealLen = remember { SeededMmField.empty() }
     val blendFwdSealLen = remember { SeededMmField.empty() }
     // "At a liner": Seat (the derived half-way shoulder) unless the user picks Liner OD.
@@ -424,6 +425,26 @@ fun AddBodyDialog(
                         sealFwd = on
                         if (on && blendFwdSealLen.text.isBlank()) {
                             defaultSealLenMm(lengthMm).let { blendFwdSealLen.reseed(it, toDisplayString(it, unit)) }
+                        }
+                    },
+                    // The card's rule: ticking the wrap switches on each seal area that is off,
+                    // seeding its length the way the seal box itself does; unticking leaves them.
+                    fiberglass = fiberglass,
+                    onSetFiberglass = { on ->
+                        fiberglass = on
+                        if (on) {
+                            if (!sealAft) {
+                                sealAft = true
+                                if (blendAftSealLen.text.isBlank()) {
+                                    defaultSealLenMm(lengthMm).let { blendAftSealLen.reseed(it, toDisplayString(it, unit)) }
+                                }
+                            }
+                            if (!sealFwd) {
+                                sealFwd = true
+                                if (blendFwdSealLen.text.isBlank()) {
+                                    defaultSealLenMm(lengthMm).let { blendFwdSealLen.reseed(it, toDisplayString(it, unit)) }
+                                }
+                            }
                         }
                     },
                     // The length fields keep an empty supporting line, so the "At a liner" chips
@@ -615,6 +636,7 @@ fun AddBodyDialog(
                         aftRadiusMm = if (aftAngleActive) blendAftRadius.mm(unit) ?: 0f else 0f,
                         fwdRadiusMm = if (fwdAngleActive) blendFwdRadius.mm(unit) ?: 0f else 0f,
                     ),
+                    fiberglass,
                 )
             }) { Text("Add") }
         },

@@ -440,7 +440,7 @@ internal fun carryBodyKeyway(from: Body, to: Body): Body {
 
 /**
  * Carries [from]'s **draw-only** decisions — name, Ø/name visibility, the shade override, the
- * compression opt-out, and the length-rail override — onto [to] (a fragment/merge/expansion of the same material),
+ * compression opt-out, the length-rail override and the fiberglass wrap — onto [to] (a fragment/merge/expansion of the same material),
  * together with its AFT | FWD reference — an authored choice, not geometry. Nothing here is
  * geometry, so unlike the keyway there is no fit test: every piece of one authored body prints,
  * and follows an OAL change, the way that body was authored to.
@@ -457,6 +457,7 @@ internal fun carryBodyDisplay(from: Body, to: Body): Body = to.copy(
     compressOnDrawing = from.compressOnDrawing,
     showDimensionRail = from.showDimensionRail,
     authoredReference = from.authoredReference,
+    fiberglass = from.fiberglass,
 )
 
 /**

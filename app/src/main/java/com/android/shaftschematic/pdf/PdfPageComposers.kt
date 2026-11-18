@@ -224,6 +224,35 @@ fun composeBeforeAfterPdf(
 )
 
 /**
+ * The FINAL drawing's Full length sheet on [page]: the whole shaft at true length, unbroken, with
+ * its fiberglass sections coloured and labelled, above the final schematic — drawn by
+ * [composeFullLengthPdfOnCanvas] onto the page's canvas at the page's size.
+ */
+fun composeFullLengthPdf(
+    page: PdfDocument.Page,
+    spec: ShaftSpec,
+    unit: UnitSystem,
+    project: ProjectInfo,
+    appVersion: String,
+    filename: String,
+    pdfPrefs: PdfPrefs = PdfPrefs(),
+    options: PdfExportOptions = PdfExportOptions(),
+    resolvedComponents: List<ResolvedComponent>? = null,
+    lineThicknessScale: Float = 1f,
+    heightScale: Float = 1f,
+    linerMinFracOfTrue: Float = 0f,
+    displayUnits: DisplayUnits = DisplayUnits.single(unit),
+) = composeFullLengthPdfOnCanvas(
+    c = page.canvas,
+    pageW = page.info.pageWidth.toFloat(),
+    pageH = page.info.pageHeight.toFloat(),
+    spec = spec, unit = unit, project = project, appVersion = appVersion, filename = filename,
+    pdfPrefs = pdfPrefs, options = options, resolvedComponents = resolvedComponents,
+    lineThicknessScale = lineThicknessScale, heightScale = heightScale,
+    linerMinFracOfTrue = linerMinFracOfTrue, displayUnits = displayUnits,
+)
+
+/**
  * The wear / inspection record sheet on [page] (US Letter landscape, already started) — drawn by
  * [composeWearPdfOnCanvas] onto the page's canvas at the page's size.
  */

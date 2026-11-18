@@ -6,6 +6,41 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-11-17
+
+### fix(undercut): the section page shows the "S.E.T. to liner end" caption, and drags at any zoom
+
+On-device report, AFT liner page: the caption over the overall dimension was cut off by the top of
+the drawing, and a one-finger drag could not move the drawing down to read it until a pinch had
+zoomed in. Where the liner end is at the drawing's edge the caption stands above its line, and the
+drawing now leaves room for it at the top. The drawing also moves under a one-finger drag at any
+zoom, as the PDF previews and the Runout canvas do; double-tap it, or tap the corner button, to put
+it back.
+
+### feat(final): a Full length sheet with the fiberglass sections coloured
+
+On-device request, with the shop's CAD drawings that mark the "(FIBERGLASS)" sections between the
+liners: every body card (explicit and bare shaft) and the Add Body dialog carry a "Fiberglass wrap"
+checkbox above Seal areas. Ticking it marks that stretch as wrapped and turns on a seal area at each
+end that has none (4", adjust the lengths as usual); unticking it leaves the seal areas alone. On
+bare shaft the wrap belongs to that stretch and follows it when the liners move, and it carries over
+when a section is made an explicit body and back.
+
+The Final tab's PDF options gain a "Full length" chip: the whole shaft drawn at its true length with
+no breaks, like the wear drawing, across the top of the page, and the Final schematic with its
+breaks, dimensions and footer under it. Each wrapped section is filled in a pale fiberglass green
+with crossed winding lines and carries the word FIBERGLASS, with a legend at the top right, so a
+black-and-white printer still shows where the fiberglass goes. The diameters on that top drawing are
+enlarged so the steps read; it carries no dimensions. Off by default; while on it takes the place of
+Original + Final. Files are named `…_Final_FullLength.pdf`.
+
+### fix(schematic): an S-break never lands on a seal area
+
+On-device report: on a short, heavily compressed section with a seal area at each end, the S-break
+sat in the gap between the seal areas but its curves ran over the seal grooves on both sides. The
+break now keeps its whole symbol clear of seal areas (and of keyway and bolt-hole windows), and a
+section with no room for that prints without a break, as one with no room for the gap always did.
+
 ## 2026-11-16
 
 ### fix(undercut): sections draw to the shaft end by default, and a zoomed preview pans

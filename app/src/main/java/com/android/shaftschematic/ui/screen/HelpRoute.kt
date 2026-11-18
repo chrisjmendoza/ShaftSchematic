@@ -888,7 +888,10 @@ internal val helpSections: List<HelpSection> = listOf(
                     "the after.\n\n" +
                     "It prints by default as one sheet with the original above it and the " +
                     "final below, each dimensioned and labelled; the \"Original + Final\" chip " +
-                    "on its PDF options sheet turns that off for the final alone. Elect " +
+                    "on its PDF options sheet turns that off for the final alone. \"Full " +
+                    "length\" prints instead the whole shaft unbroken, with every section " +
+                    "ticked \"Fiberglass wrap\" coloured and labelled FIBERGLASS, above the " +
+                    "final schematic. Elect " +
                     "runout bubbles there instead for a measurement sheet, and a blank runout " +
                     "sheet takes the finished shaft's readings, all marked Final; every other " +
                     "document keeps drawing the original.",

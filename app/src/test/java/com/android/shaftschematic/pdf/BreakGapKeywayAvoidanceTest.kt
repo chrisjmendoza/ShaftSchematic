@@ -210,7 +210,10 @@ class BreakGapKeywayAvoidanceTest {
             desiredAmplitudePt = r * 0.6f,
             strokeWidthPt = strokePt,
         )
-        val center = breakGapCenter(0f, runPt, pair.gapPt, avoid.map { it.loMm..it.hiMm })!!
+        val center = breakGapCenter(
+            0f, runPt, pair.gapPt, avoid.map { it.loMm..it.hiMm },
+            edgeReachPt = breakEdgeReachPt(pair.amplitudePt, strokePt),
+        )!!
         return Gap(center - pair.gapPt / 2f, center + pair.gapPt / 2f, pair.amplitudePt)
     }
 

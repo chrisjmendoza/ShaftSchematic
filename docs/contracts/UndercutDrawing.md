@@ -169,7 +169,12 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   (`undercutDrawingCapWhileTypingDp`). On a landscape tablet the full-height canvas pushed the
   card — and the field being typed into — off the screen (on-device report). Without the
   keyboard nothing is capped. The page is one column at every width (no two-pane branch).
-- Pinch-to-zoom (0.5×–6×) + two-finger pan; taps invert the same transform so hit-testing
+- The rail band (`undercutDetailRailBand`) adds `captionRoomPx` — a rail caption's height, gap and
+  halo, measured in the rail paint — to its top pad whenever a baseline rail is captioned: at the
+  drawing's edge `undercutRailCaptionSpot` sets the caption ABOVE its line, and the card's top cut it
+  off at the fitted view (on-device report).
+- Pinch-to-zoom (0.5×–6×) + pan, one finger or two, at EVERY zoom (an offset locked to zero at ≤ 1×
+  left a one-finger drag at the fitted view doing nothing — on-device report); taps invert the same transform so hit-testing
   always runs in untransformed canvas space. A double-tap, or the corner "Reset view" button
   (testTag `undercut_detail_reset_view`, shown only while zoomed or panned), animates back to the
   fitted view — the schematic preview's pair (on-device request).

@@ -702,6 +702,35 @@ class UndercutDraftTest {
     }
 
     @Test
+    fun `a captioned rail reserves the caption's height at the top of the canvas`() {
+        // On-device report: "S.E.T. to liner end" sat above its line at the drawing's edge and the
+        // top of the card cut it off at the fitted view.
+        val spans = listOf(UndercutSpanMm("a", 1030f, 1100f), UndercutSpanMm("b", 1200f, 1300f))
+        val inputs = detailRailInputs(spans, 1000f, 1500f)
+        val rails = requireNotNull(planUndercutDetailRails(inputs) { it.inline().length * 14f })
+        val rowStep = 17f * inputs.scale
+        val room = 20f
+
+        val plain = undercutDetailRailBand(rails, inputs.scale, rowStep, captionRoomPx = room)
+        assertEquals(
+            "no caption, no extra room",
+            undercutDetailRailBand(rails, inputs.scale, rowStep).totalRailY, plain.totalRailY, 1e-3f,
+        )
+
+        val captionSpan = com.android.shaftschematic.pdf.UndercutSetRailSpan(
+            span = rails.chainSpans.first(),
+            side = com.android.shaftschematic.pdf.UndercutAnchorSide.AFT_SET,
+            stationMm = 1500f, valueMm = 500f, openAtSet = false, tier = 0,
+            caption = com.android.shaftschematic.pdf.UNDERCUT_LINER_END_CAPTION,
+        )
+        val captioned = rails.copy(setRailSpans = listOf(captionSpan))
+        val withRoom = undercutDetailRailBand(captioned, inputs.scale, rowStep, captionRoomPx = room)
+        val without = undercutDetailRailBand(captioned, inputs.scale, rowStep)
+        assertEquals("every line drops by the caption's room", room, withRoom.totalRailY - without.totalRailY, 1e-3f)
+        assertEquals(room, withRoom.cylTopPx - without.cylTopPx, 1e-3f)
+    }
+
+    @Test
     fun `a window shift with unchanged cuts re-plans the rail's x`() {
         val spans = listOf(UndercutSpanMm("a", 1030f, 1100f), UndercutSpanMm("b", 1200f, 1300f))
         val base = detailRailInputs(spans, 1000f, 1500f, drawStart = 950f, drawEnd = 1550f)

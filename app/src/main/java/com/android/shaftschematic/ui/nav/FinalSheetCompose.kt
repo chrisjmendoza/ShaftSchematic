@@ -6,6 +6,7 @@ import com.android.shaftschematic.model.ShaftSpec
 import com.android.shaftschematic.pdf.PdfExportOptions
 import com.android.shaftschematic.pdf.SheetSection
 import com.android.shaftschematic.pdf.composeBeforeAfterPdf
+import com.android.shaftschematic.pdf.composeFullLengthPdf
 import com.android.shaftschematic.pdf.composeRunoutPdf
 import com.android.shaftschematic.pdf.composeShaftPdf
 import com.android.shaftschematic.settings.PdfPrefs
@@ -31,8 +32,10 @@ import com.android.shaftschematic.util.UnitSystem
  * **Schematic + Runout** variant over the same geometry — the pre-ship measurement copy, only
  * ever reachable on the FINAL drawing. [BEFORE_AFTER] is the FINAL drawing's comparison sheet:
  * the original shaft above the final one, each a whole schematic, under the final's footer.
+ * [FULL_LENGTH] is the FINAL drawing's whole shaft at true length, unbroken, its fiberglass
+ * sections coloured and labelled, above the final schematic.
  */
-internal enum class FinalSheetKind { PLAIN, WITH_BUBBLES, BEFORE_AFTER }
+internal enum class FinalSheetKind { PLAIN, WITH_BUBBLES, BEFORE_AFTER, FULL_LENGTH }
 
 /**
  * Which sheet a surface draws. Both elections are FINAL-drawing only: the original schematic's
@@ -40,17 +43,20 @@ internal enum class FinalSheetKind { PLAIN, WITH_BUBBLES, BEFORE_AFTER }
  * would leave two sheets claiming to be the runout record), and a before/after comparison needs a
  * final to compare against. The ORIGINAL target is therefore always [FinalSheetKind.PLAIN].
  *
- * Bubbles win over the before/after election: the bubbled sheet is the consolidated composer,
- * which has no band mode to stack the original above it, so with both elected the surface draws
- * [FinalSheetKind.WITH_BUBBLES].
+ * Bubbles win over both band layouts: the bubbled sheet is the consolidated composer, which has
+ * no band mode to stack anything above it. The Full length sheet wins over the before/after one —
+ * it is the later, narrower election (default off), and a page holds only one band above the
+ * final schematic.
  */
 internal fun finalSheetKind(
     target: SpecTarget,
     finalRunoutBubbles: Boolean,
     finalBeforeAfter: Boolean,
+    finalFullLength: Boolean = false,
 ): FinalSheetKind = when {
     target != SpecTarget.FINAL -> FinalSheetKind.PLAIN
     finalRunoutBubbles -> FinalSheetKind.WITH_BUBBLES
+    finalFullLength -> FinalSheetKind.FULL_LENGTH
     finalBeforeAfter -> FinalSheetKind.BEFORE_AFTER
     else -> FinalSheetKind.PLAIN
 }
@@ -65,8 +71,10 @@ internal fun sectionSheetKind(
     target: SpecTarget,
     finalRunoutBubbles: Boolean,
     finalBeforeAfter: Boolean,
+    finalFullLength: Boolean = false,
 ): FinalSheetKind =
-    if (sectionChosen) FinalSheetKind.PLAIN else finalSheetKind(target, finalRunoutBubbles, finalBeforeAfter)
+    if (sectionChosen) FinalSheetKind.PLAIN
+    else finalSheetKind(target, finalRunoutBubbles, finalBeforeAfter, finalFullLength)
 
 /**
  * Composes the schematic sheet a surface asked for onto [page].
@@ -156,6 +164,22 @@ internal fun composeSchematicSheet(
             options = options,
             originalResolved = originalResolved,
             finalResolved = resolvedComponents,
+            lineThicknessScale = lineThicknessScale,
+            heightScale = runoutConfig.heightScale,
+            linerMinFracOfTrue = runoutConfig.linerMinFracOfTrue,
+            displayUnits = displayUnits,
+        )
+
+        FinalSheetKind.FULL_LENGTH -> composeFullLengthPdf(
+            page = page,
+            spec = spec,
+            unit = unit,
+            project = project,
+            appVersion = appVersion,
+            filename = filename,
+            pdfPrefs = pdfPrefs,
+            options = options,
+            resolvedComponents = resolvedComponents,
             lineThicknessScale = lineThicknessScale,
             heightScale = runoutConfig.heightScale,
             linerMinFracOfTrue = runoutConfig.linerMinFracOfTrue,
