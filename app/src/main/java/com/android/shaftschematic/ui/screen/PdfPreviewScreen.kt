@@ -571,6 +571,19 @@ fun PdfPreviewScreen(
             onSelect = { sectionId = it },
             onEditSections = { showSections = true },
         )
+        // Which whole-shaft sheet the Final drawing prints. A section sheet is always the plain
+        // schematic, so the row stands down while one is on screen.
+        if (isFinal && sectionId == null) {
+            FinalSheetChoiceRow(
+                choice = finalSheetChoice(finalFullLength, finalBeforeAfter),
+                enabled = !finalRunoutBubbles,
+                onChoose = { c ->
+                    val (fullLength, beforeAfter) = finalSheetElections(c)
+                    vm.setFinalFullLength(fullLength)
+                    vm.setFinalBeforeAfter(beforeAfter)
+                },
+            )
+        }
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1070,7 +1083,7 @@ internal fun PdfOptionsSheet(
             Text(
                 "Original + Final prints the original shaft above the final one, each with its " +
                     "own dimensions, under one footer for the final — turn it off for the final " +
-                    "drawing alone. Full length prints the whole shaft unbroken, lengths to scale, " +
+                    "drawing alone. Full length prints the whole shaft unbroken and to scale, " +
                     "with its fiberglass sections coloured and labelled, above the final drawing " +
                     "(it takes the place of Original + Final). Runout bubbles adds runout stations to the final drawing " +
                     "instead: on for the pre-ship measurement sheet, which prints as the " +

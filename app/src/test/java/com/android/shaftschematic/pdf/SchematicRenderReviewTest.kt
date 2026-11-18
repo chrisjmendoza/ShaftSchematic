@@ -127,7 +127,9 @@ class SchematicRenderReviewTest {
     /** The Final tab's Full length sheet: the port tailshaft with its three fiberglass sections. */
     @Test
     fun `full length fiberglass sheet`() {
-        val spec = FiberglassShaftFixture.spec()
+        val spec = FiberglassShaftFixture.spec().let { s ->
+            s.copy(tapers = s.tapers.map { it.copy(keywayWidthMm = 50.8f, keywayDepthMm = 14.3f, keywayLengthMm = 320f) })
+        }
         val (bmp, c) = bitmapPage()
         composeFullLengthPdfOnCanvas(
             c, PDF_PAGE_WIDTH_PT.toFloat(), PDF_PAGE_HEIGHT_PT.toFloat(),

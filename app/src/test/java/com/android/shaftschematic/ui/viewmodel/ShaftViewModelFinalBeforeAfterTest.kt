@@ -33,6 +33,16 @@ class ShaftViewModelFinalBeforeAfterTest {
     }
 
     @Test
+    fun `the full length sheet is the final tab's first sheet`() {
+        val vm = vm()
+        assertTrue("Full length is on until turned off", vm.finalFullLength.value)
+
+        vm.setFinalFullLength(false)
+        assertFalse(vm.finalFullLength.value)
+        assertTrue("turning it off falls back to the before/after sheet", vm.finalBeforeAfter.value)
+    }
+
+    @Test
     fun `the setter elects it off and back on`() {
         val vm = vm()
 
