@@ -32,8 +32,6 @@ import com.android.shaftschematic.util.PDF_PAGE_WIDTH_PT
 import com.android.shaftschematic.model.*
 import com.android.shaftschematic.geom.DimensionRailLayout
 import com.android.shaftschematic.geom.MIN_BLEND_WIDTH_PT
-import com.android.shaftschematic.geom.SEAL_DASH_OFF_PT
-import com.android.shaftschematic.geom.SEAL_DASH_ON_PT
 import com.android.shaftschematic.geom.couplingFaceLayout
 import com.android.shaftschematic.geom.PlacedRunoutBubble
 import com.android.shaftschematic.geom.BubbleKeywayNotch
@@ -191,12 +189,9 @@ fun composeRunoutPdfOnCanvas(
     // Blends need the resolved neighbours to know what diameter each face steps to; without
     // a resolve pass there is nothing to blend against, so the faces simply stay square —
     // the schematic composer's rule (`ShaftPdfComposer.blendsForPdf`).
-    // Seal areas are noise on an inspection sheet (on-device request): they draw only under
-    // `PdfPrefs.inspectionSealAreas`, or on a Final sheet, which always carries them. A face
-    // stripped of its seal keeps its blend; with no seal span the S-break has nothing to avoid.
-    val showSealAreas = inspectionSheetShowsSealAreas(pdfPrefs, project)
+    // Seal areas draw only under `PdfPrefs.inspectionSealAreas` ([sheetShowsSealAreas]).
     val bodyBlendsForSheet = (resolvedComponents?.let { bodyBlends(spec, it) } ?: emptyList())
-        .let { blends -> if (showSealAreas) blends else blends.map { it.copy(seal = false, sealLenMm = 0f) }.filter { it.lengthMm > 0f } }
+        .withSealAreasFor(pdfPrefs)
 
     // ── Paints ──────────────────────────────────────────────────────────────
     val thicknessScale = lineThicknessScale.coerceIn(0.5f, 2.0f)
@@ -1616,12 +1611,21 @@ internal fun planDiaReadingsInProfile(
 }
 
 /**
- * Whether the runout / consolidated sheet draws the bodies' seal areas: the app-wide
- * `PdfPrefs.inspectionSealAreas`, or any sheet of the FINAL drawing ([ProjectInfo.drawingLabel]
- * set), where they always print. ONE rule for the composer and the tests.
+ * Whether a printed sheet draws the bodies' seal areas: the app-wide
+ * `PdfPrefs.inspectionSealAreas`, on every sheet that draws body faces — the schematic, every
+ * Final sheet, the runout and consolidated sheets (on-device request: a toggle everywhere, never
+ * forced on). ONE rule for both composers and the tests.
  */
-fun inspectionSheetShowsSealAreas(pdfPrefs: PdfPrefs, project: ProjectInfo): Boolean =
-    pdfPrefs.inspectionSealAreas || project.drawingLabel.isNotBlank()
+fun sheetShowsSealAreas(pdfPrefs: PdfPrefs): Boolean = pdfPrefs.inspectionSealAreas
+
+/**
+ * These blends as a sheet draws them under [sheetShowsSealAreas]: unchanged while seal areas
+ * show, else each face's seal dropped — a seal-only face goes with it, a blended face keeps its
+ * ramp — so the S-break gap has no seal span to steer round.
+ */
+fun List<BodyBlend>.withSealAreasFor(pdfPrefs: PdfPrefs): List<BodyBlend> =
+    if (sheetShowsSealAreas(pdfPrefs)) this
+    else map { it.copy(seal = false, sealLenMm = 0f) }.filter { it.lengthMm > 0f }
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Classic-sheet header + OAL span line (consolidated = false)

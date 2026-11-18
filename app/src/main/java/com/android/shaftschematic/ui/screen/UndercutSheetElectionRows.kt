@@ -444,14 +444,14 @@ internal fun UndercutKeywaysRow(
 }
 
 internal const val INSPECTION_SEAL_AREAS_TITLE = "Seal areas"
-internal const val INSPECTION_SEAL_AREAS_SETTING_TITLE = "Seal areas on inspection sheets"
+internal const val INSPECTION_SEAL_AREAS_SETTING_TITLE = "Seal areas on printed sheets"
 internal const val INSPECTION_SEAL_AREAS_CAPTION =
-    "Draws the bodies' seal areas (the dashed lines) on the runout and consolidated sheets. " +
-        "The schematic, the undercut sheet and the Final sheets always draw them."
+    "Draws the bodies' seal areas on the schematic, the Final sheets, the runout sheet and the " +
+        "consolidated sheet. The editor preview always shows them."
 
 /**
- * The "Seal areas" switch — the app-wide `PdfPrefs.inspectionSealAreas`, on the runout and
- * consolidated sheets' PDF options (on-device request: seal areas are noise on an inspection).
+ * The "Seal areas" switch — the app-wide `PdfPrefs.inspectionSealAreas`, on the PDF options of
+ * every sheet that draws them: schematic and Final, runout, consolidated (on-device request).
  */
 @Composable
 internal fun InspectionSealAreasRow(

@@ -1,7 +1,7 @@
 package com.android.shaftschematic.pdf
 
 import com.android.shaftschematic.gfx.Canvas
-import com.android.shaftschematic.gfx.DashPathEffect
+import com.android.shaftschematic.gfx.color
 import com.android.shaftschematic.gfx.left
 import com.android.shaftschematic.gfx.Paint
 import com.android.shaftschematic.gfx.PaintStyle
@@ -12,8 +12,8 @@ import com.android.shaftschematic.gfx.strokeWidth
 import com.android.shaftschematic.gfx.style
 import com.android.shaftschematic.gfx.top
 import com.android.shaftschematic.geom.MIN_BLEND_WIDTH_PT
-import com.android.shaftschematic.geom.SEAL_DASH_OFF_PT
-import com.android.shaftschematic.geom.SEAL_DASH_ON_PT
+import com.android.shaftschematic.geom.SEAL_LINE_GREY
+import com.android.shaftschematic.geom.SEAL_LINE_WIDTH_FRAC
 import com.android.shaftschematic.model.Body
 import com.android.shaftschematic.settings.PDF_SBREAK_THRESHOLD_DEFAULT
 import com.android.shaftschematic.model.KeywaySpan
@@ -162,14 +162,14 @@ fun drawBodyRunsWithBreaks(
         // across the body over a flat outline, drawn LAST (after fills, stubs and caps) so
         // nothing paints over it; a line inside a ramp spans the ramp's local height. Same
         // construction and dash as the canvas
-        // renderer — both read `bodyDrawEdges`. Dashed so the shaft still reads as one unit
-        // (a solid vertical is the component-face glyph); finer than the hidden-keyway dash
-        // on purpose.
+        // renderer — both read `bodyDrawEdges`. Thin solid grey: not the full-weight black of a
+        // component face, and not dashed, which would mean hidden (on-device ruling).
         if (edges.aftSeal.isNotEmpty() || edges.fwdSeal.isNotEmpty()) {
             val sealPaint = Paint(outline).apply {
                 style = PaintStyle.STROKE
-                pathEffect = DashPathEffect(
-                    floatArrayOf(SEAL_DASH_ON_PT, SEAL_DASH_OFF_PT), 0f)
+                strokeWidth = outline.strokeWidth * SEAL_LINE_WIDTH_FRAC
+                color = SEAL_LINE_GREY
+                pathEffect = null
             }
             (edges.aftSeal + edges.fwdSeal).forEach { g ->
                 c.drawLine(g.xPx, cy - g.rPx, g.xPx, cy + g.rPx, sealPaint)

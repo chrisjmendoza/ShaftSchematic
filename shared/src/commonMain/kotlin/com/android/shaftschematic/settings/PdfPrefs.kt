@@ -383,11 +383,13 @@ data class PdfPrefs(
      */
     val footerBoltHoleDia: Boolean = false,
     /**
-     * Draw the bodies' seal areas (the dashed groove lines) on the inspection sheets — the classic
-     * runout sheet and the consolidated sheet. Settings → Drawing → "Seal areas on inspection
-     * sheets" and those two sheets' PDF options. Default OFF (on-device request: on an inspection
-     * they are noise); the schematic, the undercut sheet and every Final sheet draw them
-     * regardless. Draw-only: the stored seal areas are untouched.
+     * Draw the bodies' seal areas (the groove lines) on the printed sheets that draw body faces —
+     * the schematic, every Final sheet, the classic runout sheet and the consolidated sheet.
+     * Settings → Drawing → "Seal areas on printed sheets" and each of those sheets' PDF options.
+     * Default OFF (on-device request: they are usually noise, and even a Final sheet may go out
+     * without them — a toggle everywhere, never forced on). The editor preview always shows them;
+     * the wear and undercut sheets never draw them. Draw-only: the stored seal areas are untouched.
+     * The field keeps its original name — the DataStore key and saved profiles carry it.
      */
     val inspectionSealAreas: Boolean = false,
     /**

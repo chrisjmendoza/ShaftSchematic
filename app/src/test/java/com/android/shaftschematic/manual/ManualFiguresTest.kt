@@ -39,6 +39,7 @@ import com.android.shaftschematic.pdf.composeShaftPdfOnCanvas
 import com.android.shaftschematic.pdf.composeUndercutPdf
 import com.android.shaftschematic.pdf.composeWearPdf
 import com.android.shaftschematic.pdf.undercutSheetOrientation
+import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.RunoutConfig
 import com.android.shaftschematic.settings.TirDirection
 import com.android.shaftschematic.ui.resolved.resolveComponents
@@ -303,6 +304,7 @@ class ManualFiguresTest {
         options: PdfExportOptions = PdfExportOptions(),
         scale: Float = SCALE,
         section: SheetSection? = null,
+        pdfPrefs: PdfPrefs = PdfPrefs(),
     ): Bitmap =
         sheet(scale) { c ->
             composeShaftPdfOnCanvas(
@@ -312,6 +314,7 @@ class ManualFiguresTest {
                 resolvedComponents = resolveComponents(spec),
                 displayUnits = DisplayUnits.single(UnitSystem.INCHES),
                 section = section,
+                pdfPrefs = pdfPrefs,
             )
         }
 
@@ -427,7 +430,10 @@ class ManualFiguresTest {
 
         save(schematic(featureSpec, featureProject), "schematic-features.png")
         // Close-ups come off a sharper render of the same sheet, so they hold up when enlarged.
-        val features = schematic(featureSpec, featureProject, scale = CROP_SCALE)
+        // Seal areas print only under the "Seal areas" switch; this figure is there to show them.
+        val features = schematic(
+            featureSpec, featureProject, scale = CROP_SCALE, pdfPrefs = PdfPrefs(inspectionSealAreas = true),
+        )
         crop(features, "feature-keyway-spooned.png", 52f, 240f, 146f, 318f, CROP_SCALE)
         crop(features, "feature-thread-relief.png", 24f, 240f, 100f, 318f, CROP_SCALE)
         crop(features, "feature-liner-shoulder.png", 168f, 235f, 243f, 322f, CROP_SCALE)

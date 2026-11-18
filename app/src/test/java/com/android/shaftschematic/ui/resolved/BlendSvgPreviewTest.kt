@@ -4,8 +4,6 @@ import com.android.shaftschematic.geom.MIN_BLEND_WIDTH_PT
 import com.android.shaftschematic.geom.PROFILE_MIN_LINER_PT
 import com.android.shaftschematic.geom.PROFILE_TAPER_MIN_FRAC_OF_TRUE
 import com.android.shaftschematic.geom.ProfileFeatureSpan
-import com.android.shaftschematic.geom.SEAL_DASH_OFF_PT
-import com.android.shaftschematic.geom.SEAL_DASH_ON_PT
 import com.android.shaftschematic.geom.buildCompressedProfileXMap
 import com.android.shaftschematic.model.BlendProfile
 import com.android.shaftschematic.model.Body
@@ -198,7 +196,7 @@ class BlendSvgPreviewTest {
                 svg.line(x1, cy - e.capFwdR, x1, cy + e.capFwdR)
                 (e.aftSeal + e.fwdSeal).forEach { g ->
                     svg.line(g.xPx, cy - g.rPx, g.xPx, cy + g.rPx,
-                        dash = "$SEAL_DASH_ON_PT $SEAL_DASH_OFF_PT")
+                        stroke = "#808080", sw = 0.7f)
                 }
             }
 
@@ -337,7 +335,7 @@ class BlendSvgPreviewTest {
                 svg.line(x1, cy - e.capFwdR, x1, cy + e.capFwdR)
                 (e.aftSeal + e.fwdSeal).forEach { g ->
                     svg.line(g.xPx, cy - g.rPx, g.xPx, cy + g.rPx,
-                        dash = "$SEAL_DASH_ON_PT $SEAL_DASH_OFF_PT")
+                        stroke = "#808080", sw = 0.7f)
                 }
             }
 

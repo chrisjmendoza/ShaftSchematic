@@ -51,8 +51,8 @@ import com.android.shaftschematic.geom.MIN_BLEND_WIDTH_PX
 import com.android.shaftschematic.geom.MIN_KEYWAY_WIDTH_PX
 import com.android.shaftschematic.geom.drawnKeywayHalfWidthPx
 import com.android.shaftschematic.geom.minKeywaySlotLenPx
-import com.android.shaftschematic.geom.SEAL_DASH_OFF_PT
-import com.android.shaftschematic.geom.SEAL_DASH_ON_PT
+import com.android.shaftschematic.geom.SEAL_LINE_ALPHA
+import com.android.shaftschematic.geom.SEAL_LINE_WIDTH_FRAC
 import com.android.shaftschematic.geom.ShoulderDrawSpec
 import com.android.shaftschematic.geom.linerTopSilhouette
 import com.android.shaftschematic.geom.shoulderDrawSpec
@@ -251,18 +251,15 @@ object ShaftRenderer {
                 drawPath(path, color = outline, style = Stroke(width = outlineW))
 
                 // Seal area: the radius cuts the fiberglass seats into, each one full-height
-                // line across the seal area over a flat outline. Dashed so the shaft still
-                // reads as one unit — a solid vertical is the component-face glyph (on-device
-                // report: 3 solid lines looked like 3-4 segments). Finer than the
-                // hidden-keyway dash on purpose.
-                val sealDash = PathEffect.dashPathEffect(floatArrayOf(SEAL_DASH_ON_PT, SEAL_DASH_OFF_PT), 0f)
+                // line across the seal area over a flat outline. Thin solid grey, as on the
+                // sheets: not the full-weight outline of a component face (on-device report: 3
+                // solid lines looked like 3-4 segments), and not dashed, which means hidden.
                 (edges.aftSeal + edges.fwdSeal).forEach { g ->
                     drawLine(
-                        color = outline,
+                        color = outline.copy(alpha = outline.alpha * SEAL_LINE_ALPHA),
                         start = Offset(g.xPx, cy - g.rPx),
                         end = Offset(g.xPx, cy + g.rPx),
-                        strokeWidth = outlineW,
-                        pathEffect = sealDash,
+                        strokeWidth = outlineW * SEAL_LINE_WIDTH_FRAC,
                     )
                 }
             }

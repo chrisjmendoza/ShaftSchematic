@@ -218,6 +218,8 @@ fun PdfPreviewScreen(
     // loop cannot observe, so it rides along as an input key.
     val pdfFractionStyle by vm.pdfFractionStyle.collectAsState()
     val pdfOutputFont by vm.pdfOutputFont.collectAsState()
+    // "Seal areas" changes only what the `PdfPrefs` snapshot carries, so it rides along as a key.
+    val pdfSealAreas by vm.pdfInspectionSealAreas.collectAsState()
     // The units note and the optional footer lines: switches on the options sheet that change
     // only what the `PdfPrefs` snapshot carries, so they ride along as keys.
     val pdfShowUnitsNote by vm.pdfShowUnitsNote.collectAsState()
@@ -319,6 +321,7 @@ fun PdfPreviewScreen(
                 dimTextScale = pdfDimTextScale,
                 fractionStyle = pdfFractionStyle,
                 outputFont = pdfOutputFont,
+                sealAreas = pdfSealAreas,
                 showUnitsNote = pdfShowUnitsNote,
                 footerCapturedKwInset = pdfFooterCapturedKwInset,
                 footerBoltHoleDia = pdfFooterBoltHoleDia,
@@ -841,6 +844,8 @@ private data class SchematicRenderInputs(
      * `OutputTypography.active`. Key only.
      */
     val outputFont: OutputFont,
+    /** `PdfPrefs.inspectionSealAreas` — key only, inside the `PdfPrefs` snapshot. */
+    val sealAreas: Boolean,
     /** `PdfPrefs.showUnitsNote` / `footerCapturedKwInset` / `footerBoltHoleDia` / `taperRatePerFoot` — keys only, inside the `PdfPrefs` snapshot. */
     val showUnitsNote: Boolean,
     val footerCapturedKwInset: Boolean,
@@ -1173,6 +1178,12 @@ internal fun PdfOptionsSheet(
                 dimTextScale = dimTextScale,
                 onCommitFooter = { vm.setPdfFooterTextScale(it) },
                 onCommitDim = { vm.setPdfDimTextScale(it) },
+            )
+            val sealAreas by vm.pdfInspectionSealAreas.collectAsState()
+            InspectionSealAreasRow(
+                checked = sealAreas,
+                onCheckedChange = { vm.setPdfInspectionSealAreas(it) },
+                testTag = "pdf_inspection_seal_areas",
             )
             OutputFontChips(
                 outputFont = outputFont,

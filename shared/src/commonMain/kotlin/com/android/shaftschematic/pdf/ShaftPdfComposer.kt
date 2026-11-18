@@ -59,8 +59,6 @@ import com.android.shaftschematic.pdf.render.PdfDimensionRenderer
 import com.android.shaftschematic.settings.PDF_SBREAK_THRESHOLD_DEFAULT
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.geom.MIN_BLEND_WIDTH_PT
-import com.android.shaftschematic.geom.SEAL_DASH_OFF_PT
-import com.android.shaftschematic.geom.SEAL_DASH_ON_PT
 import com.android.shaftschematic.ui.resolved.BodyBlend
 import com.android.shaftschematic.ui.resolved.BodyEdgePoint
 import com.android.shaftschematic.ui.resolved.ResolvedBody
@@ -212,8 +210,10 @@ fun composeShaftPdfOnCanvas(
 
     val allBodiesForPdf = resolvedBodies ?: spec.bodies
     // Blends need the resolved neighbours to know what diameter each face steps to; without
-    // a resolve pass there is nothing to blend against, so the faces simply stay square.
-    val allBlendsForPdf = resolvedComponents?.let { bodyBlends(spec, it) } ?: emptyList()
+    // a resolve pass there is nothing to blend against, so the faces simply stay square. Seal
+    // areas draw only under `PdfPrefs.inspectionSealAreas` ([sheetShowsSealAreas]).
+    val allBlendsForPdf = (resolvedComponents?.let { bodyBlends(spec, it) } ?: emptyList())
+        .withSealAreasFor(pdfPrefs)
     val blendsForPdf = section?.let { blendsInSection(allBlendsForPdf, it) } ?: allBlendsForPdf
     val cutAft = section?.cutsAft(spec) == true
     val cutFwd = section?.cutsFwd(spec) == true

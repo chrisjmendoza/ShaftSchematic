@@ -212,12 +212,12 @@ material.
   with their ratio preserved. The seal span never enters the curve lists or the flat span (the
   flat span runs ramp to ramp), and the S-break gap steers clear of it (`BodyDrawEdges.sealSpansX`
   → `breakGapCenter` avoid ranges, beside the keyway windows) so a sealed body still breaks
-  (on-device report: a run with two seal areas lost its break). Each cut is ONE full-height DASHED line across the body at its
-  station, silhouette to silhouette, and the silhouette stays flat through the seal area — the
-  real cuts are small radius grooves and the dashes are indication enough, so the edges carry no
-  notches (on-device report; do not reintroduce silhouette notches). Dashed, never solid: a solid
-  full-height line is the glyph for a component face and made the shaft read as segments
-  (on-device report); the dash is finer than the hidden-keyway pattern on purpose. Authored in its own **"Seal areas"** section
+  (on-device report: a run with two seal areas lost its break). Each cut is ONE full-height thin grey solid line across the body at
+  its station, silhouette to silhouette, and the silhouette stays flat through the seal area — the
+  real cuts are small radius grooves and the lines are indication enough, so the edges carry no
+  notches (on-device report; do not reintroduce silhouette notches). Thin and grey, never the
+  full-weight black of a component face (three of those made the shaft read as segments — on-device
+  report), and never dashed, which means hidden (on-device ruling). Authored in its own **"Seal areas"** section
   (AFT / FWD checkboxes, a length field under each ticked face), a sibling of the Square | Blend
   "Component blend" chips — never a third blend mode and never nested under a blend control. A
   Square | Blend change leaves the seal flags alone, and unticking a seal keeps its typed length. A fixed

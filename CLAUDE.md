@@ -442,7 +442,7 @@ render). The protected window — the slot span padded by one keyway width, clam
 (`keywayPinnedBodySpans`), the break gap steers clear of it (`breakGapCenter`, both body
 passes — THREE avoid sources: keyway windows, seal areas, bolt-row windows, each kept clear of
 the glyph's LOBES as well as the gap — `breakEdgeReachPt`, the return sweep's reach + stroke +
-daylight (on-device report: the S lobes lay over a short fiberglass section's seal dashes); a run
+daylight (on-device report: the S lobes lay over a short fiberglass section's seal lines); a run
 with no clear placement prints plain), and the slot draw derives pt/mm from
 its OWN mapped span so it stays true-size inside a compressed body
 (`drawKeywayNotchBodyPdf`). Pinning the whole host body BECAUSE of its keyway, or suppressing
@@ -1315,17 +1315,19 @@ gap survives as its own auto run, so gap-side steps are the auto run's own faces
 `AutoBlend` anchors; an explicit face that meets a same-Ø surviving gap has no step and draws
 no blend there. A body face — blended OR square — may carry a **seal area** (`Body.blendAftSeal`/`blendFwdSeal`, `AutoBlend.seal`) —
 the radius cuts the fiberglass seats into, a fixed `SEAL_GROOVE_COUNT` (3) at `sealGrooveFracs`
-stations (evenly spaced, margin at each end). Each cut draws as **ONE full-height DASHED line
-across the body at its station, silhouette to silhouette, and the silhouette stays FLAT through the
-seal area** (on-device report: the notched edges were unwanted detail — the real cuts are small
-radius grooves and the dashes are indication enough; do not reintroduce silhouette notches). The
-dash is load-bearing: a solid full-height stroke is this drawing's glyph for a component face, and
-three of them made one shaft read as 3–4 segments (on-device report); `SEAL_DASH_ON_PT`/
-`SEAL_DASH_OFF_PT` is deliberately finer than the hidden-keyway 6/4 so a near-side cut never reads
-as a far-side feature. The shop cuts 3–4, but the sheet is a cue rather than a count to machine from.
+stations (evenly spaced, margin at each end). Each cut draws as **ONE full-height THIN GREY SOLID
+line across the body at its station, silhouette to silhouette, and the silhouette stays FLAT through
+the seal area** (on-device report: the notched edges were unwanted detail — the real cuts are small
+radius grooves and the lines are indication enough; do not reintroduce silhouette notches). The ink
+is load-bearing both ways: a full-weight black full-height stroke is this drawing's glyph for a
+component face, and three of them made one shaft read as 3–4 segments (on-device report); a DASHED
+line means hidden, and a seal groove is a visible rough-cut surface (on-device ruling — the lines
+were dashed until then). So: `SEAL_LINE_WIDTH_FRAC` (half the outline) in `SEAL_LINE_GREY` (a mid
+grey that survives a black-and-white copy) on the sheets, the theme outline at `SEAL_LINE_ALPHA` on
+the editor canvas. The shop cuts 3–4, but the sheet is a cue rather than a count to machine from.
 **The seal area is measured FROM THE FACE and stays put whether the face is square or blended**
-(on-device report: a blend pushed the dashes inward by the ramp width). A ramp at the same face may
-overlap the seal area's outer end — the two are independent — and a dashed line that lands inside
+(on-device report: a blend pushed the lines inward by the ramp width). A ramp at the same face may
+overlap the seal area's outer end — the two are independent — and a seal line that lands inside
 the ramp follows the silhouette there (`aftSeal`/`fwdSeal` carry the SILHOUETTE radius at each
 station — the body radius on the flat, the ramp's local radius inside it — so each line strokes
 `cy − r → cy + r` and never pokes past or stops short of the outline). A sealed square face (or a
@@ -1379,13 +1381,15 @@ than the body is clamped where it is DRAWN. All three draw sites decompose the S
 the runout sheet keep their flat span separate (ONE shared body pass, `drawBodyRunsWithBreaks`
 in `pdf/BodyRunDraw.kt`) because that span still hosts the S-break pair
 (the break is cut into the FLAT span, the curves stay whole, and the break decision stays on the
-run's FULL drawn width). **The inspection sheets hide seal
-areas by default** (on-device request: noise on an inspection): the classic runout sheet and the
-consolidated sheet draw them only under the app-wide `PdfPrefs.inspectionSealAreas` (default OFF;
-the "Seal areas" row on those two sheets' PDF options and Settings → Drawing; profile-captured), ONE
-rule `inspectionSheetShowsSealAreas` — which is also true on any Final sheet (`drawingLabel` set),
-where they always print. Off, the composer strips the seal from its `BodyBlend` list, so the S-break
-has no seal span to avoid; the schematic, the editor preview and the undercut sheet never read it.
+run's FULL drawn width). **Printed sheets hide seal areas by default — a toggle everywhere, never
+forced on** (on-device requests: noise on an inspection, and even a Final sheet may go out without
+them): the schematic, every Final sheet, the classic runout sheet and the consolidated sheet draw
+them only under the app-wide `PdfPrefs.inspectionSealAreas` (default OFF; the field keeps its first
+name, the DataStore key and profiles carry it; the "Seal areas" row on each of those sheets' PDF
+options and Settings → Drawing "Seal areas on printed sheets"; profile-captured), ONE rule
+`sheetShowsSealAreas`, applied by ONE `withSealAreasFor` in both composers — off, the seal is
+stripped from the `BodyBlend` list, so the S-break has no seal span to avoid. The editor preview
+always shows them; the wear and undercut sheets never draw them.
 The wear document deliberately keeps square faces — it omits machining
 detail by product decision, the same posture as its keyway omission (and the thread relief: `drawSimpleShaftProfile(threadRelief = false)` prints a relieved thread as the plain hatched envelope there). Pure curve math in `geom/BlendProfileMath.kt`, deliberately
 a general "join two radii across an axial span" primitive (`(x, radius)` points, the

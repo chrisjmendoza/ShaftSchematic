@@ -664,8 +664,8 @@ private fun silhouetteRadiusAt(
  * square or blended. Each point carries the silhouette radius at its x ([silhouetteRadiusAt]), so a
  * draw site stroking `cy − r → cy + r` produces one full-height line that follows the outline it
  * crosses — the body radius on the flat, the ramp's local height inside a ramp. The draw sites
- * dash it (`SEAL_DASH_ON_PT`/`SEAL_DASH_OFF_PT`): a solid full-height line is this app's glyph for
- * a component face.
+ * stroke it thin and grey (`SEAL_LINE_WIDTH_FRAC`, `SEAL_LINE_GREY`): a full-weight black line is
+ * this app's glyph for a component face, and a dashed one would mean hidden.
  *
  * Stations come from the shared [sealGrooveFracs] and keep a margin from the span's own ends.
  * Empty when the face has no seal area.

@@ -2404,16 +2404,17 @@ Fills are drawn before outlines so the outline strokes are always visible on top
 
 ### Seal areas
 
-The classic runout sheet and the consolidated sheet draw a body's seal areas (the dashed groove
-lines) only while the app-wide `PdfPrefs.inspectionSealAreas` is on — default OFF, on-device
-request: on an inspection they are noise. The switch is the "Seal areas" row in both sheets' PDF
-options ("Lines & text", `pdf_inspection_seal_areas`) and Settings → Drawing "Seal areas on
-inspection sheets"; Drawing profiles capture it. ONE rule, `inspectionSheetShowsSealAreas`
-(`pdf/RunoutPdfComposer.kt`), which is also true on any Final sheet (`ProjectInfo.drawingLabel`
-set): the Final tab's runout sheets always draw them. Off, the composer drops the seal from its
-`BodyBlend` list (a seal-only face goes with it; a blended face keeps its ramp), so the S-break
-gap has no seal span to steer round. Draw-only — the stored seal areas, the schematic, the editor
-preview and the undercut sheet are untouched.
+Every printed sheet that draws body faces — the schematic, every Final sheet, the classic runout
+sheet and the consolidated sheet — draws a body's seal areas only while the app-wide
+`PdfPrefs.inspectionSealAreas` is on. Default OFF, a toggle everywhere, never forced on (on-device
+requests: on an inspection they are noise, and even a Final sheet may go out without them; the
+Final sheets once always drew them). The switch is the "Seal areas" row in each of those sheets'
+PDF options ("Lines & text", `pdf_inspection_seal_areas`) and Settings → Drawing "Seal areas on
+printed sheets"; Drawing profiles capture it. ONE rule, `sheetShowsSealAreas`, applied in both
+composers by ONE `withSealAreasFor` (`pdf/RunoutPdfComposer.kt`): off, the seal is dropped from
+the `BodyBlend` list (a seal-only face goes with it; a blended face keeps its ramp), so the S-break
+gap has no seal span to steer round. Draw-only — the stored seal areas and the editor preview are
+untouched; the wear and undercut sheets never draw seal areas.
 
 ## PdfPreviewOverlay
 
