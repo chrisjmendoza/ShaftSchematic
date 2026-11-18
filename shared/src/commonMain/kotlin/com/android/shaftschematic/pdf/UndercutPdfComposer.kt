@@ -423,6 +423,13 @@ private fun drawUndercutSheet(
     // The page's cap, from the ONE split the Undercut tab reads too (`splitUndercutStripsForPage`).
     val pageSplit = splitUndercutStripsForPage(pageStrips, portrait)
     val onPage = pageSplit.onPage
+    // The key to the liner outline, only on a sheet that draws one. It stands at the foot of the
+    // page, right of the notes line — beside the drawing it read as part of it (on-device report).
+    val legendPaint = linerOutlinePaint?.takeIf {
+        val printed = onPage.flatMapTo(HashSet()) { it.undercutIds }
+        val notches = sheetNotches.filter { it.id in printed }
+        docSpec.liners.any { linerOutlineSegments(it.toOutlineOd(), notches).isNotEmpty() }
+    }
     val overflow = pageSplit.overflow
     val overflowNoteH = if (overflow.isNotEmpty()) UC_OVERFLOW_NOTE_HEIGHT_PT else 0f
 
@@ -528,15 +535,7 @@ private fun drawUndercutSheet(
     )
 
     if (stripsOwnPage) {
-        drawUndercutDirectionRow(
-            c, text, contentLeft, contentRight, midTopFull + text.textSize,
-            // The key to the liner outline, only on a sheet that draws one.
-            legendPaint = linerOutlinePaint?.takeIf {
-                val printed = onPage.flatMapTo(HashSet()) { it.undercutIds }
-                val notches = sheetNotches.filter { it.id in printed }
-                docSpec.liners.any { linerOutlineSegments(it.toOutlineOd(), notches).isNotEmpty() }
-            },
-        )
+        drawUndercutDirectionRow(c, text, contentLeft, contentRight, midTopFull + text.textSize)
         // Zeroing the profile params hands the whole band to the strips; the banding functions
         // are otherwise the wear sheet's, unchanged (count-driven, content-agnostic). Per-strip
         // growth is deliberately UNCAPPED here — the reclaimed height is the point — with
@@ -716,7 +715,7 @@ private fun drawUndercutSheet(
     // ── Notes row ────────────────────────────────────────────────────────────
     // Notes only: the dye-pen PASS/FAIL checkboxes are a wear/inspection concern and have no
     // place on a machining record (`docs/archive/UndercutDrawing_PLAN.md` §11.4).
-    drawUndercutNotesRow(c, text, contentLeft, contentRight, notesY)
+    drawUndercutNotesRow(c, text, contentLeft, contentRight, notesY, legendPaint)
     // "Compress long sections" changed a strip's proportions: say so (on-device request).
     if (notToScale) {
         val note = Paint(text).apply { textAlign = PaintAlign.LEFT; textSize = (text.textSize - 1f).coerceAtLeast(7f) }
@@ -1020,26 +1019,12 @@ private fun drawUndercutOalLine(
  */
 private fun drawUndercutDirectionRow(
     c: Canvas, text: Paint, left: Float, right: Float, baselineY: Float,
-    /**
-     * The liner outline's paint when the sheet draws one: the row then carries the legend — a
-     * sample of the line and [LINER_OUTLINE_LEGEND] — centred between the two labels. Null prints
-     * the row as it always has.
-     */
-    legendPaint: Paint? = null,
 ) {
     val p = Paint(text)
     p.textAlign = PaintAlign.LEFT
     c.drawText("← AFT", left, baselineY, p)
     p.textAlign = PaintAlign.RIGHT
     c.drawText("FWD →", right, baselineY, p)
-    if (legendPaint != null) {
-        val label = Paint(text).apply { textAlign = PaintAlign.LEFT; textSize = (text.textSize - 2f).coerceAtLeast(7f) }
-        val labelW = label.measureText(LINER_OUTLINE_LEGEND)
-        val x = (left + right - UC_LEGEND_SAMPLE_PT - UC_LEGEND_GAP_PT - labelW) * 0.5f
-        val lineY = baselineY - label.textSize * 0.35f
-        c.drawLine(x, lineY, x + UC_LEGEND_SAMPLE_PT, lineY, legendPaint)
-        c.drawText(LINER_OUTLINE_LEGEND, x + UC_LEGEND_SAMPLE_PT + UC_LEGEND_GAP_PT, baselineY, label)
-    }
 }
 
 /** This liner as the outline builder reads it — its span, OD and shouldered surface. */
@@ -1689,6 +1674,12 @@ fun planUndercutDetailStrip(
      */
     drawnAftEndMm: Float = 0f,
     drawnFwdEndMm: Float = shaftExtentMm,
+    /**
+     * Drawn width of the strip's break gap (`UndercutStrip.setBreak`). The default hosts the
+     * tallest S pair; the draw pass re-plans with the width its own S curves need
+     * ([undercutSetBreakGapPt]), which is never more.
+     */
+    breakGapWidthPt: Float = UNDERCUT_SET_BREAK_GAP_PT,
 ): UndercutStripPlan? {
     // The strip's own cuts only: another strip's cut in this window draws as plain stock here.
     val memberCutSpans = strip.undercutIds.mapNotNull { id ->
@@ -1727,7 +1718,7 @@ fun planUndercutDetailStrip(
     // closed up (`closed` stations), in the cell less the gap's own drawn width.
     val gap = strip.setBreak?.takeIf { !startedStrip && it.lengthMm > 0f }
     val gapLenMm = gap?.lengthMm ?: 0f
-    val gapWidthPt = if (gap == null) 0f else UNDERCUT_SET_BREAK_GAP_PT
+    val gapWidthPt = if (gap == null) 0f else breakGapWidthPt
     fun closed(mm: Float): Float = if (gap == null) mm else mm - (mm - gap.startMm).coerceIn(0f, gapLenMm)
     fun opened(mm: Float): Float = if (gap == null || mm <= gap.startMm) mm else mm + gapLenMm
     val drawRange = computeUndercutStripDrawRange(
@@ -2088,7 +2079,7 @@ private fun drawUndercutDetailStrip(
     drawnAftEndMm: Float = 0f,
     drawnFwdEndMm: Float = shaftExtentMm,
 ) {
-    val plan = planUndercutDetailStrip(
+    fun planWith(breakGapWidthPt: Float) = planUndercutDetailStrip(
         segs, strip, undercuts, clampedById, stripLeft, stripRight, unit, text, diaText,
         shaftExtentMm, startedStrip, dual, dualStacked, railSplitAtMm, arrowSizePt, titleAirPt,
         leadSide = leadSide, aftSetMm = aftSetMm, fwdSetMm = fwdSetMm, showTotal = showTotal,
@@ -2100,7 +2091,20 @@ private fun drawUndercutDetailStrip(
         insideDiaFloorsMm = if (diaInside) notches.associate { it.id to it.floorDiaMm } else null,
         drawnAftEndMm = drawnAftEndMm,
         drawnFwdEndMm = drawnFwdEndMm,
-    )?.resolveInsideDia(stripTop, stripBottom, dualStacked) ?: return
+        breakGapWidthPt = breakGapWidthPt,
+    )?.resolveInsideDia(stripTop, stripBottom, dualStacked)
+    val widePlan = planWith(UNDERCUT_SET_BREAK_GAP_PT) ?: return
+    // A break gap is only as wide as the S pair this strip draws needs — the schematic's own rule
+    // (on-device report: the fixed gap stood wider than it had to). The curves' size follows the
+    // drawn shaft height, known once the strip is planned, so the strip is planned again with it.
+    val plan = widePlan.setBreak?.let { gap ->
+        val (_, wideInner) = widePlan.resolveRails(stripTop, stripBottom, dualStacked)
+        val rCapWide = ((wideInner.cylBottom - wideInner.cylTop) / 2f).coerceAtLeast(0f)
+        val maxDia = maxOuterDiaOver(segs, widePlan.drawStartMm, widePlan.drawEndMm).takeIf { it > 0f } ?: return@let null
+        fun ampAt(mm: Float) = min(rCapWide * (outerDiaAt(segs, mm) / maxDia) * UNDERCUT_BREAK_AMP_FRAC_OF_R, UNDERCUT_BREAK_AMP_MAX_PT)
+        val needed = undercutSetBreakGapPt(max(ampAt(gap.startMm), ampAt(gap.endMm)), outline.strokeWidth)
+        if (needed < UNDERCUT_SET_BREAK_GAP_PT - 0.5f) planWith(needed) else null
+    } ?: widePlan
     if (!plan.xMap.toScale) onNotToScale()
     val drawStartMm = plan.drawStartMm
     val drawEndMm = plan.drawEndMm
@@ -2582,10 +2586,28 @@ private fun drawUndercutOverflowNote(
 internal const val UNDERCUT_NOT_TO_SCALE_NOTE = "Not to scale — long sections shortened; dimensions are true."
 
 /** Free-text notes rule at the page bottom. */
-private fun drawUndercutNotesRow(c: Canvas, text: Paint, left: Float, right: Float, y: Float) {
+private fun drawUndercutNotesRow(
+    c: Canvas, text: Paint, left: Float, right: Float, y: Float,
+    /**
+     * The liner outline's paint when the sheet draws one: the row then ends in the legend — a
+     * sample of the line and [LINER_OUTLINE_LEGEND] — and the notes rule stops short of it. Null
+     * rules the row edge to edge.
+     */
+    legendPaint: Paint? = null,
+) {
     c.drawText("Notes:", left, y, text)
     val x = left + text.measureText("Notes:") + 6f
-    c.drawLine(x, y + 2f, right, y + 2f, Paint(text).apply { style = PaintStyle.STROKE; strokeWidth = 0.7f })
+    var ruleRight = right
+    if (legendPaint != null) {
+        val label = Paint(text).apply { textAlign = PaintAlign.LEFT; textSize = (text.textSize - 2f).coerceAtLeast(7f) }
+        val labelX = right - label.measureText(LINER_OUTLINE_LEGEND)
+        val sampleX = labelX - UC_LEGEND_GAP_PT - UC_LEGEND_SAMPLE_PT
+        val lineY = y - label.textSize * 0.35f
+        c.drawLine(sampleX, lineY, sampleX + UC_LEGEND_SAMPLE_PT, lineY, legendPaint)
+        c.drawText(LINER_OUTLINE_LEGEND, labelX, y, label)
+        ruleRight = sampleX - UC_LEGEND_NOTES_GAP_PT
+    }
+    c.drawLine(x, y + 2f, ruleRight, y + 2f, Paint(text).apply { style = PaintStyle.STROKE; strokeWidth = 0.7f })
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -2608,6 +2630,7 @@ private const val UC_PROFILE_NAMES_ROW_PT = 26f      // direction row under the 
 private const val UC_PROFILE_BOTTOM_PAD_PT = 6f      // air under the direction row before the strips gap
 private const val UC_OAL_TOP_REGION_PT = 18f         // OAL label + air above the dimension line
 private const val UC_LEGEND_SAMPLE_PT = 46f           // the legend's sample of the liner-outline line: nearly three cycles
+private const val UC_LEGEND_NOTES_GAP_PT = 14f        // notes rule → the legend at the row's right end
 private const val UC_LEGEND_GAP_PT = 6f               // legend sample → its label
 private const val UC_DIRECTION_ROW_PT = 22f          // orientation row band above the strips (strips-own-page)
 private const val UC_NOTES_BOTTOM_OFFSET_PT = 24f    // notes baseline above contentBot

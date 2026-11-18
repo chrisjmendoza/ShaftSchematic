@@ -7,6 +7,7 @@ import com.android.shaftschematic.gfx.descent
 import com.android.shaftschematic.gfx.Paint
 import com.android.shaftschematic.gfx.top
 
+import com.android.shaftschematic.geom.BREAK_PAIR_REACH_FRAC
 import com.android.shaftschematic.geom.ClampedUndercutSpanMm
 import com.android.shaftschematic.geom.DiaCalloutStation
 import com.android.shaftschematic.geom.DimensionRailLayout
@@ -402,10 +403,20 @@ private const val UNDERCUT_STRIP_MAX_PAD_FRAC = 0.15f
 const val UNDERCUT_BREAK_AMP_MAX_PT = 18f
 
 /**
- * Drawn width of a strip's break gap ([com.android.shaftschematic.geom.UndercutStripBreak]): the
- * two facing S glyphs' reach at [UNDERCUT_BREAK_AMP_MAX_PT] plus daylight between them.
+ * The widest a strip's break gap ([com.android.shaftschematic.geom.UndercutStripBreak]) draws: the
+ * two facing S glyphs' reach at [UNDERCUT_BREAK_AMP_MAX_PT] plus daylight — what a strip is sized
+ * for before its drawn height is known.
  */
-const val UNDERCUT_SET_BREAK_GAP_PT = 22f
+const val UNDERCUT_SET_BREAK_GAP_PT = 18f
+
+/**
+ * The break gap a pair of S curves of [amplitudePt] needs: their combined reach into the gap, the
+ * stroke, and [BREAK_PAIR_DAYLIGHT_PT] of paper between them — the schematic's own pair rule
+ * ([breakPairLayout]), never more than [UNDERCUT_SET_BREAK_GAP_PT].
+ */
+fun undercutSetBreakGapPt(amplitudePt: Float, strokeWidthPt: Float): Float =
+    (amplitudePt * BREAK_PAIR_REACH_FRAC + strokeWidthPt + BREAK_PAIR_DAYLIGHT_PT)
+        .coerceAtMost(UNDERCUT_SET_BREAK_GAP_PT)
 
 /**
  * Air reserved ABOVE the total-span rail line, inside [UNDERCUT_TOTAL_RAIL_BAND_PT]: the row a
@@ -1118,16 +1129,28 @@ const val UNDERCUT_LINER_START_CAPTION = "S.E.T. to liner start"
 /** The caption of the liner-end rail to the liner end farther from the S.E.T. */
 const val UNDERCUT_LINER_END_CAPTION = "S.E.T. to liner end"
 
-/** Where one rail's caption draws: its text's left edge and baseline, canvas units. */
-data class UndercutRailCaptionSpot(val leftX: Float, val baselineY: Float)
+/**
+ * Where one rail's caption draws: its text's left edge and (first) baseline, canvas units.
+ * [wrapped] sets it on two lines ([undercutCaptionTwoLines]), the second one line height down.
+ */
+data class UndercutRailCaptionSpot(val leftX: Float, val baselineY: Float, val wrapped: Boolean = false)
+
+/** [caption] broken at the space nearest its middle, or null when it has none. */
+fun undercutCaptionTwoLines(caption: String): Pair<String, String>? {
+    val mid = caption.length / 2
+    val at = caption.indices.filter { caption[it] == ' ' }.minByOrNull { kotlin.math.abs(it - mid) } ?: return null
+    return caption.substring(0, at) to caption.substring(at + 1)
+}
 
 /**
  * Places a baseline rail's caption ([UndercutSetRailSpan.caption]) — the ONE rule behind the
  * printed strip and the detail canvas. The caption stands just PAST the rail's station end, on the
  * rail's own height, reading on from the arrowhead (on-device request: a label at the edge of the
  * dimension line saying what it references). Where that would run past the drawable range
- * `[minX, maxX]` it moves inboard of the arrowhead instead, above the line and clear of the rail's
- * own value, kept inside the range.
+ * `[minX, maxX]` it is set on two lines there when those fit ([wrappedWidth], the wider of the two;
+ * on-device report: a caption moved above its line overprinted the title of the section above),
+ * and only then moves inboard of the arrowhead, above the line and clear of the rail's own value,
+ * kept inside the range.
  *
  * [stationX] is the rail's station end and [setOnLeft] whether its S.E.T. lies to the left (an
  * AFT datum on an AFT-left drawing); [lineY] its tier line; [textWidth], [ascent] (negative) and
@@ -1145,11 +1168,19 @@ fun undercutRailCaptionSpot(
     arrow: Float,
     minX: Float,
     maxX: Float,
+    /** The wider line of the caption set on two lines; null never wraps. */
+    wrappedWidth: Float? = null,
 ): UndercutRailCaptionSpot {
     val centredBaseline = lineY - (ascent + descent) / 2f
     val outboardLeft = if (setOnLeft) stationX + gap else stationX - gap - textWidth
     val fits = if (setOnLeft) outboardLeft + textWidth <= maxX else outboardLeft >= minX
     if (fits) return UndercutRailCaptionSpot(outboardLeft, centredBaseline)
+    if (wrappedWidth != null) {
+        val left = if (setOnLeft) stationX + gap else stationX - gap - wrappedWidth
+        val wrapFits = if (setOnLeft) left + wrappedWidth <= maxX else left >= minX
+        // Two lines centred on the rail's height.
+        if (wrapFits) return UndercutRailCaptionSpot(left, centredBaseline - (descent - ascent) / 2f, wrapped = true)
+    }
     val inboardLeft = if (setOnLeft) stationX - arrow - gap - textWidth else stationX + arrow + gap
     val hi = (maxX - textWidth).coerceAtLeast(minX)
     return UndercutRailCaptionSpot(inboardLeft.coerceIn(minX, hi), lineY - gap - descent)

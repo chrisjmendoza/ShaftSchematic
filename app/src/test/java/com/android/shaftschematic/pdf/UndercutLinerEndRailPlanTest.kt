@@ -120,6 +120,22 @@ class UndercutLinerEndRailPlanTest {
     }
 
     @Test
+    fun `a caption with no room past the station wraps onto two lines there before it moves above the line`() {
+        fun spot(stationX: Float, setOnLeft: Boolean) = undercutRailCaptionSpot(
+            stationX, setOnLeft, lineY = 100f, textWidth = 80f, ascent = -8f, descent = 2f,
+            gap = 5f, arrow = 3f, minX = 36f, maxX = 400f, wrappedWidth = 42f,
+        )
+        // 80 wide does not fit left of a station at 100 (36 is the edge), 42 does: two lines,
+        // centred on the rail's height, the first baseline half a line up.
+        assertEquals(UndercutRailCaptionSpot(53f, 98f, wrapped = true), spot(100f, setOnLeft = false))
+        assertEquals(UndercutRailCaptionSpot(345f, 98f, wrapped = true), spot(340f, setOnLeft = true))
+        // Not even the wrapped caption fits: inboard above the line, as before.
+        assertEquals(UndercutRailCaptionSpot(68f, 93f), spot(60f, setOnLeft = false))
+        assertEquals("S.E.T. to" to "liner end", undercutCaptionTwoLines(UNDERCUT_LINER_END_CAPTION))
+        assertEquals(null, undercutCaptionTwoLines("Overall"))
+    }
+
+    @Test
     fun `the chain, nested rows and total are the toggle-off plan's and the overhanging lead stays`() {
         val off = plan(aftLead(), null)
         val on = plan(aftLead(), liner)

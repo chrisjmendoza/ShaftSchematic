@@ -495,6 +495,8 @@ private fun drawUndercutRailCaptions(
         val span = rails.setRailSpans.getOrNull(i) ?: return@forEachIndexed
         val caption = span.caption ?: return@forEachIndexed
         val setOnLeft = span.side == UndercutAnchorSide.AFT_SET
+        val twoLines = undercutCaptionTwoLines(caption)
+        val wrappedWidth = twoLines?.let { maxOf(text.measureText(it.first), text.measureText(it.second)) }
         val spot = undercutRailCaptionSpot(
             stationX = if (setOnLeft) l.x1Pt else l.x0Pt,
             setOnLeft = setOnLeft,
@@ -506,12 +508,18 @@ private fun drawUndercutRailCaptions(
             arrow = arrowSizePt * scale,
             minX = minX,
             maxX = maxX,
+            wrappedWidth = wrappedWidth,
         )
-        c.drawRect(
-            spot.leftX - padX, spot.baselineY + fm.ascent - padY,
-            spot.leftX + text.measureText(caption) + padX, spot.baselineY + fm.descent + padY, halo,
-        )
-        c.drawText(caption, spot.leftX, spot.baselineY, text)
+        // One line, or two stacked on the rail's height with their edge toward the station.
+        val lines = if (spot.wrapped && twoLines != null) listOf(twoLines.first, twoLines.second) else listOf(caption)
+        val blockW = lines.maxOf { text.measureText(it) }
+        lines.forEachIndexed { row, line ->
+            val w = text.measureText(line)
+            val x = if (setOnLeft) spot.leftX else spot.leftX + blockW - w
+            val baseline = spot.baselineY + row * (fm.descent - fm.ascent)
+            c.drawRect(x - padX, baseline + fm.ascent - padY, x + w + padX, baseline + fm.descent + padY, halo)
+            c.drawText(line, x, baseline, text)
+        }
     }
 }
 

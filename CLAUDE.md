@@ -694,7 +694,9 @@ draws each liner's ERASED edges/OD as a PHANTOM line (long dash, two short —
 `LINER_OUTLINE_PHANTOM_PT`, the drafting line for material machined away; never dotted, which on a
 schematic means a hidden edge — on-device direction) over the cuts from the ONE pure
 `geom/LinerOutlineMath.kt`, identically on canvas and PDF, and a printed sheet that draws one names
-it in a key centred on the AFT / FWD row (`LINER_OUTLINE_LEGEND`; no key when nothing is retraced). **The chain rail prints each cut's FULL
+it in a key at the foot of the page, right of the Notes line, whose rule stops short of it
+(`LINER_OUTLINE_LEGEND`, `drawUndercutNotesRow(legendPaint)`; no key when nothing is retraced —
+on-device report: beside the drawing it read as part of it). **The chain rail prints each cut's FULL
 length** (the shop measures cut lengths — on-device ruling); a buried liner edge becomes a chain node
 only under `PdfPrefs.undercutSplitAtLinerEdge` (app-wide look pref, default OFF). The TOTAL rail is
 optional: per-job `UndercutRecord.showTotalRail` (`null` = follow `PdfPrefs.undercutTotalRail`, default ON),
@@ -714,9 +716,11 @@ the first cut): `undercutSheetStrips` hands each liner strip with cuts to the ON
 shaft between the section and the end taper left out as `UndercutStrip.setBreak`
 (`UndercutStripBreak`); never when another liner or another section's cut lies between (a break
 leaves out plain shaft only), no break when under `UNDERCUT_SET_BREAK_MIN_ELIDE_MM` would go. The
-plan sizes the strip with the gap closed up and opens it `UNDERCUT_SET_BREAK_GAP_PT` wide
-(`UndercutStripXMap.withBreakGap`, which keeps `toScale` — no "Not to scale" note), and the draw
-runs each side as its own window. Printed sheet only: the strip builders never set a break, so the
+plan sizes the strip with the gap closed up and opens it (`UndercutStripXMap.withBreakGap`, which
+keeps `toScale` — no "Not to scale" note) no wider than the S pair it draws needs — the schematic's
+own pair rule, `undercutSetBreakGapPt` (reach + stroke + `BREAK_PAIR_DAYLIGHT_PT`), which the draw
+pass re-plans with once the shaft's drawn height is known; `UNDERCUT_SET_BREAK_GAP_PT` is only the
+width a strip is sized for before that — and the draw runs each side as its own window. Printed sheet only: the strip builders never set a break, so the
 canvases owe the mirror. **The detail canvas's rail IS the printed strip's rail**: both run the ONE planner
 `planUndercutStripRails` (`pdf/UndercutStripLayout.kt` — top-level chain, nested rows against the
 parent, total, row plan) and the ONE draw routine `drawUndercutStripRails` (`pdf/UndercutRailDraw.kt`), the
@@ -891,7 +895,10 @@ cross (total, chain, nested) is knocked out by its halo. `fromSet` wins over it 
 From S.E.T. alone); off is byte-identical. Each rail carries a caption at its station end —
 "S.E.T. to liner start" (the liner end on the S.E.T.'s side) / "S.E.T. to liner end"
 (`UndercutSetRailSpan.caption`, on-device request) — placed by the ONE `undercutRailCaptionSpot`
-and drawn last on a halo by `drawUndercutStripRails`; the From-S.E.T. cut rails carry none. Do not
+(past its station end on the rail's height; on two lines there when one does not fit,
+`undercutCaptionTwoLines`; above the line only when neither fits — on-device report: a caption
+moved above its line overprinted the title of the section above) and drawn last on a halo by
+`drawUndercutStripRails`; the From-S.E.T. cut rails carry none. Do not
 build a second rail type for it. See `docs/contracts/UndercutDrawing.md` (Liner ends from the S.E.T.).
 
 **The undercut sheet's strips follow "Dimension text size"** (`PdfPrefs.dimTextScale`, on-device

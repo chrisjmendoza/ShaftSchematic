@@ -133,5 +133,9 @@ class UndercutSetBreakPdfTest {
         render("fwd_no_break", fwdOnly.copy(drawToSet = false))
         render("fwd_break_from_set", fwdOnly.copy(railStyle = com.android.shaftschematic.model.UndercutRailStyle.FROM_SET))
         render("all_liners", fwdOnly.copy(undercuts = fwdOnly.undercuts + doc.undercutRecord.undercuts))
+        render(
+            "all_liners_liner_ends",
+            fwdOnly.copy(undercuts = fwdOnly.undercuts + doc.undercutRecord.undercuts, linerEndsFromSet = true),
+        )
     }
 }
