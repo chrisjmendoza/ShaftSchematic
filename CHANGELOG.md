@@ -8,6 +8,14 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-18
 
+### fix(undercut): a blend a cut has taken away is retraced in the liner outline's line pattern
+
+On-device request: a body blend inside an undercut area printed its retrace as a fine solid line
+beside the liner's long-dash, two-short outline. The retrace was already meant to carry that
+pattern, but it was drawn in short pieces that each restarted the pattern on its long dash. Each
+side of a retraced blend is now drawn as one line, on the printed sheet and on the detail screen,
+so it reads the same as the liner outline it meets.
+
 ### fix(undercut): "S.E.T. to liner start / end" captions find a clear spot
 
 On-device report, a portrait undercut sheet with three sections: a "S.E.T. to liner end" caption

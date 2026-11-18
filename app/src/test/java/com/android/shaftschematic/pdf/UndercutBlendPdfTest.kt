@@ -48,6 +48,18 @@ class UndercutBlendPdfTest {
             strokes += Stroke(startX, startY, stopX, stopY, paint.pathEffect is DashPathEffect)
             super.drawLine(startX, startY, stopX, stopY, paint)
         }
+
+        /** A dashed path (the retraced ramp, one path a side) is recorded end to end. */
+        override fun drawPath(path: android.graphics.Path, paint: Paint) {
+            if (paint.pathEffect is DashPathEffect) {
+                val m = android.graphics.PathMeasure(path, false)
+                val a = FloatArray(2); val b = FloatArray(2)
+                if (m.getPosTan(0f, a, null) && m.getPosTan(m.length, b, null)) {
+                    strokes += Stroke(a[0], a[1], b[0], b[1], true)
+                }
+            }
+            super.drawPath(path, paint)
+        }
     }
 
     private val doc = ShaftDocCodec.decode(
