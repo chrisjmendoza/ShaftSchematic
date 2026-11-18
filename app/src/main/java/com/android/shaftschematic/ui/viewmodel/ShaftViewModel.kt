@@ -431,6 +431,11 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _pdfUndercutDiaInside = MutableStateFlow(PdfPrefs().undercutDiaInside)
     val pdfUndercutDiaInside: StateFlow<Boolean> = _pdfUndercutDiaInside.asStateFlow()
 
+    // Keyways on the printed undercut drawing's detail strips. Also a preview re-render key on
+    // the Undercut tab.
+    internal val _pdfUndercutKeyways = MutableStateFlow(PdfPrefs().undercutKeyways)
+    val pdfUndercutKeyways: StateFlow<Boolean> = _pdfUndercutKeyways.asStateFlow()
+
     // Liner shading on the undercut drawing only (never the schematic's shadedLiners). Also a
     // preview re-render key on the Undercut tab.
     internal val _pdfUndercutShadeLiners = MutableStateFlow(PdfPrefs().undercutShadeLiners)
@@ -1278,6 +1283,12 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             SettingsStore.pdfUndercutDiaInsideFlow(getApplication()).collectLatest { persisted ->
                 _pdfUndercutDiaInside.value = persisted
                 SettingsStore.updatePdfPrefs { it.copy(undercutDiaInside = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfUndercutKeywaysFlow(getApplication()).collectLatest { persisted ->
+                _pdfUndercutKeyways.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(undercutKeyways = persisted) }
             }
         }
         viewModelScope.launch {

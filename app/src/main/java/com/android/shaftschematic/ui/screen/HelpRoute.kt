@@ -1399,7 +1399,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "settings\", beside the Drawn depth slider. On unless turned off: a liner strip whose cuts end " +
                     "within 24 in of the end taper or its S.E.T. draws out to the shaft end, taper " +
                     "whole, and its dimension chain finishes with the run from the last cut to the " +
-                    "S.E.T. Saved with this job.\n" +
+                    "S.E.T. Saved with this job. A section that reaches the shaft end also draws " +
+                    "the thread there, so it is clear which end it is.\n" +
                     "• \"Overall dimension\" — on the Undercut Drawing, under \"Drawing " +
                     "settings\", and in its PDF options. Whether each section prints one " +
                     "dimension from the S.E.T. above the cut lengths; \"Overall dimension to\" " +
@@ -1447,7 +1448,10 @@ internal val helpSections: List<HelpSection> = listOf(
                     "angle. This one applies when you let go rather than while you drag.\n" +
                     "• \"Thread density\" — beside it. How many of the thread's crests the " +
                     "hatch draws, 100% being every crest at true pitch; fine threads stay at a " +
-                    "legible minimum spacing. It also applies when you let go.\n\n" +
+                    "legible minimum spacing. It also applies when you let go.\n" +
+                    "• \"Keyways\" — the undercut sheet's \"Lines & text\", also under the " +
+                    "Undercut Drawing's \"Drawing settings\". Off unless turned on: a keyway that " +
+                    "falls in a section draws on the printed sheet.\n\n" +
                     "• Drag any of those sliders and the preview updates as you drag — the " +
                     "sheet stops dimming the page and the drawing reshapes under your finger, " +
                     "so there is no need to pick a value, close the sheet, look, and reopen it. " +

@@ -231,6 +231,37 @@ fun withUndercutBreakRoom(
 }
 
 /**
+ * The draw range `[startMm, endMm]` carried on over the end thread at each shaft end it reaches
+ * (on-device request: the shop's hand sketches always draw the thread on an undercut section that
+ * shows the shaft end, "to make it clear which end it's on"). An end AT the shaft's physical end —
+ * `0` / [oalMm], the flat end [withUndercutBreakRoom] gives a range that reaches it — runs on to
+ * [aftEndMm] / [fwdEndMm], the drawn shaft's outer ends ([undercutDrawnShaftEndsMm]: past `0` or the
+ * OAL by a thread excluded from the OAL), so the whole thread draws and the strip's physical end is
+ * the thread's outer end, still flat. A thread counted IN the OAL already lies inside `[0, oalMm]`,
+ * so a range at the end holds it as it stands.
+ *
+ * The ONE rule behind every undercut strip range — the strip builders ([linerStripFor],
+ * [buildUndercutStrips]), the detail canvas's previewed range ([undercutPreviewDrawRange]) and the
+ * printed strip's final range — applied LAST, after every step that clamps to `[0, oalMm]`.
+ * Drawing only: chain datums, the S.E.T. lead and every dimension value are untouched, and cut
+ * spans stay clamped to the shaft. An end short of the shaft end, or a shaft with no thread past
+ * it (the defaults), returns the range unchanged.
+ */
+fun withUndercutEndThreads(
+    startMm: Float,
+    endMm: Float,
+    oalMm: Float,
+    aftEndMm: Float = 0f,
+    fwdEndMm: Float = oalMm,
+): Pair<Float, Float> {
+    val eps = UNDERCUT_SPAN_EPS_MM
+    val hi = oalMm.coerceAtLeast(0f)
+    val start = if (startMm <= eps && aftEndMm < -eps) min(startMm, aftEndMm) else startMm
+    val end = if (endMm >= hi - eps && fwdEndMm > hi + eps) max(endMm, fwdEndMm) else endMm
+    return start to end
+}
+
+/**
  * [pieces] cut at every shoulder of [cuts] that falls strictly inside a piece, the Ø interpolated
  * linearly to the split — the walk in [withUndercutBreakRoom] then meets each shoulder as a face.
  * No cuts returns [pieces] itself.
@@ -1300,6 +1331,9 @@ fun assignUndercutLiners(
  * [fwdReachFromMm] — the inboard end of the end taper ([undercutSetReachAnchors]), the S.E.T.
  * itself when there is none — so a liner butted against a long taper draws through it rather than
  * putting a break in the taper (on-device report).
+ *
+ * A draw range that reaches a shaft end then runs on over the end thread there, to [aftEndMm] /
+ * [fwdEndMm] ([withUndercutEndThreads]); the chain is never touched by it.
  */
 fun linerStripFor(
     liner: UndercutLinerSpan,
@@ -1319,6 +1353,10 @@ fun linerStripFor(
     aftReachFromMm: Float = aftSetMm,
     /** Where the FWD reach is measured to — the FWD end taper's inboard end. */
     fwdReachFromMm: Float = fwdSetMm,
+    /** The drawn shaft's AFT outer end ([undercutDrawnShaftEndsMm]) — [withUndercutEndThreads]. */
+    aftEndMm: Float = 0f,
+    /** The drawn shaft's FWD outer end — [withUndercutEndThreads]. */
+    fwdEndMm: Float = oalMm,
 ): UndercutStrip.LinerStrip {
     val hi = oalMm.coerceAtLeast(0f)
     val cutsMin = assignedSpans.minOfOrNull { it.startMm } ?: liner.startMm
@@ -1341,7 +1379,7 @@ fun linerStripFor(
         if (drawToAftEnd) 0f else (chainStart - padMm).coerceIn(0f, hi),
         if (drawToFwdEnd) hi else (chainEnd + padMm).coerceIn(0f, hi),
         segs, oalMm, cutSpans,
-    )
+    ).let { (s, e) -> withUndercutEndThreads(s, e, oalMm, aftEndMm, fwdEndMm) }
     return UndercutStrip.LinerStrip(
         linerId = liner.id,
         linerStartMm = liner.startMm,
@@ -1363,8 +1401,9 @@ fun linerStripFor(
  * [clusterUndercuts] rebuild the strip on commit. Never narrowing keeps the window stable
  * while a draft shrinks a cut that had extended it; the rebuild on confirm re-tightens.
  * Clamped to `[0, oalMm]`, then given break room against [segs] ([withUndercutBreakRoom] —
- * widening only, so the never-narrow rule holds; empty [segs] skips it). Spans must already be
- * render-clamped ([clampUndercutSpan]).
+ * widening only, so the never-narrow rule holds; empty [segs] skips it), then carried over an end
+ * thread at a shaft end it reaches ([withUndercutEndThreads], [aftEndMm] / [fwdEndMm]). Spans must
+ * already be render-clamped ([clampUndercutSpan]).
  */
 fun undercutPreviewDrawRange(
     strip: UndercutStrip,
@@ -1374,16 +1413,23 @@ fun undercutPreviewDrawRange(
     segs: List<SurfaceSeg> = emptyList(),
     /** The strip's own previewed cuts, whose shoulders the window-end breaks also clear. */
     cutSpans: List<UndercutSpanMm> = emptyList(),
+    /** The drawn shaft's outer ends — the strip's own ([withUndercutEndThreads]). */
+    aftEndMm: Float = 0f,
+    fwdEndMm: Float = oalMm,
 ): Pair<Float, Float> {
     val hi = oalMm.coerceAtLeast(0f)
     val spansMin = previewSpans.minOfOrNull { it.startMm }
-        ?: return withUndercutBreakRoom(strip.drawStartMm, strip.drawEndMm, segs, oalMm, cutSpans)
-    val spansMax = previewSpans.maxOf { it.endMm }
-    return withUndercutBreakRoom(
-        min(strip.drawStartMm, spansMin - padMm).coerceIn(0f, hi),
-        max(strip.drawEndMm, spansMax + padMm).coerceIn(0f, hi),
-        segs, oalMm, cutSpans,
-    )
+    val (start, end) = if (spansMin == null) {
+        withUndercutBreakRoom(strip.drawStartMm, strip.drawEndMm, segs, oalMm, cutSpans)
+    } else {
+        val spansMax = previewSpans.maxOf { it.endMm }
+        withUndercutBreakRoom(
+            min(strip.drawStartMm, spansMin - padMm).coerceIn(0f, hi),
+            max(strip.drawEndMm, spansMax + padMm).coerceIn(0f, hi),
+            segs, oalMm, cutSpans,
+        )
+    }
+    return withUndercutEndThreads(start, end, oalMm, aftEndMm, fwdEndMm)
 }
 
 /**
@@ -1458,6 +1504,9 @@ fun buildUndercutStrips(
     fwdSetMm: Float = oalMm,
     aftReachFromMm: Float = aftSetMm,
     fwdReachFromMm: Float = fwdSetMm,
+    /** The drawn shaft's outer ends ([undercutDrawnShaftEndsMm]) — every strip's [withUndercutEndThreads]. */
+    aftEndMm: Float = 0f,
+    fwdEndMm: Float = oalMm,
 ): List<UndercutStrip> {
     val live = spans.filter { it.endMm > it.startMm }
     val linerOf = assignUndercutLiners(live, liners)
@@ -1469,12 +1518,14 @@ fun buildUndercutStrips(
             liner, assigned, oalMm, padMm, segs, cutSpans = assigned,
             reachToSetMm = reachToSetMm, aftSetMm = aftSetMm, fwdSetMm = fwdSetMm,
             aftReachFromMm = aftReachFromMm, fwdReachFromMm = fwdReachFromMm,
+            aftEndMm = aftEndMm, fwdEndMm = fwdEndMm,
         )
     }
     for (window in clusterUndercuts(byLiner[null].orEmpty(), oalMm, gapMm, padMm)) {
         val members = live.filter { it.id in window.undercutIds }
         val (drawStart, drawEnd) =
             withUndercutBreakRoom(window.startMm, window.endMm, segs, oalMm, cutSpans = members)
+                .let { (s, e) -> withUndercutEndThreads(s, e, oalMm, aftEndMm, fwdEndMm) }
         strips += UndercutStrip.FreeStrip(window, drawStart, drawEnd)
     }
     // Section order is CUT order: a draw range is padded and, under "Draw to the shaft end",

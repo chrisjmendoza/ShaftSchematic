@@ -115,6 +115,7 @@ import com.android.shaftschematic.ui.viewmodel.setPdfUndercutLineArt
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutLinerOutline
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutDepthShade
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutDiaInside
+import com.android.shaftschematic.ui.viewmodel.setPdfUndercutKeyways
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutShadeLiners
 import com.android.shaftschematic.ui.viewmodel.setPdfWearAreaStyle
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutSplitAtLinerEdge
@@ -531,6 +532,8 @@ internal fun RunoutWearOptionsSheet(
     undercutDepthShade: Boolean = true,
     /** The app-wide `PdfPrefs.undercutDiaInside`, a "Lines & text" row; read only when [showUndercutLineArt]. */
     undercutDiaInside: Boolean = false,
+    /** The app-wide `PdfPrefs.undercutKeyways`, a "Lines & text" row; read only when [showUndercutLineArt]. */
+    undercutKeyways: Boolean = false,
     /** The undercut drawing's own `PdfPrefs.undercutShadeLiners`; read only when [showUndercutLineArt]. */
     undercutShadeLiners: Boolean = false,
     /**
@@ -995,6 +998,11 @@ internal fun RunoutWearOptionsSheet(
                     checked = undercutDiaInside,
                     onCheckedChange = { vm.setPdfUndercutDiaInside(it) },
                     testTag = "pdf_undercut_dia_inside",
+                )
+                UndercutKeywaysRow(
+                    checked = undercutKeyways,
+                    onCheckedChange = { vm.setPdfUndercutKeyways(it) },
+                    testTag = "pdf_undercut_keyways",
                 )
             }
             OutputFontChips(

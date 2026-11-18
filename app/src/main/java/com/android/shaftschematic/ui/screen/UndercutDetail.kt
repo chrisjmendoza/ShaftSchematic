@@ -149,6 +149,8 @@ import com.android.shaftschematic.geom.undercutOverlapIssue
 import com.android.shaftschematic.geom.undercutPartialOverlapsMm
 import com.android.shaftschematic.geom.undercutPreviewChainMm
 import com.android.shaftschematic.geom.undercutPreviewDrawRange
+import com.android.shaftschematic.geom.undercutDrawnShaftEndsMm
+import com.android.shaftschematic.geom.withUndercutEndThreads
 import com.android.shaftschematic.geom.undercutSetReachMm
 import com.android.shaftschematic.geom.undercutSetReachAnchors
 import com.android.shaftschematic.geom.withChainMm
@@ -619,8 +621,13 @@ fun UndercutWindowDetailOverlay(
     // widens the drawing live, with the standard pad of neighbour stock beyond it — the same
     // range a confirmed overhang gets when the strip rebuilds. Never narrows while editing. The
     // canvas widens it once more on the S.E.T. lead's side, where its width is known.
-    val (previewDrawStartMm, previewDrawEndMm) = remember(strip, spans, oalMm, segs) {
-        undercutPreviewDrawRange(strip, spans, oalMm, segs = segs, cutSpans = spans)
+    // A range that reaches a shaft end draws on over the end thread there, as the printed strip does.
+    val drawnShaftEnds = remember(spec) { undercutDrawnShaftEndsMm(spec) }
+    val (previewDrawStartMm, previewDrawEndMm) = remember(strip, spans, oalMm, segs, drawnShaftEnds) {
+        undercutPreviewDrawRange(
+            strip, spans, oalMm, segs = segs, cutSpans = spans,
+            aftEndMm = drawnShaftEnds.first, fwdEndMm = drawnShaftEnds.second,
+        )
     }
     // SET positions for the cards' "Measure From" re-projection. Physical shaft space already
     // (computeOalWindow's measureStartMm is always 0), so no further offset is applied.
@@ -1198,7 +1205,7 @@ fun UndercutWindowDetailOverlay(
     // discarded on leave. The default span takes the first free gap in the strip so it doesn't
     // land on top of an existing cut.
     fun seedPendingCut() {
-        val addRange = undercutAddRangeOf(strip, stripLiner)
+        val addRange = undercutAddRangeOf(strip, stripLiner, oalMm)
         val occupied = undercutRecord.undercuts.map { u ->
             val c = clampUndercutSpan(u.startFromAftMm, u.lengthMm, oalMm)
             UndercutSpanMm(u.id, c.startMm, c.endMm)
@@ -3109,13 +3116,17 @@ internal fun undercutLeaveAction(
     else -> UndercutLeaveAction.COMMIT
 }
 
-/** The shaft-space range a new cut is drafted into: a liner strip's liner, else its window. */
+/**
+ * The shaft-space range a new cut is drafted into: a liner strip's liner, else its window — held to
+ * the shaft `[0, oalMm]`, since a window at a shaft end also draws the end thread past it.
+ */
 private fun undercutAddRangeOf(
     strip: UndercutStrip,
     stripLiner: UndercutLinerSpan?,
+    oalMm: Float,
 ): Pair<Float, Float> = when {
     stripLiner != null -> stripLiner.startMm to stripLiner.endMm
-    else -> strip.drawStartMm to strip.drawEndMm
+    else -> strip.drawStartMm.coerceAtLeast(0f) to strip.drawEndMm.coerceAtMost(oalMm.coerceAtLeast(0f))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -4375,13 +4386,17 @@ internal fun undercutDetailLeadDrawRange(
             labelWidthPx(formatLenDimDualLabel(value.toDouble(), unit, false)), arrowSizePt, scale,
         )
     }
-    return undercutWidenForSetLead(
+    val widened = undercutWidenForSetLead(
         previewStartMm, previewEndMm, strip.chainStartMm, strip.chainEndMm, lead.side, room,
         otherMinPadPt = room,
         availPt = availPx,
         oalMm = oalMm,
         maxPtPerMm = if (maxOdMm > 0f) profileRowHeightPx * 0.72f / maxOdMm else Float.MAX_VALUE,
     )
+    // The lead's widening can carry an end onto the shaft end: it then draws the end thread there.
+    val (aftEndMm, fwdEndMm) = undercutDrawnShaftEndsMm(spec)
+    val (s, e) = withUndercutEndThreads(widened.startMm, widened.endMm, oalMm, aftEndMm, fwdEndMm)
+    return if (s == widened.startMm && e == widened.endMm) widened else UndercutStripDrawRangeMm(s, e)
 }
 
 /**
@@ -4523,8 +4538,10 @@ private fun undercutStripTitle(
     unit: UnitSystem,
     displayUnits: DisplayUnits = DisplayUnits.single(unit),
 ): String {
-    val rangeText =
-        "Undercuts ${disp(strip.drawStartMm, unit)}–${disp(strip.drawEndMm, unit)} ${abbr(unit)} from AFT"
+    // The shaft's own stretch: a window at a shaft end also draws the end thread past it.
+    val oal = spec.overallLengthMm.coerceAtLeast(0f)
+    val rangeText = "Undercuts ${disp(strip.drawStartMm.coerceIn(0f, oal), unit)}–" +
+        "${disp(strip.drawEndMm.coerceIn(0f, oal), unit)} ${abbr(unit)} from AFT"
     return when (strip) {
         is UndercutStrip.FreeStrip -> rangeText
         is UndercutStrip.LinerStrip -> buildLinerTitleById(spec)[strip.linerId]?.let { name ->

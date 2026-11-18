@@ -528,8 +528,11 @@ class SchematicRenderReviewTest {
         }
         // The chained sheet as stored, then the same job with its "Dimensions" From S.E.T. — measured
         // from the S.E.T. the job chose, and from the FWD one.
+        val keywayPrefs = prefs.copy(undercutKeyways = true)
         listOf(
             "${job}_undercuts.png" to doc.undercutRecord,
+            // "Keyways" on: a keyway the strip's window holds draws through the schematic's slot.
+            "${job}_undercuts_keyways.png" to doc.undercutRecord,
             "${job}_undercuts_from_set.png" to doc.undercutRecord.copy(railStyle = UndercutRailStyle.FROM_SET),
             "${job}_undercuts_from_set_fwd.png" to
                 doc.undercutRecord.copy(railStyle = UndercutRailStyle.FROM_SET, setDatum = UndercutSetDatum.FWD),
@@ -549,7 +552,9 @@ class SchematicRenderReviewTest {
             c.scale(SCALE, SCALE)
             composeUndercutPdf(
                 pageOn(c, o.widthPt, o.heightPt), doc.spec, doc.project(), unit,
-                displayUnits = units, pdfPrefs = prefs, resolvedComponents = resolved,
+                displayUnits = units,
+                pdfPrefs = if (name.endsWith("_keyways.png")) keywayPrefs else prefs,
+                resolvedComponents = resolved,
                 undercutRecord = record,
             )
             save(name, bmp)

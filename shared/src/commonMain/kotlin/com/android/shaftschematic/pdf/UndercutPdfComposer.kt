@@ -58,6 +58,8 @@ import com.android.shaftschematic.geom.undercutDepthShadeAlpha
 import com.android.shaftschematic.geom.withDepthShadeStretched
 import com.android.shaftschematic.geom.UNDERCUT_BREAK_AMP_FRAC_OF_R
 import com.android.shaftschematic.geom.withUndercutBreakRoom
+import com.android.shaftschematic.geom.withUndercutEndThreads
+import com.android.shaftschematic.geom.undercutDrawnShaftEndsMm
 import com.android.shaftschematic.geom.maxOuterDiaOver
 import com.android.shaftschematic.geom.outerDiaAt
 import com.android.shaftschematic.geom.DiaCalloutPlan
@@ -501,6 +503,8 @@ private fun drawUndercutSheet(
             } else {
                 null
             },
+            drawnAftEndMm = sheet.drawnAftEndMm,
+            drawnFwdEndMm = sheet.drawnFwdEndMm,
         )?.withInsideDiaAtCylinder(UNDERCUT_CYL_MAX_FLOOR_PT)
 
     // The ONE stacked decision (`undercutStripsStacked`): every portrait page and a landscape page
@@ -688,7 +692,10 @@ private fun drawUndercutSheet(
             // the Ø callouts; the landscape single strip and grid keep their banding exactly.
             titleAirPt = if (stacked) UC_PORTRAIT_TITLE_AIR_PT else 0f,
             keywaySpec = spec,
+            keyways = pdfPrefs.undercutKeyways,
             diaInside = diaInside && !startedPage,
+            drawnAftEndMm = sheet.drawnAftEndMm,
+            drawnFwdEndMm = sheet.drawnFwdEndMm,
         )
     }
     if (overflow.isNotEmpty()) {
@@ -746,6 +753,12 @@ data class UndercutSheetStrips(
     val allStrips: List<UndercutStrip> = strips,
     /** Every blended body face's ramp ([undercutBlendCurves]); empty with no resolved list. */
     val blendCurves: List<UndercutBlendCurve> = emptyList(),
+    /**
+     * The drawn shaft's outer ends ([undercutDrawnShaftEndsMm]): `0` / [shaftExtentMm], or past them
+     * by an end thread excluded from the OAL. A strip that reaches a shaft end draws on to them.
+     */
+    val drawnAftEndMm: Float = 0f,
+    val drawnFwdEndMm: Float = shaftExtentMm,
 ) {
     val aftSetMm: Float get() = setPositions.aftSETxMm.toFloat()
     val fwdSetMm: Float get() = setPositions.fwdSETxMm.toFloat()
@@ -816,10 +829,14 @@ fun undercutSheetStrips(
     val setReachMm = undercutSetReachMm(effectiveRecord.drawToSet)
     // The reach is measured to the end tapers' inboard ends, the overlay's own anchors.
     val (aftReachMm, fwdReachMm) = undercutSetReachAnchors(docSpec)
+    // A strip that reaches a shaft end draws on over the end thread there (on-device request: the
+    // thread shows which end the section is at), even one excluded from the OAL.
+    val (drawnAftEndMm, drawnFwdEndMm) = undercutDrawnShaftEndsMm(spec)
     val cutStrips = buildUndercutStrips(
         liveSpans, linerSpans, shaftExtentMm, segs = surfaceSegs,
         reachToSetMm = setReachMm, aftSetMm = aftSetMm, fwdSetMm = fwdSetMm,
         aftReachFromMm = aftReachMm, fwdReachFromMm = fwdReachMm,
+        aftEndMm = drawnAftEndMm, fwdEndMm = drawnFwdEndMm,
     )
     // Nothing recorded (blank template, or an export of an empty record): every drawable liner
     // gets a STARTED strip — drawn to scale, left empty for hand sketching. `linerStripFor`
@@ -832,6 +849,7 @@ fun undercutSheetStrips(
                 it, emptyList(), shaftExtentMm, segs = surfaceSegs,
                 reachToSetMm = setReachMm, aftSetMm = aftSetMm, fwdSetMm = fwdSetMm,
                 aftReachFromMm = aftReachMm, fwdReachFromMm = fwdReachMm,
+                aftEndMm = drawnAftEndMm, fwdEndMm = drawnFwdEndMm,
             )
         }
     val allStrips = cutStrips.ifEmpty { startedStrips }
@@ -845,6 +863,8 @@ fun undercutSheetStrips(
         clampedById = clampedById,
         liveSpans = liveSpans,
         blendCurves = blendCurves,
+        drawnAftEndMm = drawnAftEndMm,
+        drawnFwdEndMm = max(shaftExtentMm, drawnFwdEndMm),
     )
 }
 
@@ -1612,6 +1632,13 @@ fun planUndercutDetailStrip(
      * plans the below-shaft callouts alone.
      */
     insideDiaFloorsMm: Map<String, Float>? = null,
+    /**
+     * The drawn shaft's outer ends — 0 / [shaftExtentMm], or past them by an end thread excluded
+     * from the OAL ([undercutDrawnShaftEndsMm]). A draw range that ends at the shaft end runs on to
+     * them, over the thread ([withUndercutEndThreads]); the defaults leave the range as it was.
+     */
+    drawnAftEndMm: Float = 0f,
+    drawnFwdEndMm: Float = shaftExtentMm,
 ): UndercutStripPlan? {
     // The strip's own cuts only: another strip's cut in this window draws as plain stock here.
     val memberCutSpans = strip.undercutIds.mapNotNull { id ->
@@ -1651,8 +1678,11 @@ fun planUndercutDetailStrip(
         stripLeft, stripRight, shaftExtentMm,
         leadSide = leadSide.takeIf { leadValueMm != null }, leadRoomPt = leadRoomPt,
     )
-    val (drawStartMm, drawEndMm) =
-        withUndercutBreakRoom(drawRange.startMm, drawRange.endMm, segs, shaftExtentMm, memberCutSpans)
+    // The pad widening clamps to `[0, shaftExtentMm]`, so a strip that reaches a shaft end takes its
+    // end thread back here, last — the strip builders' own rule over the final range.
+    val (drawStartMm, drawEndMm) = withUndercutBreakRoom(
+        drawRange.startMm, drawRange.endMm, segs, shaftExtentMm, memberCutSpans,
+    ).let { (s, e) -> withUndercutEndThreads(s, e, shaftExtentMm, drawnAftEndMm, drawnFwdEndMm) }
     val drawLengthMm = drawEndMm - drawStartMm
     if (drawLengthMm <= 0f) return null
 
@@ -1983,10 +2013,21 @@ private fun drawUndercutDetailStrip(
      */
     keywaySpec: ShaftSpec = docSpec,
     /**
+     * Draw the keyways the window holds (`PdfPrefs.undercutKeyways`); false — the default — draws
+     * none.
+     */
+    keyways: Boolean = false,
+    /**
      * Write each cut's Ø inside the shaft where it fits (`PdfPrefs.undercutDiaInside`,
      * values printed); false keeps every value on its below-shaft leader.
      */
     diaInside: Boolean = false,
+    /**
+     * The drawn shaft's outer ends ([UndercutSheetStrips.drawnAftEndMm] / `drawnFwdEndMm`): a
+     * strip end at the shaft end runs on over an end thread to them ([withUndercutEndThreads]).
+     */
+    drawnAftEndMm: Float = 0f,
+    drawnFwdEndMm: Float = shaftExtentMm,
 ) {
     val plan = planUndercutDetailStrip(
         segs, strip, undercuts, clampedById, stripLeft, stripRight, unit, text, diaText,
@@ -1998,6 +2039,8 @@ private fun drawUndercutDetailStrip(
         overallLiner = overallLiner,
         longCompressFrac = longCompressFrac,
         insideDiaFloorsMm = if (diaInside) notches.associate { it.id to it.floorDiaMm } else null,
+        drawnAftEndMm = drawnAftEndMm,
+        drawnFwdEndMm = drawnFwdEndMm,
     )?.resolveInsideDia(stripTop, stripBottom, dualStacked) ?: return
     if (!plan.xMap.isLinear) onNotToScale()
     val drawStartMm = plan.drawStartMm
@@ -2081,8 +2124,10 @@ private fun drawUndercutDetailStrip(
 
     // Keyways that sit wholly inside this strip's window — the schematic's own slot draw, at the
     // strip's two scales (on-device request: a strip ending on a body reads as the shaft end once
-    // its keyway shows, the way a taper end already does). A blank write-in liner span skips it.
-    if (blankLiner == null) {
+    // its keyway shows, the way a taper end already does). Only under `PdfPrefs.undercutKeyways`
+    // (on-device request: handy on a body end, noise on a taper end, so off unless asked for). A
+    // blank write-in liner span skips it.
+    if (keyways && blankLiner == null) {
         drawUndercutStripKeyways(
             c, keywaySpec, drawStartMm, drawEndMm, cy, ::xAtStrip, ::rStrip,
             diaPtPerMm = 2f * rCap / stripMaxDiaMm, outline = outline,

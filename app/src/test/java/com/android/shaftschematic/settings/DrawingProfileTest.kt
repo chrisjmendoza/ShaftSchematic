@@ -115,7 +115,7 @@ class DrawingProfileTest {
 
         listOf(
             "tieringMode", "showComponentTitles", "shadedBodies", "shadedTapers", "shadedLiners",
-            "undercutLineArt", "undercutLinerOutline", "undercutDiaInside", "undercutSplitAtLinerEdge", "undercutTotalRail", "curveLoHeightIn", "curveHiHeightIn", "sBreakThresholdFrac", "arrowSizePt",
+            "undercutLineArt", "undercutLinerOutline", "undercutDiaInside", "undercutKeyways", "undercutSplitAtLinerEdge", "undercutTotalRail", "curveLoHeightIn", "curveHiHeightIn", "sBreakThresholdFrac", "arrowSizePt",
             "threadSlant", "threadDensity", "fractionStyle", "outputFont", "dualUnitLayout", "showUnitsNote", "wearAreaStyle", "wearTraceDepthFrac", "wearBandShadeFrac",
             "wearJoinGapMaxMm", "lineThicknessScale",
         ).forEach { field ->
@@ -154,6 +154,19 @@ class DrawingProfileTest {
         assertTrue(profile.toPdfPrefs().undercutLinerOutline)
         // Split-at-liner-edge ships off, so an older preset prints whole cut lengths.
         assertFalse(profile.toPdfPrefs().undercutSplitAtLinerEdge)
+        // Undercut keyways ship off, so an older preset draws no keyway on the strips.
+        assertFalse(profile.toPdfPrefs().undercutKeyways)
+    }
+
+    @Test
+    fun `undercut keyways is captured, applied and defaulted off`() {
+        assertFalse(PdfPrefs().undercutKeyways)
+        assertFalse(DrawingProfile().toPdfPrefs().undercutKeyways)
+        val profile = DrawingProfile.of(PdfPrefs(undercutKeyways = true), lineThicknessScale = 1f)
+        assertTrue(profile.undercutKeyways)
+        val decoded = decodeDrawingProfiles(encodeDrawingProfiles(mapOf("Keyways" to profile)))
+
+        assertTrue(decoded.getValue("Keyways").toPdfPrefs().undercutKeyways)
     }
 
     @Test

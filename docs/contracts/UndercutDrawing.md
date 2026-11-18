@@ -204,7 +204,8 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   fitted view — the schematic preview's pair (on-device request).
 - The undercut options' **Thread** section shows only while the printed sheet draws a thread:
   a printed strip's draw range overlapping a thread (`undercutStripsReachThread` over the cut
-  strips, or the started strips when nothing is recorded), or the whole-shaft profile on a
+  strips, or the started strips when nothing is recorded — a strip at a shaft end draws the end
+  thread, one excluded from the OAL included, so it counts), or the whole-shaft profile on a
   threaded shaft when there are no strips (on-device request: a shaft whose only thread lies
   outside every strip showed hatch sliders that tuned nothing). The route passes it as
   `UndercutOptionsSheet(showThreadControls)` at all three openings (preview, tab, detail page).
@@ -758,8 +759,16 @@ data class UndercutRecord(
   settings). Printed sheet only — the canvases keep their
   below-shaft callouts.
 
-  **Keyways on the detail strips** (on-device request: a strip ending on a body did not read as
-  the shaft end the way a taper end does). Every stored body or taper keyway whose slot (for a
+  **Keyways on the detail strips — `PdfPrefs.undercutKeyways`, "Keyways", default OFF**
+  (on-device request: a strip ending on a body did not read as the shaft end the way a taper end
+  does — then, "on the one shaft with a body ending it was handy, for tapers not so much", so the
+  slot became a switch, off unless asked for). App-wide look pref, captured by drawing profiles and
+  reset by "Restore Drawing defaults"; rows `pdf_undercut_keyways` (undercut PDF options, "Lines &
+  text" group, beside "Diameters inside the shaft"; and Settings → PDF Export) and
+  `undercut_keyways_switch` (Undercut tab Drawing settings), the ONE `UndercutKeywaysRow` label and
+  caption. A preview re-render key (`UndercutRenderInputs.undercutKeyways`). Off, no strip draws a
+  keyway — the sheet is the sheet of a job whose windows hold no keyway. On, every stored body or
+  taper keyway whose slot (for a
   taper, the whole taper) a strip window holds at least `UC_KEYWAY_MIN_SHOWN_FRAC` (90%) of —
   `undercutStripShowsSpan` — draws on that strip through the schematic's own slot routine
   (`drawBodyKeywaysPdf` / `drawKeywayNotchPdf`, plan view, spoon included), at the strip's axial map
@@ -985,6 +994,32 @@ data class UndercutRecord(
     `stripForLiner`), the detail overlay (which receives the route's strip, rebuilt on every record
     change and keyed on the flag through the strips `remember`), and the PDF composer
     (`effectiveRecord.drawToSet`, cut strips and started strips alike) all pass it.
+  - **The end thread** (on-device request: the shop's hand sketches always draw the thread on an
+    undercut section that shows the shaft end, "to make it clear which end it's on"). A strip whose
+    DRAW range ends at the shaft's flat physical end — `0` or the OAL (the PDF's
+    `shaftExtentMm`), whether "Draw to the shaft end" put it there or a free window clamped there —
+    runs on to the drawn shaft's outer end at that side: `undercutDrawnShaftEndsMm(spec)`
+    (`geom/UndercutOverlayMath.kt`, from `drawnExtentMm`) — past `0` / the OAL by a thread EXCLUDED
+    from the OAL; a thread counted in the OAL lies inside `[0, OAL]` and a range at the end already
+    holds it. ONE pure rule, `withUndercutEndThreads(start, end, oalMm, aftEndMm, fwdEndMm)`
+    (`geom/UndercutMath.kt`), applied LAST at every range producer: `linerStripFor` and
+    `buildUndercutStrips`' free strips (`aftEndMm`/`fwdEndMm`, defaults `0`/`oalMm` = unchanged),
+    `undercutPreviewDrawRange` (the canvas's previewed range clamps to `[0, oalMm]` first), the
+    canvas's `undercutDetailLeadDrawRange` (its lead widening can newly reach the end) and the
+    printed `planUndercutDetailStrip` after `computeUndercutStripDrawRange` + break room (the pad
+    widening clamps to `[0, shaftExtentMm]`; `UndercutSheetStrips.drawnAftEndMm`/`drawnFwdEndMm`
+    carry the ends). The route, the detail canvas and the composer all pass the same ends.
+    The thread draws through the strips' existing thread pass (`drawUndercutWindowProfile`'s hatch +
+    relief split on the sheet; the canvas's `ResolvedThread` pass), the strip's physical end is the
+    thread's outer end — flat (both sites test `≤ 0` / `≥` the extent), no S-break — and the x map
+    simply spans the wider window. **Drawing only**: chain datums, the S.E.T. lead, the overall
+    dimension, "S.E.T. to liner start/end" and every value are unchanged (no rail gains a span to the
+    thread end); cuts stay clamped to `[0, OAL]` (`clampUndercutSpan`), a free strip's add range and
+    range title are held to the shaft, and `sheetDrawsThread` (`undercutStripsReachThread` over the
+    strips) turns on by itself. A strip short of the end, or a shaft with no thread past it, is
+    byte-identical. No toggle. Pinned by `UndercutEndThreadRangeTest`, `UndercutEndThreadPdfTest`
+    (on-device fixture `undercut_end_thread_pacific_warrior.shaft`: hatch left of x(0), every
+    printed string the same as without the thread) and `UndercutDetailEndThreadTest`.
   - `undercutPreviewDrawRange(strip, previewSpans, oalMm, padMm, segs)` — the range the **detail
     overlay** actually renders: the strip's draw range **widened, never narrowed**, to hold the
     previewed spans (stored cuts with the live draft substituted). A draft edited past the

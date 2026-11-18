@@ -8,6 +8,23 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-17
 
+### feat(undercut): a section at the shaft end shows the thread
+
+On-device request: the shop's undercut sketches always draw the thread, so it is clear which end of
+the shaft the section is at. A section on the undercut sheet that runs out to the end of the shaft
+now draws the thread there too, hatched as on the schematic, with the flat end of the drawing at the
+end of the thread. It works for a thread left out of the overall length as well, which before was
+cut off at the taper's small end. Only the drawing grows: every dimension on the section reads
+exactly as before. The section's page on the Undercut tab draws the same thread.
+
+### feat(undercut): keyways on the undercut sheet are now a switch, off by default
+
+On-device request: a keyway on a section was handy on the one shaft with a body at its end, but
+cluttered the sections that end on a taper. A new "Keyways" switch (Undercut tab → Drawing
+settings, the undercut sheet's options under "Lines & text", and Settings → PDF Export) draws a
+keyway that falls in a section when it is on; off — the default — the undercut sheet draws none.
+It is app-wide and saved with drawing profiles.
+
 ### fix(undercut): more room between the stacked dimension lines on a roomy sheet
 
 On-device report (Pacific Warrior PORT, MID liner on its own sheet): the dimension lines above the

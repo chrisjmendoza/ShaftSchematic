@@ -114,6 +114,7 @@ import com.android.shaftschematic.geom.undercutSetReachMm
 import com.android.shaftschematic.geom.effectiveUndercutTotalRail
 import com.android.shaftschematic.geom.maxOuterDiaOver
 import com.android.shaftschematic.geom.pickUndercutStripAt
+import com.android.shaftschematic.geom.undercutDrawnShaftEndsMm
 import com.android.shaftschematic.geom.undercutDisplayedDistanceMm
 import com.android.shaftschematic.geom.undercutReferenceParentSpan
 import com.android.shaftschematic.geom.undercutReferenceLabel
@@ -160,6 +161,7 @@ import com.android.shaftschematic.ui.viewmodel.restoreUndercut
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutSplitAtLinerEdge
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutDepthShade
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutDiaInside
+import com.android.shaftschematic.ui.viewmodel.setPdfUndercutKeyways
 import com.android.shaftschematic.ui.viewmodel.setPdfUndercutShadeLiners
 import com.android.shaftschematic.ui.viewmodel.setUndercutDrawToSet
 import com.android.shaftschematic.ui.viewmodel.setUndercutShowTotalRail
@@ -287,6 +289,8 @@ fun UndercutRoute(
     // Ø values inside the shaft on the printed sheet: a preview re-render key and an
     // options-sheet control.
     val pdfUndercutDiaInside by vm.pdfUndercutDiaInside.collectAsState()
+    // Keyways on the printed sheet's strips: a preview re-render key and an options-sheet control.
+    val pdfUndercutKeyways by vm.pdfUndercutKeyways.collectAsState()
     // The undercut drawing's own liner shading (never the schematic's): a preview re-render key, an
     // options-sheet control, and read by both canvases.
     val pdfUndercutShadeLiners by vm.pdfUndercutShadeLiners.collectAsState()
@@ -476,11 +480,18 @@ fun UndercutRoute(
     val (stripAftSetMm, stripFwdSetMm) = remember(spec) { undercutSetPositions(spec) }
     // Where that reach is measured to: the end tapers' inboard ends.
     val (stripAftReachMm, stripFwdReachMm) = remember(spec) { undercutSetReachAnchors(spec) }
-    val strips = remember(spans, linerSpans, oalMm, segs, setReachMm, stripAftSetMm, stripFwdSetMm, stripAftReachMm, stripFwdReachMm) {
+    // A strip that reaches a shaft end draws on over the end thread there, one excluded from the
+    // OAL included — the printed sheet's ends.
+    val (stripAftEndMm, stripFwdEndMm) = remember(spec) { undercutDrawnShaftEndsMm(spec) }
+    val strips = remember(
+        spans, linerSpans, oalMm, segs, setReachMm, stripAftSetMm, stripFwdSetMm, stripAftReachMm, stripFwdReachMm,
+        stripAftEndMm, stripFwdEndMm,
+    ) {
         buildUndercutStrips(
             spans, linerSpans, oalMm, segs = segs,
             reachToSetMm = setReachMm, aftSetMm = stripAftSetMm, fwdSetMm = stripFwdSetMm,
             aftReachFromMm = stripAftReachMm, fwdReachFromMm = stripFwdReachMm,
+            aftEndMm = stripAftEndMm, fwdEndMm = stripFwdEndMm,
         )
     }
     // Whether the printed sheet draws a thread anywhere — the gate on its options' Thread section.
@@ -497,6 +508,7 @@ fun UndercutRoute(
                     it, emptyList(), oalMm, segs = segs,
                     reachToSetMm = setReachMm, aftSetMm = stripAftSetMm, fwdSetMm = stripFwdSetMm,
                     aftReachFromMm = stripAftReachMm, fwdReachFromMm = stripFwdReachMm,
+                    aftEndMm = stripAftEndMm, fwdEndMm = stripFwdEndMm,
                 )
             }
         }
@@ -547,6 +559,7 @@ fun UndercutRoute(
             liner, members, oalMm, segs = segs, cutSpans = members,
             reachToSetMm = setReachMm, aftSetMm = stripAftSetMm, fwdSetMm = stripFwdSetMm,
             aftReachFromMm = stripAftReachMm, fwdReachFromMm = stripFwdReachMm,
+            aftEndMm = stripAftEndMm, fwdEndMm = stripFwdEndMm,
         )
     }
 
@@ -740,6 +753,7 @@ fun UndercutRoute(
                 undercutLinerOutline = pdfUndercutLinerOutline,
                 undercutDepthShade = pdfUndercutDepthShade,
                 undercutDiaInside = pdfUndercutDiaInside,
+                undercutKeyways = pdfUndercutKeyways,
                 undercutShadeLiners = pdfUndercutShadeLiners,
                 undercutSplitAtLinerEdge = pdfUndercutSplitAtLinerEdge,
                 undercutTotalRail = pdfUndercutTotalRail,
@@ -1235,6 +1249,13 @@ fun UndercutRoute(
                         checked = pdfUndercutDiaInside,
                         onCheckedChange = { vm.setPdfUndercutDiaInside(it) },
                         testTag = "undercut_dia_inside_switch",
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                    // App-wide look, printed sheet only: a keyway that falls in a section draws.
+                    UndercutKeywaysRow(
+                        checked = pdfUndercutKeyways,
+                        onCheckedChange = { vm.setPdfUndercutKeyways(it) },
+                        testTag = "undercut_keyways_switch",
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
                     // The undercut drawing's OWN liner shading — the schematic's stays untouched.
@@ -1944,6 +1965,8 @@ private data class UndercutRenderInputs(
     val undercutDepthShade: Boolean,
     /** `PdfPrefs.undercutDiaInside` — a key only; the composer reads it off the `PdfPrefs` snapshot. */
     val undercutDiaInside: Boolean,
+    /** `PdfPrefs.undercutKeyways` — a key only; the composer reads it off the `PdfPrefs` snapshot. */
+    val undercutKeyways: Boolean,
     val undercutShadeLiners: Boolean,
     val undercutSplitAtLinerEdge: Boolean,
     val undercutTotalRail: Boolean,
@@ -2036,6 +2059,7 @@ internal fun UndercutOptionsSheet(
     val pdfUndercutLinerOutline by vm.pdfUndercutLinerOutline.collectAsState()
     val pdfUndercutDepthShade by vm.pdfUndercutDepthShade.collectAsState()
     val pdfUndercutDiaInside by vm.pdfUndercutDiaInside.collectAsState()
+    val pdfUndercutKeyways by vm.pdfUndercutKeyways.collectAsState()
     val pdfUndercutShadeLiners by vm.pdfUndercutShadeLiners.collectAsState()
     val pdfUndercutSplitAtLinerEdge by vm.pdfUndercutSplitAtLinerEdge.collectAsState()
     val pdfUndercutTotalRail by vm.pdfUndercutTotalRail.collectAsState()
@@ -2076,6 +2100,7 @@ internal fun UndercutOptionsSheet(
         undercutLinerOutline = pdfUndercutLinerOutline,
         undercutDepthShade = pdfUndercutDepthShade,
         undercutDiaInside = pdfUndercutDiaInside,
+        undercutKeyways = pdfUndercutKeyways,
         undercutShadeLiners = pdfUndercutShadeLiners,
         vm = vm,
         dateSheet = SheetDateSheet.UNDERCUT,

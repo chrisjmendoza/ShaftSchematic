@@ -903,12 +903,27 @@ Pure geometry in `geom/UndercutBlendMath.kt`, drawn identically on the printed s
 strips are zoomed. The whole-shaft overview canvas keeps `ShaftRenderer`'s own blend and draws
 no dotted retrace.
 
-**Keyways print on the undercut detail strips** (on-device request: a strip ending on a body must
-read as the shaft end, as a taper end does): any STORED body or taper keyway a strip window holds
-≥ 90% of (`undercutStripShowsSpan`) draws through the schematic's own slot routine at the strip's
-two scales, clipped to the window; the strip's `docSpec` carries resolved bodies (no keyways), so
-the composer hands it the stored spec as `keywaySpec`. Printed sheet only so far — the canvases owe
-the mirror.
+**Keyways print on the undercut detail strips — only under `PdfPrefs.undercutKeyways`** (app-wide
+look pref "Keyways", default OFF — on-device request: handy on the one shaft with a body ending a
+strip, noise on a taper end; the Undercut tab's Drawing settings, the undercut PDF options' "Lines &
+text" group and Settings → PDF Export, profiles capture it): on, any STORED body or taper keyway a
+strip window holds ≥ 90% of (`undercutStripShowsSpan`) draws through the schematic's own slot
+routine at the strip's two scales, clipped to the window; the strip's `docSpec` carries resolved
+bodies (no keyways), so the composer hands it the stored spec as `keywaySpec`. Off draws no keyway on
+any strip. Printed sheet only so far — the canvases owe the mirror.
+
+**An undercut section that reaches a shaft end draws the end thread** (on-device request: the shop's
+sketches always show the thread "to make it clear which end it's on"): a strip DRAW range whose end
+is the shaft's flat physical end (`0` / the OAL) runs on to the drawn shaft's outer end there —
+`undercutDrawnShaftEndsMm` (`drawnExtentMm`), past the face by a thread EXCLUDED from the OAL; a
+thread counted in the OAL is already inside — through the ONE pure `withUndercutEndThreads`
+(`geom/UndercutMath.kt`), applied LAST in `linerStripFor`, `buildUndercutStrips`'s free strips,
+`undercutPreviewDrawRange`, the canvas's `undercutDetailLeadDrawRange` and the printed
+`planUndercutDetailStrip` (after the `[0, OAL]`-clamping pad widening). The thread draws through the
+strips' existing thread pass, the strip's physical end is the thread's outer end (flat, no S-break),
+and `sheetDrawsThread` follows from the widened range. Drawing only: chain datums, the S.E.T. lead,
+the overall dimension and every value are unchanged, cuts stay clamped to `[0, OAL]`, and a strip
+short of the end or a shaft with no thread past it is byte-identical. No toggle.
 
 **`PdfPrefs.undercutDiaInside`** (default OFF — on-device request, a toggle so both ways can be
 printed; line art and shaded sheets alike) writes each cut's Ø INSIDE the shaft on the printed strips as a vertical

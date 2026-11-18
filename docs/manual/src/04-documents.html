@@ -130,7 +130,7 @@
       <tr><td>Runout Sheet</td><td>Blank draft, Coupling face</td><td>Shaft (all four) · Runout bubbles · Thread · Lines &amp; text (Line thickness, Output font, Fractions) · Shade in Components · Units</td></tr>
       <tr><td>Consolidated Sheet</td><td>Blank draft, Coupling face</td><td>Every section except Wear. The fullest panel.</td></tr>
       <tr><td>Wear Document</td><td>Blank draft</td><td>Shaft (Shaft height only) · Wear · Thread · Lines &amp; text (Line thickness, Output font, Fractions) · Shade in Components (no Explicit bodies only) · Units</td></tr>
-      <tr><td>Undercut Drawing</td><td>Blank draft, Page, Distance to S.E.T., Split cuts at liner edges, Overall dimension, Overall dimension to, Sections to print</td><td>Thread · Lines &amp; text (Line thickness, Output font, Fractions) · Shade in Components (its own Liners switch, with the line-art, Shade cuts by depth and Liner outline rows, no Explicit bodies only) · Units</td></tr>
+      <tr><td>Undercut Drawing</td><td>Blank draft, Page, Distance to S.E.T., Split cuts at liner edges, Overall dimension, Overall dimension to, Sections to print</td><td>Thread · Lines &amp; text (Line thickness, Output font, Fractions, Diameters inside the shaft, Keyways) · Shade in Components (its own Liners switch, with the line-art, Shade cuts by depth and Liner outline rows, no Explicit bodies only) · Units</td></tr>
     </tbody>
   </table>
 
@@ -190,6 +190,7 @@
       <tr><td><span class="ui">Output font</span></td><td><span class="ui">Standard</span></td><td>App-wide</td><td>The typeface every printed sheet is set in: Standard, Medium, Hyperlegible, Hyperlegible Bold, Hyperlegible Mono or B612. Medium and the Hyperlegible faces are the easiest to read. Every sheet.</td></tr>
       <tr><td><span class="ui">Fractions</span></td><td><span class="ui">Diagonal</span></td><td>App-wide</td><td><span class="ui">Stacked</span>, <span class="ui">Diagonal</span> or <span class="ui">Plain</span>.</td></tr>
       <tr><td><span class="ui">Diameters inside the shaft</span></td><td>Off</td><td>App-wide</td><td>Undercut sheet only, with line art or shading. Writes each cut's diameter vertically inside the shaft; a cut too thin for the text keeps its pointer below the shaft. A depth-shaded sheet lightens its deepest cuts so the values stay readable.</td></tr>
+      <tr><td><span class="ui">Keyways</span></td><td>Off</td><td>App-wide</td><td>Undercut sheet only. Draws a keyway that falls in a section — a strip that runs out to a taper or a keyed body at the shaft end — as on the schematic. Off, the sections draw no keyway.</td></tr>
     </tbody>
   </table>
   <p>Each of these is described in full in <a href="#settings-drawing-lines">Lines, threads and text</a>.</p>

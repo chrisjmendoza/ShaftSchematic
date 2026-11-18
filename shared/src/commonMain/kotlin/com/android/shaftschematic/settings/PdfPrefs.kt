@@ -251,6 +251,14 @@ data class PdfPrefs(
      */
     val undercutDiaInside: Boolean = false,
     /**
+     * Keyways on the printed undercut drawing's detail strips (on-device request: handy on a strip
+     * that ends on a body, noise on one that ends on a taper): on, a stored body or taper keyway a
+     * strip's window holds most of (`undercutStripShowsSpan`) draws through the schematic's own
+     * slot routine; off, no strip draws a keyway. The undercut PDF only — the undercut canvases
+     * draw none either way. Part of the drawing look, so profiles capture it. Off by default.
+     */
+    val undercutKeyways: Boolean = false,
+    /**
      * Shade the liners on the undercut drawing — its OWN switch, never [shadedLiners] (on-device
      * request: turning liner shading off for the undercut sheet must not change the schematic).
      * Off by default: the liner prints white and the cut sections carry the grey. The undercut PDF

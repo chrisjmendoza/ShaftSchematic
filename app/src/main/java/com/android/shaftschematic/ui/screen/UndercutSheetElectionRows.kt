@@ -363,6 +363,32 @@ internal fun UndercutDiaInsideRow(
 }
 
 /**
+ * The "Keyways" switch — the app-wide `PdfPrefs.undercutKeyways`, on the Undercut tab's Drawing
+ * settings beside the same pref's row in the PDF options' "Lines & text" group and Settings → PDF
+ * Export. Only the printed sheet reads it; the canvas above draws no keyway either way.
+ */
+@Composable
+internal fun UndercutKeywaysRow(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    testTag: String,
+    modifier: Modifier = Modifier,
+) {
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(UNDERCUT_KEYWAYS_LABEL, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                "$UNDERCUT_KEYWAYS_CAPTION App-wide.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Switch(checked = checked, onCheckedChange = onCheckedChange, modifier = Modifier.testTag(testTag))
+    }
+}
+
+/**
  * The undercut drawing's own "Shade liners" switch — `PdfPrefs.undercutShadeLiners`, which only the
  * undercut sheet and its canvases read, so switching it never changes the schematic's liner
  * shading (on-device request).
