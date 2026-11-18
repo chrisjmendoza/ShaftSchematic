@@ -1147,10 +1147,12 @@ private fun drawLinerOutlinesPdf(
 
 /**
  * The blended body faces a cut took away, retraced on the printed strip in the liner outline's
- * dotted [paint] — from the cut's edge, where the solid ramp now stops, up to the face, where the
- * liner outline's own retrace stands — mirrored about [cy], from the ONE pure builder the canvas
- * also runs ([erasedBlendTraces]). Drawn with the liner outline, after the notch pass. A null
- * [paint] (the pref off) draws nothing.
+ * phantom-line [paint] — from the cut's edge, where the solid ramp now stops, up to the face, where
+ * the liner outline's own retrace stands — mirrored about [cy], from the ONE pure builder the canvas
+ * also runs ([erasedBlendTraces]). Each side of a trace is ONE stroked path, so the line pattern
+ * runs along the whole ramp: stroked sample by sample, every short piece would open on its long
+ * dash and the ramp would read as a solid line. Drawn with the liner outline, after the notch
+ * pass. A null [paint] (the pref off) draws nothing.
  */
 private fun drawErasedBlendTracesPdf(
     c: Canvas,
@@ -1165,14 +1167,20 @@ private fun drawErasedBlendTracesPdf(
     knotsInside: (Float, Float) -> List<Float>,
 ) {
     if (paint == null || notches.isEmpty()) return
+    val stroke = Paint(paint).apply { style = PaintStyle.STROKE }
     curves.forEach { curve ->
         erasedBlendTraces(curve, notches).forEach { trace ->
             val a = max(trace.first().xMm, w0Mm)
             val b = min(trace.last().xMm, w1Mm)
-            clipSurfacePolyline(trace, a, b, knotsInside(a, b)).zipWithNext { p0, p1 ->
-                val r0 = rAt(p0.diaMm); val r1 = rAt(p1.diaMm)
-                c.drawLine(xAt(p0.xMm), cy - r0, xAt(p1.xMm), cy - r1, paint)
-                c.drawLine(xAt(p0.xMm), cy + r0, xAt(p1.xMm), cy + r1, paint)
+            val pts = clipSurfacePolyline(trace, a, b, knotsInside(a, b))
+            if (pts.size < 2) return@forEach
+            for (sign in floatArrayOf(-1f, 1f)) {
+                val path = Path()
+                pts.forEachIndexed { i, p ->
+                    val x = xAt(p.xMm); val y = cy + sign * rAt(p.diaMm)
+                    if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                }
+                c.drawPath(path, stroke)
             }
         }
     }

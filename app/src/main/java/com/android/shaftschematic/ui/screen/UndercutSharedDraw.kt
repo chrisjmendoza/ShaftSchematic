@@ -244,11 +244,17 @@ internal fun DrawScope.drawErasedBlendTraces(
         erasedBlendTraces(curve, notches).forEach { trace ->
             val a = maxOf(trace.first().xMm, w0Mm)
             val b = minOf(trace.last().xMm, w1Mm)
-            clipSurfacePolyline(trace, a, b, knotsInside(a, b)).zipWithNext { p0, p1 ->
-                val r0 = rPx(p0.diaMm)
-                val r1 = rPx(p1.diaMm)
-                drawLine(color, Offset(xPx(p0.xMm), cy - r0), Offset(xPx(p1.xMm), cy - r1), strokeWidthPx, pathEffect = dots)
-                drawLine(color, Offset(xPx(p0.xMm), cy + r0), Offset(xPx(p1.xMm), cy + r1), strokeWidthPx, pathEffect = dots)
+            // One stroked path a side: stroked sample by sample, every short piece would open on
+            // its long dash and the ramp would read as a solid line.
+            val pts = clipSurfacePolyline(trace, a, b, knotsInside(a, b))
+            if (pts.size < 2) return@forEach
+            for (sign in floatArrayOf(-1f, 1f)) {
+                val path = androidx.compose.ui.graphics.Path()
+                pts.forEachIndexed { i, p ->
+                    val x = xPx(p.xMm); val y = cy + sign * rPx(p.diaMm)
+                    if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                }
+                drawPath(path, color, style = androidx.compose.ui.graphics.drawscope.Stroke(strokeWidthPx, pathEffect = dots))
             }
         }
     }
