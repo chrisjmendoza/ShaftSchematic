@@ -927,7 +927,10 @@ ramp the cut's floor stands above is never doubled; follows `PdfPrefs.undercutLi
 removed stretch that takes in part of the ramp runs on along the body's FLAT surface past the
 ramp's foot to the cut's edge (`UndercutBlendCurve.flatToMm` — to the body's far face, or the
 middle of the flat when both faces are blended; on-device request); a cut wholly on the flat body,
-clear of the ramp, is not retraced. Each side of a trace is ONE stroked path — a dash pattern
+clear of the ramp, is not retraced. A SQUARE body face that butts a liner gets the same flat-surface
+retrace (`UndercutBlendCurve.square`, built in `undercutBlendCurves`; it draws nothing itself) when a
+cut runs over the liner's edge onto the body — on-device request: keep the drafting consistent
+whether or not the face is blended. Each side of a trace is ONE stroked path — a dash pattern
 restarts on every separately stroked piece, and short pieces read as a solid line.
 Pure geometry in `geom/UndercutBlendMath.kt`, drawn identically on the printed strip
 (`drawUndercutWindowProfile` + `drawErasedBlendTracesPdf`) and the detail canvas

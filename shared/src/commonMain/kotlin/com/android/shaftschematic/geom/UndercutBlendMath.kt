@@ -10,7 +10,10 @@ import kotlin.math.min
  * stops at the cut's edge — that is where the machined blend now really ends — while the part
  * the cut removed is retraced in the liner outline's phantom line up to the face, where it meets
  * the liner's own retrace, and on along the body's flat surface past the ramp's foot as far as
- * the same cut took that away too (on-device requests). Pure geometry in shaft-space mm, shared by the canvas pass
+ * the same cut took that away too (on-device requests). A SQUARE body face that butts a liner gets
+ * the same retrace along its flat surface ([UndercutBlendCurve.square]), so a cut over a liner's
+ * edge keeps the outline of the body beside it whether or not that face is blended (on-device
+ * request). Pure geometry in shaft-space mm, shared by the canvas pass
  * (`ui/screen/UndercutSharedDraw.kt`) and the PDF composer (`pdf/UndercutPdfComposer.kt`); the
  * callers map x and Ø through their own scales and mirror every line about the centreline.
  */
@@ -20,12 +23,18 @@ import kotlin.math.min
  * envelope samples (`ui/resolved/SurfaceSegs.kt`), so the drawn ramp is the surface the notches
  * are cut against. [atAftFace] says which end of [points] is the body's face. [flatToMm] is where
  * the body's flat surface beyond the ramp's foot ends — the body's far face, or the middle of the
- * flat run when the far face is blended too; null when the body has no flat run on this side.
+ * flat run when the far face also carries a retrace source; null when the body has no flat run on
+ * this side.
+ *
+ * [square] marks a face with no ramp that butts a liner: [points] is the face alone (two points at
+ * the face's x, the body's Ø), it draws nothing ([blendedBodyTop] skips it) and only feeds
+ * [erasedBlendTraces] the body's flat surface on from the face.
  */
 data class UndercutBlendCurve(
     val atAftFace: Boolean,
     val points: List<SurfacePoint>,
     val flatToMm: Float? = null,
+    val square: Boolean = false,
 ) {
     val startMm: Float get() = points.first().xMm
     val endMm: Float get() = points.last().xMm
@@ -89,7 +98,8 @@ fun clipSurfacePolyline(
  * into one stretch; a blend no cut reaches yields nothing. A stretch that takes in part of the
  * ramp runs on along the body's flat surface ([UndercutBlendCurve.flatToMm]) as far as it was
  * erased, so the retrace reaches the cut's edge rather than stopping at the ramp's foot (on-device
- * request); a cut lying wholly on the flat body, clear of the ramp, is not retraced.
+ * request); a cut lying wholly on the flat body, clear of the ramp, is not retraced. On a [square]
+ * face the stretch must reach the face itself — the cut runs over the liner's edge onto the body.
  */
 fun erasedBlendTraces(
     curve: UndercutBlendCurve,
@@ -112,7 +122,13 @@ fun erasedBlendTraces(
             else merged += a to b
         }
     return merged
-        .filter { (a, b) -> min(b, curve.endMm) - max(a, curve.startMm) > epsMm }
+        .filter { (a, b) ->
+            if (curve.square) {
+                if (curve.atAftFace) a <= curve.faceMm + epsMm else b >= curve.faceMm - epsMm
+            } else {
+                min(b, curve.endMm) - max(a, curve.startMm) > epsMm
+            }
+        }
         .map { (a, b) -> clipSurfacePolyline(pts, a, b) }
         .filter { it.size >= 2 }
 }
@@ -135,8 +151,8 @@ fun blendedBodyTop(
     diaMm: Float,
     epsMm: Float = UNDERCUT_TOUCH_EPS_MM,
 ): BlendedBodyTop? {
-    val aft = curves.firstOrNull { it.atAftFace && abs(it.faceMm - startMm) <= epsMm && it.endMm <= endMm + epsMm }
-    val fwd = curves.firstOrNull { !it.atAftFace && abs(it.faceMm - endMm) <= epsMm && it.startMm >= startMm - epsMm }
+    val aft = curves.firstOrNull { !it.square && it.atAftFace && abs(it.faceMm - startMm) <= epsMm && it.endMm <= endMm + epsMm }
+    val fwd = curves.firstOrNull { !it.square && !it.atAftFace && abs(it.faceMm - endMm) <= epsMm && it.startMm >= startMm - epsMm }
     if (aft == null && fwd == null) return null
     return BlendedBodyTop(
         points = (aft?.points ?: listOf(SurfacePoint(startMm, diaMm))) +
