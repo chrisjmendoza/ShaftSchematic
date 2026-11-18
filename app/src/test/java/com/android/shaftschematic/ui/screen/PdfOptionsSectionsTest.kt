@@ -672,4 +672,16 @@ class PdfOptionsSectionsTest {
         rule.waitForIdle()
         rule.onNodeWithTag("options_thread_expander").assertExists()
     }
+
+    @Test
+    fun `the undercut options panel carries the Drawn depth slider`() {
+        val vm = vm()
+        rule.setContent {
+            MaterialTheme {
+                UndercutOptionsSheet(vm = vm, blankDraft = false, onSetBlankDraft = {}, showThreadControls = false)
+            }
+        }
+        rule.onNodeWithTag("pdf_undercut_exaggeration_slider").performScrollTo().assertExists()
+        rule.onNodeWithText("Drawn depth").assertExists()
+    }
 }

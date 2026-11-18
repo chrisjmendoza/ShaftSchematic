@@ -95,7 +95,6 @@ import com.android.shaftschematic.geom.SurfaceSeg
 import com.android.shaftschematic.geom.undercutSetReachAnchors
 import com.android.shaftschematic.geom.undercutMachinedSpans
 import com.android.shaftschematic.geom.UNDERCUT_DEFAULT_LENGTH_MM
-import com.android.shaftschematic.geom.UNDERCUT_EXAGGERATION_MAX_FRAC
 import com.android.shaftschematic.geom.UNDERCUT_WINDOW_PAD_MM
 import com.android.shaftschematic.geom.UndercutLinerSpan
 import com.android.shaftschematic.geom.UndercutSpanMm
@@ -193,7 +192,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.math.roundToInt
 
 /** The Undercut tab's toolbar title. */
 internal const val UNDERCUT_TAB_TITLE_TAG = "undercut_tab_title"
@@ -757,10 +755,11 @@ fun UndercutRoute(
                 undercutShadeLiners = pdfUndercutShadeLiners,
                 undercutSplitAtLinerEdge = pdfUndercutSplitAtLinerEdge,
                 undercutTotalRail = pdfUndercutTotalRail,
-                // A live "Compress long sections" drag rides in on a copy; the stored record is
-                // written once, on release.
+                // A live "Compress long sections" or "Drawn depth" drag rides in on a copy; the
+                // stored record is written once, on release.
                 undercutRecord = sheetRecordState.value.let { rec ->
-                    tuning.undercutLongCompress?.let { rec.copy(longCompressFrac = it) } ?: rec
+                    val r1 = tuning.undercutLongCompress?.let { rec.copy(longCompressFrac = it) } ?: rec
+                    tuning.undercutExaggeration?.let { r1.copy(exaggerationFrac = it) } ?: r1
                 },
                 blankValues = blankDraft,
                 fractionStyle = pdfFractionStyle,
@@ -1265,35 +1264,11 @@ fun UndercutRoute(
                         testTag = "undercut_shade_liners_switch",
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text("Drawn depth", style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            text = "${(shownExaggeration * 100f).roundToInt()}%",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Slider(
-                        value = shownExaggeration,
-                        onValueChange = { dragExaggeration = it },
-                        onValueChangeFinished = {
-                            dragExaggeration?.let { vm.setUndercutExaggeration(it) }
-                            dragExaggeration = null
-                        },
-                        valueRange = 0f..UNDERCUT_EXAGGERATION_MAX_FRAC,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("undercut_exaggeration_slider"),
-                    )
-                    Text(
-                        "Makes shallow cuts easier to see — 0% is true scale. Printed Ø values " +
-                            "never change. Saved with this job.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    UndercutDrawnDepthRow(
+                        frac = undercutRecord.exaggerationFrac,
+                        onCommit = { vm.setUndercutExaggeration(it) },
+                        testTag = "undercut_exaggeration_slider",
+                        onDrag = { dragExaggeration = it },
                     )
                     // Per-job fit, not a look: a liner strip near a shaft end draws out to the S.E.T.
                     // and its chain dimensions the run to it. The reach in the caption is the constant
@@ -2140,6 +2115,15 @@ internal fun UndercutOptionsSheet(
                 onCommit = { vm.setUndercutLongCompress(it) },
                 testTag = "pdf_undercut_long_compress_slider",
                 onDrag = tuning?.let { t -> { v: Float? -> t.undercutLongCompress = v } },
+            )
+            Spacer(Modifier.height(12.dp))
+            // On the panel too (on-device request): it was only under the tab's Drawing settings,
+            // out of reach from a section's page and the preview.
+            UndercutDrawnDepthRow(
+                frac = undercutRecord.exaggerationFrac,
+                onCommit = { vm.setUndercutExaggeration(it) },
+                testTag = "pdf_undercut_exaggeration_slider",
+                onDrag = tuning?.let { t -> { v: Float? -> t.undercutExaggeration = v } },
             )
             Spacer(Modifier.height(12.dp))
             // On the panel too (on-device request for the taper beside a liner near the shaft

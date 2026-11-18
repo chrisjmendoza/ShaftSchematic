@@ -8,6 +8,17 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-18
 
+### feat(undercut): the body beside a liner keeps its outline under a cut; "Drawn depth" on the options panel
+
+- A cut that runs over a liner's edge onto a body whose face is square (no blend — the liner and
+  body machined to the same size) now retraces the body's original surface in the phantom line,
+  from the liner's face out to the cut's edge, the same as a blended face (on-device request:
+  keep the drafting consistent). A cut lying wholly on the body, away from the liner's edge,
+  draws as before. Printed undercut sheet and detail screen.
+- The "Drawn depth" slider is now also in the undercut options panel — the PDF preview's and a
+  section's own page's — not only under the tab's Drawing settings (on-device request). The
+  preview page redraws live while it is dragged; the value is saved with the job on release.
+
 ### fix(undercut): the retrace runs on along the body's flat surface to the cut's edge
 
 Where a cut runs across a body blend and on past the foot of the ramp, the part of the body's

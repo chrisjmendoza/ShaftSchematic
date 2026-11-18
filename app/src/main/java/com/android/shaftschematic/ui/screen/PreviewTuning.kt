@@ -68,9 +68,16 @@ class PreviewTuning {
      */
     var undercutLongCompress by mutableStateOf<Float?>(null)
 
+    /**
+     * In-progress undercut "Drawn depth" fraction, or null — the undercut preview draws its record
+     * with this in place of the stored `UndercutRecord.exaggerationFrac`.
+     */
+    var undercutExaggeration by mutableStateOf<Float?>(null)
+
     private val activeState = derivedStateOf {
         lineThickness != null || sBreakFrac != null ||
-            heightScale != null || linerCompression != null || undercutLongCompress != null
+            heightScale != null || linerCompression != null || undercutLongCompress != null ||
+            undercutExaggeration != null
     }
 
     /** True while any tuning slider is being dragged. */
