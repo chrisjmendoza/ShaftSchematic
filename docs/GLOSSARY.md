@@ -336,6 +336,8 @@ printed Ø values stay the stored numbers. The other per-job sheet fits live on
 cuts), `pageOrientation`, `setDatum` (which S.E.T. the strips measure to — see S.E.T. Lead)
 and the "Sections to print" exclusion lists. A cut nested inside another may be dimensioned
 from its parent cut's shoulders (`PARENT_AFT`/`PARENT_FWD` via `Undercut.referenceCutId`).
+A cut keeps the Distance typed from its datum: an ORIGINAL edit that moves that S.E.T., liner
+edge or parent shoulder carries the cut with it (`geom/UndercutReanchorMath.kt`).
 
 ### S.E.T. Lead
 On the undercut sheet, the half dimension that continues each strip's chain of cut

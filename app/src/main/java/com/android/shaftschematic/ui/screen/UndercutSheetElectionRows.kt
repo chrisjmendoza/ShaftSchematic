@@ -40,6 +40,7 @@ import com.android.shaftschematic.pdf.buildUndercutStripTitle
 import com.android.shaftschematic.pdf.formatDiaWithUnit
 import com.android.shaftschematic.pdf.isUndercutStripPrinted
 import com.android.shaftschematic.pdf.undercutAnchorFor
+import com.android.shaftschematic.pdf.undercutSheetPageSplit
 import com.android.shaftschematic.pdf.undercutSheetStrips
 import com.android.shaftschematic.pdf.undercutStripSetSide
 import com.android.shaftschematic.pdf.withResolvedBodies
@@ -408,14 +409,17 @@ internal fun undercutSetDatumTestTag(d: UndercutSetDatum): String =
 
 /**
  * One section the undercut sheet can print — a strip ([strip]: one liner, or one bare-shaft area),
- * labelled as its printed title names it ([label]), with its cut count and whether the job prints
- * it ([printed], [isUndercutStripPrinted]).
+ * labelled as its printed title names it ([label]), with its cut count, whether the job prints
+ * it ([printed], [isUndercutStripPrinted]) and, for a printed one, whether it is ON the page
+ * ([fitsOnPage] false: ticked, but past the page's cap — `undercutSheetPageSplit`, the composer's
+ * own cut — so it prints only as the sheet's "+N more" note).
  */
 internal data class UndercutPrintSection(
     val strip: UndercutStrip,
     val label: String,
     val cutCount: Int,
     val printed: Boolean,
+    val fitsOnPage: Boolean = true,
 ) {
     /** `undercut_print_section_<liner id>` / `undercut_print_section_free_<first cut id>`. */
     val testTag: String
@@ -450,6 +454,7 @@ internal fun undercutPrintSections(
     displayUnits: DisplayUnits,
 ): List<UndercutPrintSection> {
     val sheet = undercutSheetStrips(spec, resolvedComponents, record, blankDraft)
+    val overflow = undercutSheetPageSplit(sheet, record).overflow
     val docSpec = spec.withResolvedBodies(resolvedComponents)
     val linerTitles = buildLinerTitleById(docSpec)
     return sheet.allStrips.map { strip ->
@@ -477,27 +482,58 @@ internal fun undercutPrintSections(
                 "Bare shaft — " + buildUndercutAnchorLabel(anchor, displayUnits.documentUnit)
             }
         }
-        UndercutPrintSection(strip, label, spans.size, isUndercutStripPrinted(strip, record))
+        UndercutPrintSection(
+            strip, label, spans.size, isUndercutStripPrinted(strip, record),
+            fitsOnPage = strip !in overflow,
+        )
     }
 }
 
 /**
- * The cut ids that sit in a section the job leaves off the printout — the non-blank sheet's
- * sections, so the "Recorded undercuts" list can say which cuts will not print.
+ * The cut ids that will not be on the printout — in a section the job leaves off, or in a ticked
+ * section past the page's cap (`undercutSheetPageSplit`) — the non-blank sheet's sections, so the
+ * "Recorded undercuts" list can say which cuts will not print.
  */
 internal fun undercutCutIdsNotPrinted(
     spec: ShaftSpec,
     resolvedComponents: List<ResolvedComponent>?,
     record: UndercutRecord,
-): Set<String> =
-    undercutSheetStrips(spec, resolvedComponents, record, blankValues = false).allStrips
-        .filterNot { isUndercutStripPrinted(it, record) }
+): Set<String> {
+    val sheet = undercutSheetStrips(spec, resolvedComponents, record, blankValues = false)
+    val overflow = undercutSheetPageSplit(sheet, record).overflow
+    return (sheet.allStrips.filterNot { isUndercutStripPrinted(it, record) } + overflow)
         .flatMap { it.undercutIds }
         .toSet()
+}
 
-/** The caption under the "Sections to print" list: `2 of 3 sections print. Saved with this job.` */
-internal fun undercutPrintSectionsCaption(printed: Int, total: Int): String =
-    "$printed of $total sections print. Saved with this job."
+/**
+ * The caption under the "Sections to print" list: `2 of 3 sections print. Saved with this job.`
+ * While ticked sections do not all fit on the page ([overflowLabels], AFT → FWD), it says which
+ * will not print: `4 of 5 sections fit on the page — FWD Liner Ø10.000" will not print.`, or with
+ * some unticked, `5 of 6 sections ticked, 4 fit on the page — … will not print.`
+ */
+internal fun undercutPrintSectionsCaption(
+    printed: Int,
+    total: Int,
+    overflowLabels: List<String> = emptyList(),
+): String {
+    if (overflowLabels.isEmpty()) return "$printed of $total sections print. Saved with this job."
+    val fit = (printed - overflowLabels.size).coerceAtLeast(0)
+    val count = if (printed == total) "$fit of $printed sections fit on the page"
+    else "$printed of $total sections ticked, $fit fit on the page"
+    return "$count — ${undercutJoinedNames(overflowLabels)} will not print. Saved with this job."
+}
+
+/** `A`, `A and B`, `A, B and C`. */
+internal fun undercutJoinedNames(names: List<String>): String = when (names.size) {
+    0 -> ""
+    1 -> names[0]
+    else -> names.dropLast(1).joinToString(", ") + " and " + names.last()
+}
+
+/** The labels of the ticked sections the page has no room for, AFT → FWD. */
+internal fun List<UndercutPrintSection>.overflowLabels(): List<String> =
+    filter { it.printed && !it.fitsOnPage }.map { it.label }
 
 /** Why Print and Export are off while every section is left off the sheet. */
 internal const val UNDERCUT_NONE_SELECTED_MESSAGE =
@@ -532,10 +568,13 @@ internal fun UndercutPrintSectionsList(
                 Text(s.rowText, style = MaterialTheme.typography.bodyMedium)
             }
         }
+        val overflow = sections.overflowLabels()
         Text(
-            undercutPrintSectionsCaption(sections.count { it.printed }, sections.size),
+            undercutPrintSectionsCaption(sections.count { it.printed }, sections.size, overflow),
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            // A ticked section that will not print is a problem, not a count.
+            color = if (overflow.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant
+            else MaterialTheme.colorScheme.error,
             modifier = Modifier.testTag("undercut_print_sections_caption"),
         )
     }

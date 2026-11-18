@@ -86,6 +86,27 @@ fun undercutStripsPerPage(mode: WearPdfMode, portrait: Boolean = false): Int = w
 }
 
 /**
+ * The PRINTED strips of one undercut sheet split at the page's cap: [onPage] the strips the page
+ * draws, AFT → FWD, and [overflow] the ones past [undercutStripsPerPage] that print only as the
+ * "+N more" note.
+ */
+data class UndercutPageSplit(
+    val onPage: List<UndercutStrip>,
+    val overflow: List<UndercutStrip>,
+)
+
+/**
+ * Which of the sheet's printed [strips] (the "Sections to print" filter already applied) fit on
+ * one undercut page of the given shape and which overflow it — the ONE answer behind the
+ * composer's own cut and the Undercut tab's "Sections to print" caption, list rows and pre-print
+ * question, so the tab can never promise a section the page leaves off.
+ */
+fun splitUndercutStripsForPage(strips: List<UndercutStrip>, portrait: Boolean): UndercutPageSplit {
+    val maxPerPage = undercutStripsPerPage(determineUndercutPdfMode(strips.size), portrait)
+    return UndercutPageSplit(strips.take(maxPerPage), strips.drop(maxPerPage))
+}
+
+/**
  * Detail strips stacked on one PORTRAIT undercut page — the landscape grid's cap, so choosing
  * portrait never pushes a strip into the "+N more" note that landscape would have printed.
  */
@@ -689,6 +710,13 @@ fun undercutSetRailLineYs(
  * ([textHeight] — a line of text, or a stacked dual's two) plus 3 pt of air, scaled.
  */
 fun undercutSetTierMinPitch(textHeight: Float, scale: Float = 1f): Float = textHeight + 3f * scale
+
+/**
+ * The pitches, as multiples of the rail row metric, a printed strip tries for its baseline tiers
+ * when its band has surplus air, widest first; the first that leaves the drawn shaft its height is
+ * used (`UndercutStripPlan.roomyTiers`), else the row metric itself.
+ */
+val UNDERCUT_SET_TIER_ROOMY_FACTORS: List<Float> = listOf(1.5f, 1.25f)
 
 /**
  * Fallback label rows one resolved rail uses — only spans whose value does NOT seat in the

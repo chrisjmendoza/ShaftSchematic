@@ -413,10 +413,10 @@ private fun drawUndercutSheet(
     val startedPage = sheet.startedPage
     // The page shape is the caller's: it started the page `undercutSheetOrientation` chose.
     val portrait = pageH > pageW
-    val mode = determineUndercutPdfMode(pageStrips.size)
-    val maxPerPage = undercutStripsPerPage(mode, portrait)
-    val onPage = pageStrips.take(maxPerPage)
-    val overflow = pageStrips.drop(maxPerPage)
+    // The page's cap, from the ONE split the Undercut tab reads too (`splitUndercutStripsForPage`).
+    val pageSplit = splitUndercutStripsForPage(pageStrips, portrait)
+    val onPage = pageSplit.onPage
+    val overflow = pageSplit.overflow
     val overflowNoteH = if (overflow.isNotEmpty()) UC_OVERFLOW_NOTE_HEIGHT_PT else 0f
 
     val undercutById = effectiveRecord.undercuts.associateBy { it.id }
@@ -873,11 +873,26 @@ fun undercutSheetOrientation(
     resolvedComponents: List<ResolvedComponent>?,
     undercutRecord: UndercutRecord,
     blankValues: Boolean,
-): PdfPageOrientation {
-    val sheet = undercutSheetStrips(spec, resolvedComponents, undercutRecord, blankValues)
+): PdfPageOrientation = undercutSheetOrientationOf(
+    undercutSheetStrips(spec, resolvedComponents, undercutRecord, blankValues), undercutRecord,
+)
+
+/** [undercutSheetOrientation] for a [sheet] already resolved from [undercutRecord]. */
+private fun undercutSheetOrientationOf(sheet: UndercutSheetStrips, undercutRecord: UndercutRecord): PdfPageOrientation {
     if (sheet.noneSelected) return PdfPageOrientation.LANDSCAPE
     return resolveUndercutPageOrientation(undercutRecord.pageOrientation, sheet.strips.size)
 }
+
+/**
+ * Which of [sheet]'s printed strips fit on the page [composeUndercutPdf] draws them on and which
+ * overflow into its "+N more" note: the page every caller starts ([undercutSheetOrientation]) cut
+ * by the composer's own [splitUndercutStripsForPage]. [sheet] is resolved from [undercutRecord].
+ */
+fun undercutSheetPageSplit(sheet: UndercutSheetStrips, undercutRecord: UndercutRecord): UndercutPageSplit =
+    splitUndercutStripsForPage(
+        sheet.strips,
+        portrait = undercutSheetOrientationOf(sheet, undercutRecord) == PdfPageOrientation.PORTRAIT,
+    )
 
 /**
  * True when the job leaves EVERY section of its undercut sheet off ("Sections to print") — the sheet
@@ -1457,7 +1472,9 @@ class UndercutStripPlan(
     ): Pair<UndercutStripRails, UndercutStripInnerLayout> {
         if (rails.canLiftFallbacks) {
             val liftedInner = innerLayout(stripTop, stripBottom, dualStacked, lifted = true)
-            if (undercutRailsLift(liftedInner.cylBottom - liftedInner.cylTop)) return liftedRails to liftedInner
+            if (undercutRailsLift(liftedInner.cylBottom - liftedInner.cylTop)) {
+                return liftedRails to roomyTiers(liftedInner, stripTop, stripBottom, dualStacked, lifted = true)
+            }
         }
         if (rails.rows.setRows > 0) return rails to setTierInnerLayout(stripTop, stripBottom, dualStacked)
         return rails to innerLayout(stripTop, stripBottom, dualStacked)
@@ -1472,10 +1489,36 @@ class UndercutStripPlan(
     private fun setTierInnerLayout(stripTop: Float, stripBottom: Float, dualStacked: Boolean): UndercutStripInnerLayout {
         val full = innerLayout(stripTop, stripBottom, dualStacked)
         val shortfall = UNDERCUT_CYL_MAX_FLOOR_PT - (full.cylBottom - full.cylTop)
-        if (shortfall <= 0f) return full
+        if (shortfall <= 0f) return roomyTiers(full, stripTop, stripBottom, dualStacked, lifted = false)
         val minPitch = setTierMinPitch(dualStacked)
         val pitch = (full.setTierPitchPt - shortfall / rails.rows.setRows).coerceIn(minPitch, full.setTierPitchPt)
         return innerLayout(stripTop, stripBottom, dualStacked, setTierPitchPt = pitch)
+    }
+
+    /**
+     * [base] with its baseline tiers opened up where the strip has air to spare: the widest of
+     * [UNDERCUT_SET_TIER_ROOMY_FACTORS] × the row metric at which the drawn shaft keeps the height
+     * [base] gives it — so the wider pitch is paid for out of the band's surplus air only, never
+     * out of the shaft (on-device request: on a sheet with one section and most of the page free
+     * the dimension lines stood a text height apart and read tight). A strip with no tiers, or one
+     * whose shaft would shrink, keeps [base].
+     */
+    private fun roomyTiers(
+        base: UndercutStripInnerLayout,
+        stripTop: Float,
+        stripBottom: Float,
+        dualStacked: Boolean,
+        lifted: Boolean,
+    ): UndercutStripInnerLayout {
+        if (base.setTierPitchPt <= 0f) return base
+        val baseCyl = base.cylBottom - base.cylTop
+        for (factor in UNDERCUT_SET_TIER_ROOMY_FACTORS) {
+            val roomy = innerLayout(
+                stripTop, stripBottom, dualStacked, lifted = lifted, setTierPitchPt = base.setTierPitchPt * factor,
+            )
+            if (roomy.cylBottom - roomy.cylTop >= baseCyl - 0.01f) return roomy
+        }
+        return base
     }
 
     /** [undercutSetTierMinPitch] for this strip's values, never above the row metric. */
