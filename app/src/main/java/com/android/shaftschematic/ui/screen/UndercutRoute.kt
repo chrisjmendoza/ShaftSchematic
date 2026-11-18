@@ -107,7 +107,6 @@ import com.android.shaftschematic.geom.clampUndercutSpan
 import com.android.shaftschematic.geom.effectiveUndercutReference
 import com.android.shaftschematic.geom.isUndercutStaleOverrun
 import com.android.shaftschematic.geom.linerStripFor
-import com.android.shaftschematic.geom.undercutStripsReachThread
 import com.android.shaftschematic.geom.UNDERCUT_SET_REACH_MM
 import com.android.shaftschematic.geom.undercutSetReachMm
 import com.android.shaftschematic.geom.effectiveUndercutTotalRail
@@ -137,7 +136,6 @@ import com.android.shaftschematic.model.collidingIds
 import com.android.shaftschematic.pdf.buildUndercutStripTitle
 import com.android.shaftschematic.pdf.composeUndercutPdf
 import com.android.shaftschematic.pdf.resolveUndercutPageOrientation
-import com.android.shaftschematic.pdf.isUndercutStripPrinted
 import com.android.shaftschematic.pdf.undercutSheetOrientation
 import com.android.shaftschematic.pdf.undercutRecordForOnlySection
 import com.android.shaftschematic.pdf.undercutSheetStripCount
@@ -304,8 +302,7 @@ fun UndercutRoute(
     val pdfThreadSlant     by vm.pdfThreadSlant.collectAsState()
     val pdfThreadDensity   by vm.pdfThreadDensity.collectAsState()
     // Dual-unit layout: this document stacks its dual values like every other
-    // (`wantDualStacked`), so its options sheet has to show the stored choice — and the
-    // preview has to redraw when it changes.
+    // (`wantDualStacked`), so the preview has to redraw when the Settings choice changes.
     val pdfDualUnitLayout  by vm.pdfDualUnitLayout.collectAsState()
     val undercutRecord     by vm.undercutRecord.collectAsState()
     val undercutStyle      by vm.undercutStyle.collectAsState()
@@ -319,7 +316,8 @@ fun UndercutRoute(
     val canRedo            by vm.canRedo.collectAsState()
 
     val pdfArrowSizePt     by vm.pdfArrowSizePt.collectAsState()
-    val pdfDimTextScale    by vm.pdfDimTextScale.collectAsState()
+    // The undercut sheet's strips print at the UNDERCUT group's size (`SheetTextGroup.UNDERCUT`).
+    val pdfUndercutDimTextScale by vm.pdfUndercutDimTextScale.collectAsState()
 
     val ctx = LocalContext.current
     var showPreview by rememberSaveable { mutableStateOf(false) }
@@ -491,34 +489,6 @@ fun UndercutRoute(
             aftReachFromMm = stripAftReachMm, fwdReachFromMm = stripFwdReachMm,
             aftEndMm = stripAftEndMm, fwdEndMm = stripFwdEndMm,
         )
-    }
-    // Whether the printed sheet draws a thread anywhere — the gate on its options' Thread section.
-    // The sheet prints the cut strips, or a started strip per liner when nothing is recorded, or
-    // the whole-shaft profile when it has neither (the composer's own order).
-    // Only the PRINTED sections count ("Sections to print"): a thread reached only by a section left
-    // off draws nowhere, and a sheet with every section left off draws no shaft at all.
-    val sheetDrawsThread = remember(
-        strips, linerSpans, oalMm, segs, setReachMm, stripAftSetMm, stripFwdSetMm, spec, undercutRecord,
-    ) {
-        val allStrips = strips.ifEmpty {
-            linerSpans.sortedBy { it.startMm }.map {
-                linerStripFor(
-                    it, emptyList(), oalMm, segs = segs,
-                    reachToSetMm = setReachMm, aftSetMm = stripAftSetMm, fwdSetMm = stripFwdSetMm,
-                    aftReachFromMm = stripAftReachMm, fwdReachFromMm = stripFwdReachMm,
-                    aftEndMm = stripAftEndMm, fwdEndMm = stripFwdEndMm,
-                )
-            }
-        }
-        val pageStrips = allStrips.filter { isUndercutStripPrinted(it, undercutRecord) }
-        when {
-            allStrips.isEmpty() -> hasDrawnThreads(spec)
-            pageStrips.isEmpty() -> false
-            else -> undercutStripsReachThread(
-                pageStrips,
-                spec.threads.map { it.startFromAftMm to it.startFromAftMm + it.lengthMm },
-            )
-        }
     }
     // The printed sheet's section count and the page it resolves to — the print path's own
     // computation (`undercutSheetStripCount`, blank draft included), so the Page caption names
@@ -769,7 +739,7 @@ fun UndercutRoute(
                 threadDensity = pdfThreadDensity,
                 dualUnitLayout = pdfDualUnitLayout,
                 arrowSizePt = pdfArrowSizePt,
-                dimTextScale = pdfDimTextScale,
+                undercutDimTextScale = pdfUndercutDimTextScale,
                 displayUnits = DisplayUnits(unit, unitOverrides, dualUnits),
                 draft = tuning.active,
             )
@@ -1468,7 +1438,6 @@ fun UndercutRoute(
                     modifier = Modifier.align(Alignment.BottomCenter),
                 ) {
                     UndercutOptionsSheet(
-                        showThreadControls = sheetDrawsThread,
                         vm = vm,
                         blankDraft = blankDraft,
                         onSetBlankDraft = { blankDraft = it },
@@ -1633,7 +1602,6 @@ fun UndercutRoute(
             // the tab's own state either way, so the two can never disagree.
             optionsSheet = {
                 UndercutOptionsSheet(
-                    showThreadControls = sheetDrawsThread,
                     vm = vm,
                     blankDraft = blankDraft,
                     onSetBlankDraft = { blankDraft = it },
@@ -1673,7 +1641,6 @@ fun UndercutRoute(
                 // Same blank-draft state as the tab body's switch — ONE state behind both, so
                 // the tab and the sheet can never disagree about what the preview is showing.
                 UndercutOptionsSheet(
-                    showThreadControls = sheetDrawsThread,
                     vm = vm,
                     blankDraft = blankDraft,
                     onSetBlankDraft = { blankDraft = it },
@@ -1955,8 +1922,11 @@ private data class UndercutRenderInputs(
     val threadDensity: Float,
     val dualUnitLayout: DualUnitLayout,
     val arrowSizePt: Float,
-    /** `PdfPrefs.dimTextScale` — a key only; the composer reads it off the `PdfPrefs` snapshot. */
-    val dimTextScale: Float,
+    /**
+     * `PdfPrefs.undercutDimTextScale` — a key only; the composer reads it off the `PdfPrefs`
+     * snapshot through `forTextGroup`.
+     */
+    val undercutDimTextScale: Float,
     val displayUnits: DisplayUnits,
     /** A tuning slider is mid-drag: raster at draft resolution and hold the spinner back. */
     val draft: Boolean,
@@ -2001,8 +1971,8 @@ private fun UndercutDrawToSetRow(
 /**
  * The undercut drawing's PDF options — ONE configuration of the shared [RunoutWearOptionsSheet]
  * behind every surface that opens it: the preview's Tune panel, the tab's "Options" button and the
- * detail page's Options icon. Every row is a remote control for the one app-wide `PdfPrefs` value
- * (or the document's own dual-units switch), except the per-job "Page" row, which writes this job's
+ * detail page's Options icon. Every row is a remote control for the one app-wide `PdfPrefs` value,
+ * except the per-job "Page" row, which writes this job's
  * `UndercutRecord.pageOrientation` and says so; the three surfaces can never disagree. [blankDraft]
  * is the tab's session-only write-in election.
  */
@@ -2012,12 +1982,6 @@ internal fun UndercutOptionsSheet(
     blankDraft: Boolean,
     onSetBlankDraft: (Boolean) -> Unit,
     /**
-     * Whether this sheet draws a thread ([undercutStripsReachThread], or the whole-shaft profile on
-     * a threaded shaft) — the Thread section shows only then, since its sliders tune nothing else
-     * here (on-device request: fewer controls).
-     */
-    showThreadControls: Boolean,
-    /**
      * Live-tuning sink, passed only by the PDF preview — the one surface whose page re-renders
      * from it. The tab's and the detail page's Options panels sit over on-screen canvases and
      * keep commit-on-release.
@@ -2026,7 +1990,6 @@ internal fun UndercutOptionsSheet(
 ) {
     val spec by vm.spec.collectAsState()
     val dualUnits by vm.dualUnits.collectAsState()
-    val pdfDualUnitLayout by vm.pdfDualUnitLayout.collectAsState()
     val lineThicknessScale by vm.lineThicknessScale.collectAsState()
     val pdfShadedBodies by vm.pdfShadedBodies.collectAsState()
     val pdfShadedTapers by vm.pdfShadedTapers.collectAsState()
@@ -2040,10 +2003,8 @@ internal fun UndercutOptionsSheet(
     val pdfUndercutSplitAtLinerEdge by vm.pdfUndercutSplitAtLinerEdge.collectAsState()
     val pdfUndercutTotalRail by vm.pdfUndercutTotalRail.collectAsState()
     val pdfFractionStyle by vm.pdfFractionStyle.collectAsState()
-    val pdfThreadSlant by vm.pdfThreadSlant.collectAsState()
-    val pdfThreadDensity by vm.pdfThreadDensity.collectAsState()
     val pdfArrowSizePt by vm.pdfArrowSizePt.collectAsState()
-    val pdfDimTextScale by vm.pdfDimTextScale.collectAsState()
+    val pdfUndercutDimTextScale by vm.pdfUndercutDimTextScale.collectAsState()
     val optionsUnit by vm.unit.collectAsState()
     val resolvedComponents by vm.resolvedComponents.collectAsState()
     val undercutRecord by vm.undercutRecord.collectAsState()
@@ -2059,9 +2020,6 @@ internal fun UndercutOptionsSheet(
         )
     }
     RunoutWearOptionsSheet(
-        dualUnits = dualUnits,
-        onDualUnitsChange = { vm.setDualUnits(it) },
-        dualUnitLayout = pdfDualUnitLayout,
         lineThicknessScale = lineThicknessScale,
         pdfShadedBodies = pdfShadedBodies,
         pdfShadedTapers = pdfShadedTapers,
@@ -2085,11 +2043,8 @@ internal fun UndercutOptionsSheet(
         showDimensionArrows = true,
         arrowSizePt = pdfArrowSizePt,
         showDimTextSize = true,
-        dimTextScale = pdfDimTextScale,
+        dimTextScale = pdfUndercutDimTextScale,
         fractionStyle = pdfFractionStyle,
-        hasThreads = showThreadControls,
-        threadSlant = pdfThreadSlant,
-        threadDensity = pdfThreadDensity,
         blankDraft = blankDraft,
         onSetBlankDraft = onSetBlankDraft,
         tuning = tuning,

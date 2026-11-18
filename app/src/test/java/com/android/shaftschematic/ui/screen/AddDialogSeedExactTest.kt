@@ -113,7 +113,7 @@ class AddDialogSeedExactTest {
                     unit = UnitSystem.INCHES,
                     spec = onlyTaper,
                     initialLengthMm = 260f,
-                    onSubmit = { start, _, _, _, _ -> linerStart = start },
+                    onSubmit = { start, _, _, _, _, _ -> linerStart = start },
                     onCancel = {},
                 )
             }

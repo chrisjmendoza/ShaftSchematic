@@ -14,7 +14,7 @@ import kotlin.math.min
  * crest drifts half a pitch axially while it crosses the whole major diameter, so its true
  * run/rise is `(pitch / 2) / majorDia`. True geometry is nearly vertical on shaft threads
  * (87°–89.5°), so a user-set slant factor ([THREAD_SLANT_MIN]..[THREAD_SLANT_MAX], Settings →
- * Drawing → "Thread slant" and both PDF options sheets — `PdfPrefs.threadSlant`) multiplies it
+ * Drawing → "Thread slant" — `PdfPrefs.threadSlant`) multiplies it
  * into a readable lean (on-device request: base the angle on the actual pitch, with a slider).
  *
  * The spacing follows the same posture: the thread's true crest spacing at the drawing's OWN

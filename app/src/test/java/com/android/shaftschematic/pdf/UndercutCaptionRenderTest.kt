@@ -54,7 +54,7 @@ class UndercutCaptionRenderTest {
             composeUndercutPdf(
                 pageOnCanvas(c, o.widthPt, o.heightPt), spec, project, unit,
                 displayUnits = DisplayUnits(unit, doc.unitOverrides, doc.dualUnits),
-                pdfPrefs = PdfPrefs(dimTextScale = textScale),
+                pdfPrefs = PdfPrefs(undercutDimTextScale = textScale),
                 resolvedComponents = resolved, undercutRecord = record,
             )
             val name = "undercut_captions_${(textScale * 100).toInt()}.png"

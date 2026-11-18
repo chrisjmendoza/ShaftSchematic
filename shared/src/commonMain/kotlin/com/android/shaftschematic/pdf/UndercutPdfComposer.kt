@@ -85,6 +85,7 @@ import com.android.shaftschematic.settings.PDF_TEXT_SCALE_MAX
 import com.android.shaftschematic.settings.PDF_TEXT_SCALE_MIN
 import com.android.shaftschematic.settings.PDF_TEXT_SCALES
 import com.android.shaftschematic.settings.PdfPrefs
+import com.android.shaftschematic.settings.SheetTextGroup
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.resolved.bodyBlends
 import com.android.shaftschematic.ui.resolved.linerSurfaceSegs
@@ -235,6 +236,8 @@ fun composeUndercutPdfOnCanvas(
     lineThicknessScale: Float = 1.0f,
     blankValues: Boolean = false,
 ) {
+    // The ONE text-size remap: from here down, `dimTextScale` is the undercut group's size.
+    val pdfPrefs = pdfPrefs.forTextGroup(SheetTextGroup.UNDERCUT)
     fun draw(c: Canvas, textScale: Float): Float = drawUndercutSheet(
         c, pageW.toFloat(), pageH.toFloat(), spec, project, unit, displayUnits, pdfPrefs,
         resolvedComponents, undercutRecord, lineThicknessScale, blankValues, textScale,
@@ -357,7 +360,7 @@ private fun drawUndercutSheet(
     // surface stroke and any shading fill are erased inside the cut, then the shoulders and
     // floor are outlined on top.
     val voidFill = Paint(ANTI_ALIAS_FLAG).apply { style = PaintStyle.FILL; color = Color.WHITE }
-    // "Dimension text size" (`PdfPrefs.dimTextScale`, on-device request: the From-S.E.T. values
+    // "Dimension text size" (`PdfPrefs.undercutDimTextScale`, on-device request: the From-S.E.T. values
     // were a little small): every strip's own text — rail values, captions, Ø values, the strip
     // title — is set at this multiple; every row and band on a strip is sized off these paints'
     // metrics, so the layout follows. The header, the AFT/FWD row and the notes keep the base size.

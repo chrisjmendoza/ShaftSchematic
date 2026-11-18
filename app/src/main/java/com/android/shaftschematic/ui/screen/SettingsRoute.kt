@@ -183,6 +183,9 @@ fun SettingsRoute(
     val pdfArrowSizePt by vm.pdfArrowSizePt.collectAsState()
     val pdfFooterTextScale by vm.pdfFooterTextScale.collectAsState()
     val pdfDimTextScale by vm.pdfDimTextScale.collectAsState()
+    val pdfRunoutFooterTextScale by vm.pdfRunoutFooterTextScale.collectAsState()
+    val pdfRunoutDimTextScale by vm.pdfRunoutDimTextScale.collectAsState()
+    val pdfUndercutDimTextScale by vm.pdfUndercutDimTextScale.collectAsState()
     val pdfThreadSlant by vm.pdfThreadSlant.collectAsState()
     val pdfThreadDensity by vm.pdfThreadDensity.collectAsState()
     val pdfFractionStyle by vm.pdfFractionStyle.collectAsState()
@@ -408,17 +411,32 @@ fun SettingsRoute(
                         onCommit = { vm.setPdfArrowSizePt(it) },
                     )
 
-                    // Same pickers the schematic and consolidated PDF options carry — one
-                    // PdfPrefs.footerTextScale and one PdfPrefs.dimTextScale.
+                    // The three sheet groups' text sizes (`SheetTextGroup`), each the same picker
+                    // its sheets' PDF options carry: schematic / Final, runout / consolidated,
+                    // undercut.
+                    Text("Sheet text sizes", style = MaterialTheme.typography.titleSmall)
                     SheetTextSizeChips(
                         footerTextScale = pdfFooterTextScale,
                         dimTextScale = pdfDimTextScale,
                         onCommitFooter = { vm.setPdfFooterTextScale(it) },
                         onCommitDim = { vm.setPdfDimTextScale(it) },
                     )
+                    SheetTextSizeChips(
+                        footerTextScale = pdfRunoutFooterTextScale,
+                        dimTextScale = pdfRunoutDimTextScale,
+                        onCommitFooter = { vm.setPdfRunoutFooterTextScale(it) },
+                        onCommitDim = { vm.setPdfRunoutDimTextScale(it) },
+                        sheets = RUNOUT_TEXT_SIZE_SHEETS,
+                        tagPrefix = "runout_",
+                    )
+                    DimTextSizeChips(
+                        dimTextScale = pdfUndercutDimTextScale,
+                        onCommit = { vm.setPdfUndercutDimTextScale(it) },
+                    )
 
-                    // Same slider both PDF options sheets carry — one PdfPrefs.threadSlant. Like
-                    // the fraction style it also restyles the on-screen canvases' thread hatch.
+                    // PdfPrefs.threadSlant — here only, never on the PDF options panels (on-device
+                    // ruling: rarely changed). Like the fraction style it also restyles the
+                    // on-screen canvases' thread hatch.
                     ThreadSlantSlider(
                         threadSlant = pdfThreadSlant,
                         onCommit = { vm.setPdfThreadSlant(it) },
@@ -430,7 +448,7 @@ fun SettingsRoute(
                         },
                     )
 
-                    // The slant's sibling, on the same three surfaces — one PdfPrefs.threadDensity.
+                    // The slant's sibling, Settings-only the same way — PdfPrefs.threadDensity.
                     ThreadDensitySlider(
                         threadDensity = pdfThreadDensity,
                         onCommit = { vm.setPdfThreadDensity(it) },
@@ -463,7 +481,7 @@ fun SettingsRoute(
                         onCommit = { vm.setPdfDualUnitLayout(it) },
                     )
                     // The last look row of the units group, ahead of the capability switches.
-                    // Both PDF options sheets carry it too, in their Units section.
+                    // Settings is its only surface (on-device ruling: rarely changed).
                     SettingSwitchRow(
                         checked = pdfShowUnitsNote,
                         onCheckedChange = { vm.setPdfShowUnitsNote(it) },

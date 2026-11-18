@@ -210,9 +210,9 @@ its options change (a full-height sheet covered it — emulator QA), in two grou
 switches — Dimension lines with its "Dimension text size: Small | Medium | Large" chips
 (`preview_dim_text_SMALL|MEDIUM|LARGE`, greyed while the lines are off; on-device request), Draw
 like the sheet, Grid (greyed while the sheet layout is on), Highlight selected component — and, under the shared app-wide `OptionsScopeNote`, the look
-settings the preview reads, each the exact control the PDF options panels and Settings → Drawing
-use, wired to the same setters: Fractions, Dimension arrows, Dual-unit layout (a dual-unit
-document only), Body S-break, the per-job Shaft height and the per-job Liner & taper compression
+settings the preview reads, each the exact control Settings → Drawing (and, but for the
+Dual-unit layout, the PDF options panels) use, wired to the same setters: Fractions, Dimension
+arrows, Dual-unit layout (a dual-unit document only), Body S-break, the per-job Shaft height and the per-job Liner & taper compression
 (its "Keep liners and tapers proportional lengthwise" checkbox, `LinerCompressionControl` —
 both "Saved with this job"). Remote controls for the one stored value — the sheet owns no
 storage. The three sliders redraw the box under the finger (local state, no write) and commit on
@@ -421,20 +421,17 @@ prints exactly as it did before they existed.
   pruned). The auto-body and coupler-bolt-slot cards carry no chip. The chip is **card-only**
   — a deliberate carve-out from the Add-dialog-parity invariant, reasoned in
   `docs/contracts/AddComponentDialogs.md`.
-- **Dual-unit display** — the global **default** for new documents. Each document persists
-  its own `dual_units` value, and the sheet-wide toggle on the document writes this default
-  back so the two stay in step.
-- **Dual units** — the DOCUMENT's own flag, so it also appears on every PDF options sheet
-  (schematic, runout, consolidated, wear, undercut), not only here. The Settings switch is the
-  DEFAULT for new documents; the sheet switch changes the document in hand. The layout chips below
-  it are disabled while it is off — display-only, and never rewriting the stored layout.
-- **Dual-unit layout** (`PdfPrefs.dualUnitLayout`; also on every PDF options sheet) — how the two
+- **Dual-unit display** — the global **default** for new documents, and the one switch for the
+  document in hand: flipping it also sets the open document's own `dual_units` (the observer in
+  `ShaftViewModel.init`). Each document persists its own value and reopens with it. No PDF options
+  panel carries a dual-units switch (on-device ruling: units are a rare change).
+- **Dual-unit layout** (`PdfPrefs.dualUnitLayout`; Settings only — no PDF options panel) — how the two
   terms are SET once a document has them: **Inline** (`1 1/2" [38.1 mm]`, the default) or
   **Stacked** (primary over secondary). A stack is about 55% narrower, so more values sit inside
   the dimension line instead of above it; it is one line taller, and a sheet whose vertical budget
   cannot absorb that reverts to Inline for the WHOLE sheet. Inert on a single-unit document.
-- **Units note on sheets** (`PdfPrefs.showUnitsNote`, default OFF; also in every PDF options
-  sheet's Units section) — a look switch directly under the layout chips, ahead of the capability
+- **Units note on sheets** (`PdfPrefs.showUnitsNote`, default OFF; Settings only — no PDF options
+  panel) — a look switch directly under the layout chips, ahead of the capability
   switches. On, every printed sheet carries a small "Units in inches" / "Units in mm" (the
   DOCUMENT unit) in its bottom-right margin (on-device request). App-wide, captured by Drawing
   profiles and reset by "Restore Drawing defaults"; see `docs/PDF_EXPORT.md` §4.

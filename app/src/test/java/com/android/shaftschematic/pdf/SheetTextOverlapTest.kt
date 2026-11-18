@@ -507,7 +507,7 @@ class SheetTextOverlapTest {
         // Each step on its own and both together: the footer band, the rail lanes and the Ø
         // callouts are each measured from the scaled paint, so none may crowd another.
         val combos = PDF_TEXT_SCALES.flatMap { s ->
-            listOf(PdfPrefs(footerTextScale = s), PdfPrefs(dimTextScale = s), PdfPrefs(footerTextScale = s, dimTextScale = s))
+            listOf(allGroupsText(footer = s), allGroupsText(dim = s), allGroupsText(footer = s, dim = s))
         }
         val failures = mutableListOf<String>()
         fun check(name: String, c: RecordingCanvas) {
@@ -567,6 +567,12 @@ class SheetTextOverlapTest {
     private fun footerHeadingHeight(c: RecordingCanvas) =
         c.boxes.last { it.text == FOOTER_AFT_TAPER_HEADER }.rect.height()
 
+    /** Every sheet group's text at the same sizes, so one combo reaches the schematic and the consolidated sheet alike. */
+    private fun allGroupsText(footer: Float = 1f, dim: Float = 1f) = PdfPrefs(
+        footerTextScale = footer, dimTextScale = dim,
+        runoutFooterTextScale = footer, runoutDimTextScale = dim, undercutDimTextScale = dim,
+    )
+
     private fun plainConsolidated(prefs: PdfPrefs): RecordingCanvas {
         val c = canvas()
         composeRunoutPdfOnCanvas(
@@ -613,7 +619,7 @@ class SheetTextOverlapTest {
         // Bubbles, the coupling face lane and the rails all share this page with the footer, so it
         // may step down — but it never prints at 100% when a larger step fits, and never collides.
         val base = plainConsolidated(PdfPrefs())
-        val c = plainConsolidated(PdfPrefs(footerTextScale = PDF_TEXT_SCALES.last()))
+        val c = plainConsolidated(PdfPrefs(runoutFooterTextScale = PDF_TEXT_SCALES.last()))
         assertNoOverlap("plain consolidated, largest footer", c)
         assertTrue(
             "footer heading should grow: ${footerHeadingHeight(base)} → ${footerHeadingHeight(c)}",
@@ -632,7 +638,7 @@ class SheetTextOverlapTest {
         val base = consolidated(includeBubbles = true, includeWearInfo = false, blank = false, face = true, dyePen = true)
         val c = consolidated(
             includeBubbles = true, includeWearInfo = false, blank = false, face = true,
-            prefs = PdfPrefs(footerTextScale = PDF_TEXT_SCALES.last()), dyePen = true,
+            prefs = PdfPrefs(runoutFooterTextScale = PDF_TEXT_SCALES.last()), dyePen = true,
         )
         val ratio = footerHeadingHeight(c) / footerHeadingHeight(base)
         assertTrue("stepped-down footer ratio $ratio should sit between 125% and the largest step", ratio > 1.2f && ratio < PDF_TEXT_SCALES.last() - 0.05f)

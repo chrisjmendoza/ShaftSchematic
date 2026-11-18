@@ -441,7 +441,8 @@ internal fun carryBodyKeyway(from: Body, to: Body): Body {
 /**
  * Carries [from]'s **draw-only** decisions — name, Ø/name visibility, the shade override, the
  * compression opt-out, the length-rail override and the fiberglass wrap — onto [to] (a fragment/merge/expansion of the same material),
- * together with its AFT | FWD reference — an authored choice, not geometry. Nothing here is
+ * together with its AFT | FWD reference — an authored choice, not geometry — and its Ø
+ * tolerance, which belongs to the Ø every fragment keeps ([Body.diaTolPlusMm]). Nothing here is
  * geometry, so unlike the keyway there is no fit test: every piece of one authored body prints,
  * and follows an OAL change, the way that body was authored to.
  *
@@ -458,6 +459,8 @@ internal fun carryBodyDisplay(from: Body, to: Body): Body = to.copy(
     showDimensionRail = from.showDimensionRail,
     authoredReference = from.authoredReference,
     fiberglass = from.fiberglass,
+    diaTolPlusMm = from.diaTolPlusMm,
+    diaTolMinusMm = from.diaTolMinusMm,
 )
 
 /**

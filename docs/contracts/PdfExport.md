@@ -99,6 +99,22 @@ with this job", so the reader never has to guess which kind a row is.
   (one shared `SheetTextSizeChips`; the overlay shows them only with `showSheetTextSizes`, the
   Output tab). Same chip-tap-is-the-commit posture and render-input keys as the arrows. 100%
   prints byte-identically to before the prefs existed.
+  - *Per sheet group* (on-device request: the schematic at one size, the undercut sections
+    larger): three app-wide groups, `SheetTextGroup`. SCHEMATIC — the schematic, every Final
+    sheet (the bubbled Final sheet and the Final tab's blank runout sheet too, which pass
+    `textGroup = SCHEMATIC` to the runout composer) and the section sheets — reads
+    `footerTextScale` / `dimTextScale` as stored. RUNOUT — the classic runout and consolidated
+    sheets — reads `runoutFooterTextScale` / `runoutDimTextScale`. UNDERCUT — the undercut strips —
+    reads `undercutDimTextScale` (no footer). `PdfPrefs.forTextGroup` swaps a group's pair into
+    `footerTextScale` / `dimTextScale` once at the entry of the runout and undercut composers, so
+    nothing downstream knows the groups exist. Each group starts at the user's previous shared
+    size: `SettingsStore` reads a missing group key as the schematic key, and a schematic write
+    first freezes every still-unset group key at the schematic's OLD value in the same edit; a
+    drawing profile saved before the groups loads them from its own shared sizes. Each options
+    panel's chips write their own group (the schematic / Final panel → SCHEMATIC, the Output tab's
+    consolidated panel → RUNOUT, the undercut panel → UNDERCUT) under a caption naming those
+    sheets; Settings → Drawing shows all three. The classic runout sheet prints no scaled text
+    today (no rails, no footer), so its tab carries no chips.
   - *Footer*: the shared footer block's paint (`schematicFooterTextPaint`, the consolidated
     composer's `footerText`) and, on the consolidated sheet, the TIR / dye pen row above it (its
     lane height and boxes scale too; the classic runout sheet's TIR row does not). The band is
@@ -142,15 +158,14 @@ with this job", so the reader never has to guess which kind a row is.
     undercut sheets keep their own sizes.
 - **Thread slant** (`threadSlant`): slider 1×–10× in 0.5 steps, default 3×, commits on
   release (no `PreviewTuning` drag channel) — in Settings → Drawing → "Thread slant" (with a
-  "Default (3×)" reset) and in both PDF Options sheets' "Thread" section, which a sheet shows
-  only while its shaft draws a thread (`hasDrawnThreads`) (one shared `ThreadSlantSlider`,
-  one app-wide pref, testTag `thread_slant_slider`). It multiplies each thread's TRUE crest
+  "Default (3×)" reset) ONLY: no PDF Options panel carries it (on-device ruling: rarely changed)
+  (`ThreadSlantSlider`, one app-wide pref, testTag `thread_slant_slider`). It multiplies each thread's TRUE crest
   lean, so a coarse thread still leans further than a fine one at every setting. The composers
   read the `util/ThreadHatchStyle.slant` mirror (sole writer `SettingsStore.updatePdfPrefs`,
   the fraction-style posture), so every preview carries `threadSlant` as a render-input key.
 - **Thread density** (`threadDensity`): slider 15%–100% in 5% steps, default 50%, commits on
-  release — directly after Thread slant in Settings → Drawing (with a "Default (50%)" reset)
-  and in the same "Thread" section of both PDF Options sheets (one shared `ThreadDensitySlider`, one app-wide pref,
+  release — directly after Thread slant in Settings → Drawing (with a "Default (50%)" reset),
+  Settings-only like the slant (`ThreadDensitySlider`, one app-wide pref,
   testTag `thread_density_slider`; end labels "Sparse" / "100% true"). It is the fraction of
   the thread's true crests drawn, so 100% shows separate lines only on coarse threads. Same
   mirror (`util/ThreadHatchStyle.density`), so every preview carries `threadDensity` as a
@@ -217,20 +232,18 @@ zoomed but not moved). `PdfPreviewScreen` takes the same posture (its gestures s
   rows inside one). On this sheet:
   1. **Shaft** (`options_shaft_expander`, OPEN by default) — the live-tuning group:
      **"Shaft height"**, "Body S-break" threshold, the liner & taper compression control.
-  2. **Thread** (`options_thread_expander`, collapsed) — "Thread slant", "Thread density";
-     only while the sheet draws a thread (`hasDrawnThreads`: a thread with length > 0; the
-     undercut sheet narrows it to strips that reach a thread, `undercutStripsReachThread`).
-     Header summary: slant · density (`3× · 50%`).
-  3. **Lines & text** (`options_lines_expander`, collapsed) — line thickness (50–200%, its
+  2. **Lines & text** (`options_lines_expander`, collapsed) — line thickness (50–200%, its
      live `onDrag` channel intact), "Dimension arrows" size, footer / dimension text size
      (schematic and consolidated sheets), fractions. Header summary: the
      line weight (`100%`).
-  4. **Shade in Components** (`options_shade_expander`, collapsed) — bodies/tapers/liners +
+  3. **Shade in Components** (`options_shade_expander`, collapsed) — bodies/tapers/liners +
      an "Explicit bodies only" sub-checkbox under Bodies.
-  5. **Measurement reference** (`options_measure_ref_expander`, collapsed) — Auto/AFT/FWD.
-  6. **Units** (`options_units_expander`, collapsed, LAST — rarely used options trail,
-     on-device ruling) — the document's "Dual units" switch + the dual-unit layout chips.
-     Header summary: `Single` or `Dual · <layout>`.
+  4. **Measurement reference** (`options_measure_ref_expander`, collapsed) — Auto/AFT/FWD.
+
+  There is NO Thread and NO Units section on any options panel (on-device ruling: rarely
+  changed). Thread slant / density, the dual-units switch ("Dual-unit display"), the dual-unit
+  layout and the units note are Settings → Drawing only; the previews keep them as render-input
+  keys, so a Settings change still redraws an open preview.
 
   Open state is composition-local (`OptionsExpander(initiallyExpanded)`): a reopened sheet
   starts from these defaults. Every control is bound to `PdfPrefs` (or, for the
@@ -281,7 +294,7 @@ zoomed but not moved). `PdfPreviewScreen` takes the same posture (its gestures s
     `PDF_PREVIEW_RENDER_SCALE`. The spinner is held back for drag frames and for that
     release pass — the current page stays up instead of strobing. Every OTHER sharp pass
     keeps the page up too: the full spinner replaces the page only while no bitmap exists
-    yet; once one does, a re-render (a commit-on-release control, Thread slant included)
+    yet; once one does, a re-render (a commit-on-release control)
     leaves the current page and its zoom on screen under the small corner
     `PreviewRerenderIndicator` (`ui/screen/PreviewOptionsPanel.kt`) — blanking the page at
     the moment its change is being watched made the change unwatchable.

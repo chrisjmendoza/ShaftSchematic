@@ -255,7 +255,8 @@ fun AddBodyDialog(
                blendAftSeal: Boolean, blendFwdSeal: Boolean,
                blendAftSealLenMm: Float, blendFwdSealLenMm: Float,
                blendAftToLinerOd: Boolean, blendFwdToLinerOd: Boolean,
-               blendAngles: BlendAngleDraft, fiberglass: Boolean) -> Unit,
+               blendAngles: BlendAngleDraft, fiberglass: Boolean,
+               diaTol: DiaToleranceDraft) -> Unit,
     onCancel: () -> Unit,
 ) {
     val d = rememberAddDialogDefaults(spec)
@@ -272,6 +273,9 @@ fun AddBodyDialog(
     val start = if (isFwd) startFwd else startAft
     val length = rememberSeededMm(effectiveLengthMm, unit)
     val dia = rememberSeededMm(max(1f, d.bodyDiaMm), unit)
+    // Ø tolerance — the card's row under the Ø (parity rule); blank = no tolerance.
+    var diaTolPlus by remember(unit) { mutableStateOf("") }
+    var diaTolMinus by remember(unit) { mutableStateOf("") }
 
     // Component blend + seal areas — mirror the body card by contract (they change drawn
     // geometry, so they are under the add-dialog-parity rule, not the card-only carve-out). Same
@@ -393,6 +397,17 @@ fun AddBodyDialog(
                 CommitNumField("Length (${abbr(unit)})", length.text, requirePositive = true) { length.onText(it) }
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("Diameter (${abbr(unit)})", dia.text, requirePositive = true) { dia.onText(it) }
+                Spacer(Modifier.height(8.dp))
+                DiaToleranceRow(
+                    plus = { m ->
+                        CommitNumField(diaTolPlusLabel(unit), diaTolPlus, modifier = m.testTag("add_body_dia_tol_plus"),
+                            parseValid = ::isDiaTolText) { diaTolPlus = it }
+                    },
+                    minus = { m ->
+                        CommitNumField(diaTolMinusLabel(unit), diaTolMinus, modifier = m.testTag("add_body_dia_tol_minus"),
+                            parseValid = ::isDiaTolText) { diaTolMinus = it }
+                    },
+                )
                 Spacer(Modifier.height(12.dp))
                 BlendSection(
                     aftMode = blendAftMode,
@@ -599,6 +614,8 @@ fun AddBodyDialog(
             // submit 0 in place of the typed value.
             val ok = bodyAddEnabled(startMm, lengthMm, diaMm) && optionalEntriesReadable(
                 keywayEntryTexts(kwEnabled, kwCaptured, kwWidth, kwDepth, kwLength, kwOffset) + listOf(
+                    diaTolPlus,
+                    diaTolMinus,
                     blendAft.text.takeIf { blendAftMode == BlendFaceMode.BLEND },
                     blendFwd.text.takeIf { blendFwdMode == BlendFaceMode.BLEND },
                     blendAftSealLen.text.takeIf { sealAft },
@@ -637,6 +654,10 @@ fun AddBodyDialog(
                         fwdRadiusMm = if (fwdAngleActive) blendFwdRadius.mm(unit) ?: 0f else 0f,
                     ),
                     fiberglass,
+                    DiaToleranceDraft(
+                        plusMm = diaTolMmOrNull(diaTolPlus, unit) ?: 0f,
+                        minusMm = diaTolMmOrNull(diaTolMinus, unit) ?: 0f,
+                    ),
                 )
             }) { Text("Add") }
         },
@@ -688,6 +709,12 @@ data class ShoulderEndDraft(val lenMm: Float, val odMm: Float, val radiusMm: Flo
 /** Shoulders for a new liner; a null end has none. */
 data class LinerShoulderDraft(val aft: ShoulderEndDraft? = null, val fwd: ShoulderEndDraft? = null)
 
+/**
+ * The Ø tolerance a new liner or body is created with: upper and lower deviations as typed
+ * magnitudes in mm (0 = none on that side).
+ */
+data class DiaToleranceDraft(val plusMm: Float = 0f, val minusMm: Float = 0f)
+
 @Composable
 fun AddLinerDialog(
     unit: UnitSystem,
@@ -700,7 +727,7 @@ fun AddLinerDialog(
     dialogUnitConverterEnabled: Boolean = false,
     onSubmit: (
         startMm: Float, lengthMm: Float, odMm: Float, reference: LinerAuthoredReference,
-        shoulders: LinerShoulderDraft,
+        shoulders: LinerShoulderDraft, diaTol: DiaToleranceDraft,
     ) -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -719,6 +746,9 @@ fun AddLinerDialog(
 
     val length = rememberSeededMm(effectiveLengthMm, unit)
     val od = rememberSeededMm(max(1f, d.linerOdMm), unit)
+    // OD tolerance — the card's row under the Outer Ø (parity rule); blank = no tolerance.
+    var diaTolPlus by remember(unit) { mutableStateOf("") }
+    var diaTolMinus by remember(unit) { mutableStateOf("") }
 
     // Shoulders (add-dialog-parity rule: they change drawn geometry, so the same section the
     // liner card shows appears here, under the same capability gate).
@@ -812,6 +842,17 @@ fun AddLinerDialog(
                 CommitNumField("Length (${abbr(unit)})", length.text, requirePositive = true) { length.onText(it) }
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("Outer Ø (${abbr(unit)})", od.text, requirePositive = true) { od.onText(it) }
+                Spacer(Modifier.height(8.dp))
+                DiaToleranceRow(
+                    plus = { m ->
+                        CommitNumField(diaTolPlusLabel(unit), diaTolPlus, modifier = m.testTag("add_liner_dia_tol_plus"),
+                            parseValid = ::isDiaTolText) { diaTolPlus = it }
+                    },
+                    minus = { m ->
+                        CommitNumField(diaTolMinusLabel(unit), diaTolMinus, modifier = m.testTag("add_liner_dia_tol_minus"),
+                            parseValid = ::isDiaTolText) { diaTolMinus = it }
+                    },
+                )
 
                 if (linerShouldersEnabled) {
                     Spacer(Modifier.height(8.dp))
@@ -841,7 +882,7 @@ fun AddLinerDialog(
         },
         confirmButton = {
             val ok = linerAddEnabled(physStartMm, lengthMm, odMm, startError) && optionalEntriesReadable(
-                if (!linerShouldersEnabled) emptyList() else listOf(
+                listOf(diaTolPlus, diaTolMinus) + if (!linerShouldersEnabled) emptyList() else listOf(
                     shAftLen.takeIf { shAftOn }, shAftOd.takeIf { shAftOn },
                     shFwdLen.takeIf { shFwdOn }, shFwdOd.takeIf { shFwdOn },
                 )
@@ -859,7 +900,11 @@ fun AddLinerDialog(
                     aft = end(shAftOn, shAftLen, shAftOd, shAftRadiusMm),
                     fwd = end(shFwdOn, shFwdLen, shFwdOd, shFwdRadiusMm),
                 )
-                val action = { onSubmit(physStartMm, lengthMm, odMm, ref, shoulders) }
+                val diaTol = DiaToleranceDraft(
+                    plusMm = diaTolMmOrNull(diaTolPlus, unit) ?: 0f,
+                    minusMm = diaTolMmOrNull(diaTolMinus, unit) ?: 0f,
+                )
+                val action = { onSubmit(physStartMm, lengthMm, odMm, ref, shoulders, diaTol) }
                 val warnings = collectAddWarnings(spec, physStartMm, lengthMm, unit)
                 if (warnings.isEmpty()) action() else { warningLines = warnings; warningAction = action }
             }) { Text("Add") }

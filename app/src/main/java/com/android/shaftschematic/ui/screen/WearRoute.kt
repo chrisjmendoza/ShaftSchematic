@@ -189,8 +189,7 @@ fun WearRoute(
     val pdfThreadSlant     by vm.pdfThreadSlant.collectAsState()
     val pdfThreadDensity   by vm.pdfThreadDensity.collectAsState()
     // Dual-unit layout: this document stacks its dual values like every other
-    // (`wantDualStacked`), so its options sheet has to show the stored choice — and the
-    // preview has to redraw when it changes.
+    // (`wantDualStacked`), so the preview has to redraw when the Settings choice changes.
     val pdfDualUnitLayout  by vm.pdfDualUnitLayout.collectAsState()
     val wearRecord         by vm.wearRecord.collectAsState()
     // The shared per-job "Shaft height" multiplier — ONE value behind every drawing. Only its
@@ -722,18 +721,12 @@ fun WearRoute(
                 // taper–liner join.
                 RunoutWearOptionsSheet(
                     dateSheet = SheetDateSheet.WEAR,
-                    dualUnits = dualUnits,
-                    onDualUnitsChange = { vm.setDualUnits(it) },
-                    dualUnitLayout = pdfDualUnitLayout,
                     lineThicknessScale = lineThicknessScale,
                     pdfShadedBodies = pdfShadedBodies,
                     pdfShadedTapers = pdfShadedTapers,
                     pdfShadedLiners = pdfShadedLiners,
                     vm = vm,
                     fractionStyle = pdfFractionStyle,
-                    hasThreads = hasDrawnThreads(spec),
-                    threadSlant = pdfThreadSlant,
-                    threadDensity = pdfThreadDensity,
                     blankDraft = blankDraft,
                     onSetBlankDraft = { blankDraft = it },
                     showWearControls = true,

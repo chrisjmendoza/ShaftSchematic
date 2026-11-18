@@ -159,7 +159,7 @@ class UndercutDetailOverlayTest {
                     seedNewCut = seedNewCut,
                     onPreview = if (withChrome) ({ previewed++ }) else null,
                     optionsSheet = vm?.let { v ->
-                        { UndercutOptionsSheet(vm = v, blankDraft = false, onSetBlankDraft = {}, showThreadControls = false) }
+                        { UndercutOptionsSheet(vm = v, blankDraft = false, onSetBlankDraft = {}) }
                     },
                 )
             }

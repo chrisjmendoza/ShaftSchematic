@@ -82,7 +82,7 @@ class SparkTestRowTest {
     fun `a pair too wide for the lane puts the spark row on its own line under the dye pen row`() {
         val rec = consolidated(
             RunoutConfig(showDyePenTest = true, showSparkTest = true, showCouplingFace = true),
-            prefs = PdfPrefs(footerTextScale = PDF_TEXT_SCALE_MAX),
+            prefs = PdfPrefs(runoutFooterTextScale = PDF_TEXT_SCALE_MAX),
         )
         val dye = rec.texts.single { it.text == "Dye pen test:" }
         val spark = rec.texts.single { it.text == SPARK_TEST_LABEL }

@@ -1223,12 +1223,6 @@ fun RunoutRoute(
                     showSBreak = true,
                     sBreakThresholdFrac = pdfSBreakThresholdFrac,
                     fractionStyle = pdfFractionStyle,
-                    hasThreads = hasDrawnThreads(spec),
-                    threadSlant = pdfThreadSlant,
-                    threadDensity = pdfThreadDensity,
-                    dualUnitLayout = pdfDualUnitLayout,
-                    dualUnits = dualUnits,
-                    onDualUnitsChange = { vm.setDualUnits(it) },
                     tuning = tuning,
                     // The same session-only state as the tab body's switch — ONE value, so
                     // the two can never disagree about what the preview is showing.

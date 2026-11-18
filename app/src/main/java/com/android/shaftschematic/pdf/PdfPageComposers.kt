@@ -10,6 +10,7 @@ import com.android.shaftschematic.model.UndercutRecord
 import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.RunoutConfig
+import com.android.shaftschematic.settings.SheetTextGroup
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.UnitSystem
@@ -166,6 +167,7 @@ fun composeRunoutPdf(
     consolidated: Boolean = true,
     includeBubbles: Boolean = true,
     includeWearInfo: Boolean = true,
+    textGroup: SheetTextGroup = SheetTextGroup.RUNOUT,
 ) = composeRunoutPdfOnCanvas(
     c = page.canvas,
     pageW = page.info.pageWidth.toFloat(),
@@ -176,6 +178,7 @@ fun composeRunoutPdf(
     runoutStationPlacements = runoutStationPlacements, wearRecord = wearRecord,
     blankValues = blankValues, consolidated = consolidated,
     includeBubbles = includeBubbles, includeWearInfo = includeWearInfo,
+    textGroup = textGroup,
 )
 
 /**

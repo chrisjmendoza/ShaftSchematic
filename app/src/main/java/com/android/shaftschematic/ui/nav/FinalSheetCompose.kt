@@ -11,6 +11,7 @@ import com.android.shaftschematic.pdf.composeRunoutPdf
 import com.android.shaftschematic.pdf.composeShaftPdf
 import com.android.shaftschematic.settings.PdfPrefs
 import com.android.shaftschematic.settings.RunoutConfig
+import com.android.shaftschematic.settings.SheetTextGroup
 import com.android.shaftschematic.ui.resolved.ResolvedComponent
 import com.android.shaftschematic.ui.viewmodel.SpecTarget
 import com.android.shaftschematic.util.DisplayUnits
@@ -150,6 +151,8 @@ internal fun composeSchematicSheet(
             consolidated = true,
             includeBubbles = true,
             includeWearInfo = false,
+            // Every Final sheet prints at the schematic's text sizes — the schematic options tune it.
+            textGroup = SheetTextGroup.SCHEMATIC,
         )
 
         FinalSheetKind.BEFORE_AFTER -> composeBeforeAfterPdf(

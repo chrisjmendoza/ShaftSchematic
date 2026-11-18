@@ -293,7 +293,10 @@ fun ShaftViewModel.setPdfArrowSizePt(v: Float, persist: Boolean = true) {
     if (persist) viewModelScope.launch { SettingsStore.setPdfArrowSizePt(getApplication(), clamped) }
 }
 
-/** Wired to the schematic / consolidated PDF options and Settings → Drawing → "Footer text size". */
+/**
+ * The SCHEMATIC group's footer size — the schematic / Final PDF options and Settings → Drawing →
+ * "Schematic sheets". The store freezes the other groups' unset keys first, so this never moves them.
+ */
 fun ShaftViewModel.setPdfFooterTextScale(v: Float, persist: Boolean = true) {
     val clamped = v.coerceIn(PDF_TEXT_SCALE_MIN, PDF_TEXT_SCALE_MAX)
     _pdfFooterTextScale.value = clamped
@@ -301,7 +304,7 @@ fun ShaftViewModel.setPdfFooterTextScale(v: Float, persist: Boolean = true) {
     if (persist) viewModelScope.launch { SettingsStore.setPdfFooterTextScale(getApplication(), clamped) }
 }
 
-/** Wired to the schematic / consolidated PDF options and Settings → Drawing → "Dimension text size". */
+/** The SCHEMATIC group's dimension text size — same surfaces as [setPdfFooterTextScale]. */
 fun ShaftViewModel.setPdfDimTextScale(v: Float, persist: Boolean = true) {
     val clamped = v.coerceIn(PDF_TEXT_SCALE_MIN, PDF_TEXT_SCALE_MAX)
     _pdfDimTextScale.value = clamped
@@ -310,7 +313,37 @@ fun ShaftViewModel.setPdfDimTextScale(v: Float, persist: Boolean = true) {
 }
 
 /**
- * Wired to the PDF options sheets and Settings → Drawing → "Thread slant". Commit-on-release
+ * The RUNOUT group's footer size (the consolidated sheet's footer) — the runout / consolidated PDF
+ * options and Settings → Drawing → "Runout and consolidated sheets".
+ */
+fun ShaftViewModel.setPdfRunoutFooterTextScale(v: Float, persist: Boolean = true) {
+    val clamped = v.coerceIn(PDF_TEXT_SCALE_MIN, PDF_TEXT_SCALE_MAX)
+    _pdfRunoutFooterTextScale.value = clamped
+    SettingsStore.updatePdfPrefs { it.copy(runoutFooterTextScale = clamped) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfRunoutFooterTextScale(getApplication(), clamped) }
+}
+
+/** The RUNOUT group's dimension text size — same surfaces as [setPdfRunoutFooterTextScale]. */
+fun ShaftViewModel.setPdfRunoutDimTextScale(v: Float, persist: Boolean = true) {
+    val clamped = v.coerceIn(PDF_TEXT_SCALE_MIN, PDF_TEXT_SCALE_MAX)
+    _pdfRunoutDimTextScale.value = clamped
+    SettingsStore.updatePdfPrefs { it.copy(runoutDimTextScale = clamped) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfRunoutDimTextScale(getApplication(), clamped) }
+}
+
+/**
+ * The UNDERCUT group's dimension text size (the undercut sheet's strips) — the undercut PDF options
+ * and Settings → Drawing → "Undercut sheet".
+ */
+fun ShaftViewModel.setPdfUndercutDimTextScale(v: Float, persist: Boolean = true) {
+    val clamped = v.coerceIn(PDF_TEXT_SCALE_MIN, PDF_TEXT_SCALE_MAX)
+    _pdfUndercutDimTextScale.value = clamped
+    SettingsStore.updatePdfPrefs { it.copy(undercutDimTextScale = clamped) }
+    if (persist) viewModelScope.launch { SettingsStore.setPdfUndercutDimTextScale(getApplication(), clamped) }
+}
+
+/**
+ * Wired to Settings → Drawing → "Thread slant" (its only surface). Commit-on-release
  * from the sliders — never called per drag frame.
  *
  * The `updatePdfPrefs` call mirrors the value into `ThreadHatchStyle.slant`, which the PDF hatch
@@ -324,7 +357,7 @@ fun ShaftViewModel.setPdfThreadSlant(v: Float, persist: Boolean = true) {
 }
 
 /**
- * Wired to the PDF options sheets and Settings → Drawing → "Thread density". Commit-on-release
+ * Wired to Settings → Drawing → "Thread density" (its only surface). Commit-on-release
  * from the sliders — never called per drag frame.
  *
  * The `updatePdfPrefs` call mirrors the value into `ThreadHatchStyle.density`, which the PDF
@@ -588,6 +621,9 @@ fun ShaftViewModel.applyDrawingProfile(profile: DrawingProfile) {
     setPdfRunoutBubbleDropScale(prefs.runoutBubbleDropScale)
     setPdfFooterTextScale(prefs.footerTextScale)
     setPdfDimTextScale(prefs.dimTextScale)
+    setPdfRunoutFooterTextScale(prefs.runoutFooterTextScale)
+    setPdfRunoutDimTextScale(prefs.runoutDimTextScale)
+    setPdfUndercutDimTextScale(prefs.undercutDimTextScale)
     setLineThicknessScale(profile.clampedLineThicknessScale)
 }
 

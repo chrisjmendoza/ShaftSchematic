@@ -1941,6 +1941,10 @@ private fun drawLiners(
  * from [bodiesForPdf]/`bodyForPdf` may carry a resolved fragment id (`"<id>#2"`, a body split
  * by a liner or taper); [resolvedBodyBaseId] strips that before the lookup, matching the
  * pattern `ShaftSpec.bodyForPdf` already uses for the Ø-visibility flag.
+ *
+ * A body's Ø tolerance ([Body.diaTolPlusMm]/[Body.diaTolMinusMm]) is part of the group's identity:
+ * two bodies of one Ø with different tolerances print two callouts, each value carrying its own
+ * stacked limits ([DiaCallout.tolerance], formatted in the anchor's unit by [formatDiaTolerance]).
  */
 fun buildBodyOdCallouts(
     bodies: List<Body>,
@@ -1948,19 +1952,24 @@ fun buildBodyOdCallouts(
 ): List<DiaCallout> =
     bodies
         .filter { it.diaMm > 0f && it.showDiaOnDrawing }
-        .groupBy { it.diaMm }
+        .groupBy { DiaGroupKey(it.diaMm, it.diaTolPlusMm, it.diaTolMinusMm) }
         .entries
-        .sortedByDescending { it.key }
-        .mapNotNull { (diaMm, group) ->
+        .sortedByDescending { it.key.diaMm }
+        .mapNotNull { (key, group) ->
             val anchor = group.maxByOrNull { it.lengthMm } ?: return@mapNotNull null
             val centerMm = (anchor.startFromAftMm + anchor.lengthMm * 0.5).toDouble()
+            val unit = displayUnits.unitFor(resolvedBodyBaseId(anchor.id))
             DiaCallout(
-                xMm = centerMm, valueMm = diaMm.toDouble(), side = LeaderSide.BELOW,
-                unit = displayUnits.unitFor(resolvedBodyBaseId(anchor.id)), dual = displayUnits.dual,
+                xMm = centerMm, valueMm = key.diaMm.toDouble(), side = LeaderSide.BELOW,
+                unit = unit, dual = displayUnits.dual,
                 spanStartMm = anchor.startFromAftMm.toDouble(),
                 spanEndMm = (anchor.startFromAftMm + anchor.lengthMm).toDouble(),
+                tolerance = formatDiaTolerance(key.tolPlusMm.toDouble(), key.tolMinusMm.toDouble(), unit),
             )
         }
+
+/** What makes two body or liner Ø callouts one value: the Ø and both tolerance limits. */
+private data class DiaGroupKey(val diaMm: Float, val tolPlusMm: Float, val tolMinusMm: Float)
 
 /**
  * The callout an Angle-mode blend prints below the shaft: the STORED angle, followed by the
@@ -2021,6 +2030,7 @@ fun buildBlendAngleCallouts(
  *
  * [Liner.showDiaOnDrawing] is applied before the grouping, same rule as the body builder.
  * Liners are never fragmented, so the anchor's id resolves directly (no base-id stripping).
+ * The OD tolerance groups and prints exactly as the body builder's does.
  */
 fun buildLinerOdCallouts(
     liners: List<Liner>,
@@ -2028,17 +2038,19 @@ fun buildLinerOdCallouts(
 ): List<DiaCallout> =
     liners
         .filter { it.odMm > 0f && it.showDiaOnDrawing }
-        .groupBy { it.odMm }
+        .groupBy { DiaGroupKey(it.odMm, it.diaTolPlusMm, it.diaTolMinusMm) }
         .entries
-        .sortedByDescending { it.key }
-        .mapNotNull { (odMm, group) ->
+        .sortedByDescending { it.key.diaMm }
+        .mapNotNull { (key, group) ->
             val anchor = group.maxByOrNull { it.lengthMm } ?: return@mapNotNull null
             val centerMm = (anchor.startFromAftMm + anchor.lengthMm * 0.5).toDouble()
+            val unit = displayUnits.unitFor(anchor.id)
             DiaCallout(
-                xMm = centerMm, valueMm = odMm.toDouble(), side = LeaderSide.BELOW,
-                unit = displayUnits.unitFor(anchor.id), dual = displayUnits.dual,
+                xMm = centerMm, valueMm = key.diaMm.toDouble(), side = LeaderSide.BELOW,
+                unit = unit, dual = displayUnits.dual,
                 spanStartMm = anchor.startFromAftMm.toDouble(),
                 spanEndMm = (anchor.startFromAftMm + anchor.lengthMm).toDouble(),
+                tolerance = formatDiaTolerance(key.tolPlusMm.toDouble(), key.tolMinusMm.toDouble(), unit),
             )
         }
 
@@ -2055,7 +2067,9 @@ fun buildLinerOdCallouts(
  * also resolve to that one unit. The joined callout takes the liner group's place in the list and
  * the body group's callout is dropped: its first leader is the pair's liner (centre + span), its
  * second the pair's body. Only a body joins a liner — never two liners, never two bodies — and
- * everything that does not qualify is built exactly as the two builders build it.
+ * everything that does not qualify is built exactly as the two builders build it. A pair joins
+ * only when it carries the SAME tolerance too: one printed value stands for both components, so
+ * a toleranced liner beside an untoleranced body keeps two callouts.
  *
  * [bodies] are the drawable runs (`bodiesForPdf` — already trimmed around liners, fragment ids
  * intact), so a body that runs under a liner touches it at the run's trimmed end.
@@ -2083,15 +2097,21 @@ fun joinSharedOdCallouts(
         val bi = bodyCalls.indices.firstOrNull { i ->
             i !in droppedBodyCalls &&
                 abs(bodyCalls[i].valueMm - lc.valueMm) <= SHARED_OD_EPS_MM &&
-                bodyCalls[i].unit == lc.unit
+                bodyCalls[i].unit == lc.unit &&
+                bodyCalls[i].tolerance == lc.tolerance
         } ?: return@map lc
         val pair = shownLiners
-            .filter { abs(it.odMm - lc.valueMm) <= SHARED_OD_EPS_MM && displayUnits.unitFor(it.id) == lc.unit }
+            .filter {
+                abs(it.odMm - lc.valueMm) <= SHARED_OD_EPS_MM && displayUnits.unitFor(it.id) == lc.unit &&
+                    formatDiaTolerance(it.diaTolPlusMm.toDouble(), it.diaTolMinusMm.toDouble(), lc.unit) == lc.tolerance
+            }
             .flatMap { l ->
                 shownBodies
                     .filter {
                         abs(it.diaMm - lc.valueMm) <= SHARED_OD_EPS_MM &&
                             displayUnits.unitFor(resolvedBodyBaseId(it.id)) == lc.unit &&
+                            formatDiaTolerance(it.diaTolPlusMm.toDouble(), it.diaTolMinusMm.toDouble(), lc.unit) ==
+                            lc.tolerance &&
                             touches(it, l)
                     }
                     .map { b -> l to b }
@@ -2147,6 +2167,9 @@ fun ShaftSpec.withResolvedBodies(resolved: List<ResolvedComponent>?): ShaftSpec 
  * way each section already carries its own Ø. A resolved id with no stored match (never expected)
  * follows the model default — hidden, the opt-in posture.
  *
+ * The Ø tolerance ([Body.diaTolPlusMm]/[Body.diaTolMinusMm]) rides the same lookup, so every
+ * run's Ø callout prints its stored body's limits; an AUTO span has none.
+ *
  * [Body.compressOnDrawing] rides the same fragment-stripped lookup, so every run of a split
  * body keeps its author's decision and [drawBodyRunsWithBreaks] can read it off the run it
  * is drawing. AUTO spans always compress: bare-shaft fill is the give that funds every other
@@ -2169,6 +2192,8 @@ fun ShaftSpec.bodyForPdf(b: ResolvedBody): Body {
             stored?.showDiaOnDrawing ?: false
         },
         compressOnDrawing = stored?.compressOnDrawing ?: true,
+        diaTolPlusMm = stored?.diaTolPlusMm ?: 0f,
+        diaTolMinusMm = stored?.diaTolMinusMm ?: 0f,
     )
 }
 

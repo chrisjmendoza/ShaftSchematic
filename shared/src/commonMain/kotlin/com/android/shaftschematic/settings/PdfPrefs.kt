@@ -157,7 +157,8 @@ const val PDF_ARROW_SIZE_DEFAULT_PT = PDF_ARROW_SIZE_SMALL_PT
 
 /**
  * Sheet text sizes: the multipliers on the footer block's text (`PdfPrefs.footerTextScale`) and on
- * the dimension values — rail lengths and Ø values (`PdfPrefs.dimTextScale`). Fixed steps rather
+ * the dimension values — rail lengths and Ø values (`PdfPrefs.dimTextScale`), one pair per
+ * [SheetTextGroup] (`PdfPrefs.forTextGroup`). Fixed steps rather
  * than a slider, the [PDF_ARROW_SIZES_PT] posture: the size is picked once for the readers' eyes,
  * not tuned against a drawing. 100% prints the shipped sizes exactly.
  *
@@ -318,7 +319,8 @@ data class PdfPrefs(
     /**
      * Thread-hatch slant factor — a multiplier on each thread's TRUE crest lean (half its pitch
      * over its major diameter, `geom/ThreadHatchMath.kt`), [THREAD_SLANT_MIN] (true geometry)
-     * ..[THREAD_SLANT_MAX]. Settings → Drawing → "Thread slant" and both PDF options sheets.
+     * ..[THREAD_SLANT_MAX]. Settings → Drawing → "Thread slant" only (on-device ruling: rarely
+     * changed, so it is not on the PDF options panels).
      * Reaches every thread hatch, sheets and canvases alike: `SettingsStore.updatePdfPrefs`
      * mirrors it into `ThreadHatchStyle.slant` for the composers, and the canvases take it
      * from the ViewModel's flow.
@@ -328,7 +330,7 @@ data class PdfPrefs(
      * Thread-hatch density — the fraction of each thread's TRUE crests the hatch draws (true
      * spacing = one pitch at the drawing's own diametral scale, `geom/ThreadHatchMath.kt`),
      * [THREAD_DENSITY_MIN]..[THREAD_DENSITY_MAX] (every crest at true pitch). Settings → Drawing →
-     * "Thread density" and both PDF options sheets, beside the slant. Reaches every thread hatch
+     * "Thread density" only, beside the slant. Reaches every thread hatch
      * the same way: `SettingsStore.updatePdfPrefs` mirrors it into `ThreadHatchStyle.density`
      * for the composers, and the canvases take it from the ViewModel's flow.
      */
@@ -352,8 +354,9 @@ data class PdfPrefs(
      */
     val outputFont: OutputFont = OutputFont.Default,
     /**
-     * How a DUAL value is set on the drawing — Settings → Drawing → "Dual-unit layout" and both
-     * PDF options sheets. Only ever visible on a sheet whose document has `dual_units` on.
+     * How a DUAL value is set on the drawing — Settings → Drawing → "Dual-unit layout" (and the
+     * editor's Preview options), never the PDF options panels (on-device ruling: rarely changed).
+     * Only ever visible on a sheet whose document has `dual_units` on.
      *
      * [DualUnitLayout.STACKED] sets the two terms on two lines. That is the app's only label form
      * which moves HEIGHT, so unlike the other drawing prefs it is threaded explicitly into the
@@ -460,22 +463,41 @@ data class PdfPrefs(
     val runoutBubbleDropScale: Float = PDF_RUNOUT_BUBBLE_DROP_SCALE_DEFAULT,
     /**
      * Multiplier on the FOOTER block's text — the three columns the schematic and the consolidated
-     * sheet share (`drawFooter`, `pdf/SheetFooter.kt`), one of [PDF_TEXT_SCALES]. Settings → Drawing
-     * → "Footer text size" and both of those sheets' PDF options (on-device request: readers with
-     * poor eyesight, and the footer has room). The band is measured from the scaled paint, so a
-     * larger size reserves its own height and the drawing above gives it up.
+     * sheet share (`drawFooter`, `pdf/SheetFooter.kt`), one of [PDF_TEXT_SCALES] (on-device
+     * request: readers with poor eyesight, and the footer has room). The band is measured from the
+     * scaled paint, so a larger size reserves its own height and the drawing above gives it up.
+     * As stored, the [SheetTextGroup.SCHEMATIC] group's footer size; the consolidated sheet reads
+     * [runoutFooterTextScale] through [forTextGroup].
      */
     val footerTextScale: Float = PDF_TEXT_SCALE_DEFAULT,
     /**
-     * Multiplier on the DIMENSION values — the rail lengths, the schematic's Ø callouts and the
-     * consolidated sheet's in-profile Ø values — one of [PDF_TEXT_SCALES]; the rail lane pitch grows
-     * with it so a larger value never crowds the next rail. Settings → Drawing → "Dimension text
-     * size" and the same PDF options as [footerTextScale]. The undercut sheet's strips follow it
-     * too (rail values, Ø values, captions and strip titles, fitted down per sheet by
-     * `fittedUndercutTextScale`), from its own options' "Dimension text size". The wear sheet
-     * keeps its own sizes.
+     * Multiplier on the DIMENSION values — the rail lengths and the Ø callouts — one of
+     * [PDF_TEXT_SCALES]; the rail lane pitch grows with it so a larger value never crowds the next
+     * rail. The value the composers read: [footerTextScale] and this are the SCHEMATIC group's
+     * sizes as stored, and [forTextGroup] swaps a sheet group's own sizes into both before a
+     * runout-family or undercut composer draws (on-device request: the schematic at one size, the
+     * undercut sections larger). The wear sheet reads neither.
+     *
+     * As stored: the [SheetTextGroup.SCHEMATIC] group — the schematic, every Final sheet and the
+     * section sheets — Settings → Drawing → "Schematic sheets" and the schematic PDF options.
      */
     val dimTextScale: Float = PDF_TEXT_SCALE_DEFAULT,
+    /**
+     * [SheetTextGroup.RUNOUT]'s dimension text — the classic runout sheet and the consolidated
+     * sheet (rail values, in-profile Ø values), one of [PDF_TEXT_SCALES]. Settings → Drawing →
+     * "Runout and consolidated sheets" and those two sheets' PDF options. Starts at the user's
+     * [dimTextScale] as it stood before the groups existed (`SettingsStore`'s read fallback).
+     */
+    val runoutDimTextScale: Float = PDF_TEXT_SCALE_DEFAULT,
+    /** [SheetTextGroup.RUNOUT]'s footer text — the consolidated sheet's footer and TIR row. */
+    val runoutFooterTextScale: Float = PDF_TEXT_SCALE_DEFAULT,
+    /**
+     * [SheetTextGroup.UNDERCUT]'s dimension text — the undercut sheet's strips (rail values, Ø
+     * values, captions and strip titles), fitted down per sheet by `fittedUndercutTextScale`. One
+     * of [PDF_TEXT_SCALES]; Settings → Drawing → "Undercut sheet" and the undercut PDF options. The
+     * undercut sheet has no footer, so the group carries no footer size.
+     */
+    val undercutDimTextScale: Float = PDF_TEXT_SCALE_DEFAULT,
 ) {
     /** The anchor heights in PDF points (72 pt per paper inch) — what the geometry consumes. */
     val curveLoHeightPt: Float get() = curveLoHeightIn * 72f
@@ -501,5 +523,38 @@ data class PdfPrefs(
                 .coerceIn(PDF_RUNOUT_BUBBLE_DROP_SCALE_MIN, PDF_RUNOUT_BUBBLE_DROP_SCALE_MAX),
             footerTextScale = footerTextScale.coerceIn(PDF_TEXT_SCALE_MIN, PDF_TEXT_SCALE_MAX),
             dimTextScale = dimTextScale.coerceIn(PDF_TEXT_SCALE_MIN, PDF_TEXT_SCALE_MAX),
+            runoutDimTextScale = runoutDimTextScale.coerceIn(PDF_TEXT_SCALE_MIN, PDF_TEXT_SCALE_MAX),
+            runoutFooterTextScale = runoutFooterTextScale.coerceIn(PDF_TEXT_SCALE_MIN, PDF_TEXT_SCALE_MAX),
+            undercutDimTextScale = undercutDimTextScale.coerceIn(PDF_TEXT_SCALE_MIN, PDF_TEXT_SCALE_MAX),
         )
+
+    /**
+     * These prefs as [group]'s sheets read them: [dimTextScale] and [footerTextScale] replaced by
+     * the group's own sizes, every other field untouched. [SheetTextGroup.SCHEMATIC] is the
+     * identity. Applied ONCE at a composer's entry, so everything downstream — the footer, the rail
+     * planner, the Ø leaders — reads the group's sizes without knowing the groups exist.
+     */
+    fun forTextGroup(group: SheetTextGroup): PdfPrefs = when (group) {
+        SheetTextGroup.SCHEMATIC -> this
+        SheetTextGroup.RUNOUT -> copy(
+            dimTextScale = runoutDimTextScale,
+            footerTextScale = runoutFooterTextScale,
+        )
+        SheetTextGroup.UNDERCUT -> copy(dimTextScale = undercutDimTextScale)
+    }
 }
+
+/**
+ * The sheet families that each carry their own text sizes (on-device request: the schematic at one
+ * size, the undercut sections generally larger). App-wide like every other look pref.
+ *
+ * - [SCHEMATIC] — the schematic, every Final sheet (Final schematic, Original + Final, Full
+ *   length, the Final schematic with runout bubbles, the Final tab's blank runout sheet) and the
+ *   section sheets: [PdfPrefs.dimTextScale] / [PdfPrefs.footerTextScale].
+ * - [RUNOUT] — the classic runout sheet and the consolidated sheet:
+ *   [PdfPrefs.runoutDimTextScale] / [PdfPrefs.runoutFooterTextScale].
+ * - [UNDERCUT] — the undercut sheet's strips: [PdfPrefs.undercutDimTextScale] (no footer).
+ *
+ * The wear sheet keeps its own fixed sizes and belongs to none.
+ */
+enum class SheetTextGroup { SCHEMATIC, RUNOUT, UNDERCUT }

@@ -2,9 +2,6 @@ package com.android.shaftschematic.ui.screen
 
 import android.app.Application
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assert
@@ -26,8 +23,6 @@ import com.android.shaftschematic.pdf.PdfExportMode
 import com.android.shaftschematic.settings.PdfTieringMode
 import com.android.shaftschematic.ui.viewmodel.ShaftViewModel
 import com.android.shaftschematic.ui.viewmodel.setPdfFooterCapturedKwInset
-import com.android.shaftschematic.ui.viewmodel.setPdfShowUnitsNote
-import com.android.shaftschematic.util.DualUnitLayout
 import com.android.shaftschematic.util.FractionStyle
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -208,7 +203,7 @@ class PdfOptionsSectionsTest {
 
     // ── The sheets' section layout ──────────────────────────────────────────────
     // Both sheets build their sections from ONE ordered list (`OptionsSection`): most-used on
-    // top, the shaft fit open, everything from Runout bubbles down folded, Units last. These
+    // top, the shaft fit open, everything from Runout bubbles down folded. These
     // host the real sheets so a section moved, renamed, or opened by default on one of them
     // fails here rather than reading as a different sheet on device.
 
@@ -241,11 +236,7 @@ class PdfOptionsSectionsTest {
                     arrowSizePt = 4f,
                     footerTextScale = 1f,
                     dimTextScale = 1f,
-                    threadSlant = 3f,
-                    threadDensity = 0.5f,
                     fractionStyle = FractionStyle.Default,
-                    dualUnitLayout = DualUnitLayout.Default,
-                    dualUnits = false,
                     heightScale = 1f,
                     linersProportional = false,
                     linerCompression = 1f,
@@ -297,8 +288,7 @@ class PdfOptionsSectionsTest {
     }
 
     /** The shared sheet as the Consolidated Output preview configures it. */
-    private fun hostConsolidatedSheet(hasThreads: Boolean) {
-        val vm = vm()
+    private fun hostConsolidatedSheet(vm: ShaftViewModel = vm()) {
         rule.setContent {
             MaterialTheme {
                 RunoutWearOptionsSheet(
@@ -311,8 +301,6 @@ class PdfOptionsSectionsTest {
                     showSBreak = true,
                     showDimensionArrows = true,
                     showSheetTextSizes = true,
-                    hasThreads = hasThreads,
-                    onDualUnitsChange = {},
                     onSetBlankDraft = {},
                     showHeightSlider = true,
                     showLinerCompression = true,
@@ -337,8 +325,6 @@ class PdfOptionsSectionsTest {
         }
     }
 
-    private val allSectionTags = OptionsSection.entries.map { it.testTag }
-
     @Test
     fun `the schematic sheet opens on the Shaft section holding the height slider`() {
         hostSchematicSheet(bareSpec)
@@ -350,48 +336,73 @@ class PdfOptionsSectionsTest {
 
     @Test
     fun `the consolidated sheet opens on the Shaft section holding the height slider`() {
-        hostConsolidatedSheet(hasThreads = false)
+        hostConsolidatedSheet()
 
         rule.onNodeWithText("Shaft height", substring = true).assertExists()
     }
 
-    @Test
-    fun `the schematic sheet offers the Thread section only on a threaded shaft`() {
-        hostSchematicSheet(bareSpec)
+    // ── Thread hatch and units live in Settings only ─────────────────────────────
+    // On-device ruling: thread slant / density and the units (dual units, dual-unit layout, the
+    // units note) are rare changes, so they are in Settings → Drawing and on no PDF options panel.
+    // Every folded section is opened before checking, so a control moved into another section
+    // fails here too — on a threaded shaft with dual units on, where the old sections showed.
 
-        rule.onNodeWithTag("options_thread_expander").assertDoesNotExist()
-        rule.onNodeWithText("Thread slant", substring = true).assertDoesNotExist()
+    private fun openEveryFoldedSection() {
+        OptionsSection.entries.filter { !it.initiallyExpanded }.forEach { section ->
+            if (rule.onAllNodesWithTag(section.testTag).fetchSemanticsNodes().isNotEmpty()) {
+                rule.onNodeWithTag(section.testTag).performScrollTo().performClick()
+            }
+        }
+        rule.waitForIdle()
+    }
+
+    private fun assertNoThreadOrUnitsControls() {
+        assertTrue(OptionsSection.entries.none { it.title == "Thread" || it.title == "Units" })
+        listOf(
+            "options_thread_expander",
+            "options_units_expander",
+            "thread_slant_slider",
+            "thread_density_slider",
+            "options_units_note",
+            "dual_unit_layout_inline",
+            "dual_unit_layout_stacked",
+        ).forEach { tag -> rule.onNodeWithTag(tag).assertDoesNotExist() }
+        rule.onNodeWithText("Dual units").assertDoesNotExist()
+        rule.onNodeWithText("Dual-unit layout").assertDoesNotExist()
     }
 
     @Test
-    fun `the schematic sheet's Thread section is collapsed until tapped`() {
-        hostSchematicSheet(threadedSpec)
+    fun `neither Thread nor Units appears on the schematic panel`() {
+        val vm = vm()
+        vm.setDualUnits(true, persist = false)
+        hostSchematicSheet(threadedSpec, vm)
 
-        rule.onNodeWithTag("options_thread_expander").assertExists()
-        rule.onNodeWithText("Thread slant", substring = true).assertDoesNotExist()
-
-        rule.onNodeWithTag("options_thread_expander").performScrollTo().performClick()
-
-        rule.onNodeWithTag("thread_slant_slider").assertExists()
-        rule.onNodeWithTag("thread_density_slider").assertExists()
+        openEveryFoldedSection()
+        assertNoThreadOrUnitsControls()
     }
 
     @Test
-    fun `the shared sheet offers the Thread section only when told there are threads`() {
-        hostConsolidatedSheet(hasThreads = false)
+    fun `neither Thread nor Units appears on the undercut panel`() {
+        val vm = vm()
+        vm.setDualUnits(true, persist = false)
+        rule.setContent {
+            MaterialTheme {
+                UndercutOptionsSheet(vm = vm, blankDraft = false, onSetBlankDraft = {})
+            }
+        }
 
-        rule.onNodeWithTag("options_thread_expander").assertDoesNotExist()
+        openEveryFoldedSection()
+        assertNoThreadOrUnitsControls()
     }
 
     @Test
-    fun `the shared sheet's Thread section is collapsed until tapped`() {
-        hostConsolidatedSheet(hasThreads = true)
+    fun `neither Thread nor Units appears on the consolidated panel`() {
+        val vm = vm()
+        vm.setDualUnits(true, persist = false)
+        hostConsolidatedSheet(vm)
 
-        rule.onNodeWithTag("thread_slant_slider").assertDoesNotExist()
-
-        rule.onNodeWithTag("options_thread_expander").performScrollTo().performClick()
-
-        rule.onNodeWithTag("thread_slant_slider").assertExists()
+        openEveryFoldedSection()
+        assertNoThreadOrUnitsControls()
     }
 
     @Test
@@ -413,35 +424,32 @@ class PdfOptionsSectionsTest {
 
         assertSectionOrder(
             "options_shaft_expander",
-            "options_thread_expander",
             "options_lines_expander",
             "options_footer_expander",
             "options_shade_expander",
             "options_measure_ref_expander",
-            "options_units_expander",
         )
     }
 
     @Test
     fun `the consolidated sheet lays its sections out in the documented order`() {
-        hostConsolidatedSheet(hasThreads = true)
+        hostConsolidatedSheet()
 
         assertSectionOrder(
             "options_shaft_expander",
             "options_bubbles_expander",
-            "options_thread_expander",
             "options_lines_expander",
             "options_footer_expander",
             "options_shade_expander",
             "options_measure_ref_expander",
-            "options_units_expander",
         )
     }
 
     // ── Every choice that changes the printed sheet, in the menu ────────────────
-    // On-device request: the output font, the units note, the optional footer lines and Template
-    // mode live on the preview's options panel as well as in Settings, each on the sheets it
-    // changes. The default drawing size is the exception — Settings only (on-device ruling).
+    // On-device request: the output font, the optional footer lines and Template mode live on
+    // the preview's options panel as well as in Settings, each on the sheets it changes. The
+    // default drawing size, the thread hatch and the units are the exceptions — Settings only
+    // (on-device rulings).
 
     @Test
     fun `the output font picker sits in Lines and text on both sheets`() {
@@ -466,7 +474,6 @@ class PdfOptionsSectionsTest {
                     vm = vm,
                     showShadeExplicitBodiesOnly = false,
                     showUndercutLineArt = true,
-                    onDualUnitsChange = {},
                     onSetBlankDraft = {},
                 )
             }
@@ -498,10 +505,9 @@ class PdfOptionsSectionsTest {
     }
 
     @Test
-    fun `the footer lines and the units note toggle the shared prefs`() {
+    fun `the footer lines toggle the shared prefs`() {
         val vm = vm()
         val kw0 = vm.pdfFooterCapturedKwInset.value
-        val note0 = vm.pdfShowUnitsNote.value
         try {
             hostSchematicSheet(bareSpec, vm)
             rule.onNodeWithTag("options_footer_captured_kw").assertDoesNotExist()
@@ -510,15 +516,9 @@ class PdfOptionsSectionsTest {
             rule.onNodeWithTag("options_footer_captured_kw").performScrollTo().performClick()
             rule.waitForIdle()
             assertEquals(!kw0, vm.pdfFooterCapturedKwInset.value)
-
-            rule.onNodeWithTag("options_units_expander").performScrollTo().performClick()
-            rule.onNodeWithTag("options_units_note").performScrollTo().performClick()
-            rule.waitForIdle()
-            assertEquals(!note0, vm.pdfShowUnitsNote.value)
         } finally {
-            // The setters also write the process-wide PdfPrefs mirror; put it back.
+            // The setter also writes the process-wide PdfPrefs mirror; put it back.
             vm.setPdfFooterCapturedKwInset(kw0, persist = false)
-            vm.setPdfShowUnitsNote(note0, persist = false)
         }
     }
 
@@ -526,14 +526,14 @@ class PdfOptionsSectionsTest {
     fun `the default drawing size stays in Settings, off every sheet`() {
         // The per-job Shaft height slider adjusts each sheet against the app-wide baseline; the
         // baseline itself is set once, in Settings → Drawing (on-device ruling).
-        hostConsolidatedSheet(hasThreads = false)
+        hostConsolidatedSheet()
         rule.onNodeWithText("4″ shaft draws", substring = true).assertDoesNotExist()
         rule.onNodeWithTag("drawing_size_standard").assertDoesNotExist()
         rule.onNodeWithText("Default drawing size").assertDoesNotExist()
     }
 
     @Test
-    fun `the wear sheet carries the units note but no footer lines`() {
+    fun `the wear sheet carries no footer lines`() {
         val vm = vm()
         rule.setContent {
             MaterialTheme {
@@ -546,40 +546,11 @@ class PdfOptionsSectionsTest {
                     showWearControls = true,
                     showHeightSlider = true,
                     showShadeExplicitBodiesOnly = false,
-                    onDualUnitsChange = {},
                     onSetBlankDraft = {},
                 )
             }
         }
         rule.onNodeWithTag("options_footer_expander").assertDoesNotExist()
-        rule.onNodeWithTag("options_units_expander").performScrollTo().performClick()
-        rule.onNodeWithTag("options_units_note").assertExists()
-    }
-
-    @Test
-    fun `Units is the last section on both sheets`() {
-        hostConsolidatedSheet(hasThreads = true)
-
-        val unitsTop = headerTop("options_units_expander")
-        allSectionTags.filter { it != "options_units_expander" }.forEach { tag ->
-            val nodes = rule.onAllNodesWithTag(tag).fetchSemanticsNodes()
-            if (nodes.isNotEmpty()) {
-                assertTrue("$tag sits above Units", headerTop(tag) < unitsTop)
-            }
-        }
-    }
-
-    @Test
-    fun `Units is the last section on the schematic sheet`() {
-        hostSchematicSheet(threadedSpec)
-
-        val unitsTop = headerTop("options_units_expander")
-        allSectionTags.filter { it != "options_units_expander" }.forEach { tag ->
-            val nodes = rule.onAllNodesWithTag(tag).fetchSemanticsNodes()
-            if (nodes.isNotEmpty()) {
-                assertTrue("$tag sits above Units", headerTop(tag) < unitsTop)
-            }
-        }
     }
 
     @Test
@@ -596,7 +567,6 @@ class PdfOptionsSectionsTest {
                     showWearControls = true,
                     showHeightSlider = true,
                     showShadeExplicitBodiesOnly = false,
-                    onDualUnitsChange = {},
                     onSetBlankDraft = {},
                 )
             }
@@ -610,7 +580,6 @@ class PdfOptionsSectionsTest {
             "options_wear_expander",
             "options_lines_expander",
             "options_shade_expander",
-            "options_units_expander",
         )
     }
 
@@ -627,7 +596,6 @@ class PdfOptionsSectionsTest {
                     vm = vm,
                     showShadeExplicitBodiesOnly = false,
                     showUndercutLineArt = true,
-                    onDualUnitsChange = {},
                     onSetBlankDraft = {},
                 )
             }
@@ -637,7 +605,6 @@ class PdfOptionsSectionsTest {
         assertSectionOrder(
             "options_lines_expander",
             "options_shade_expander",
-            "options_units_expander",
         )
     }
 
@@ -646,7 +613,7 @@ class PdfOptionsSectionsTest {
         val vm = vm()
         rule.setContent {
             MaterialTheme {
-                UndercutOptionsSheet(vm = vm, blankDraft = false, onSetBlankDraft = {}, showThreadControls = false)
+                UndercutOptionsSheet(vm = vm, blankDraft = false, onSetBlankDraft = {})
             }
         }
 
@@ -658,27 +625,11 @@ class PdfOptionsSectionsTest {
     }
 
     @Test
-    fun `the undercut sheet shows its Thread section only when it draws a thread`() {
-        val vm = vm()
-        var draws by mutableStateOf(false)
-        rule.setContent {
-            MaterialTheme {
-                UndercutOptionsSheet(vm = vm, blankDraft = false, onSetBlankDraft = {}, showThreadControls = draws)
-            }
-        }
-        rule.onNodeWithTag("options_thread_expander").assertDoesNotExist()
-
-        draws = true
-        rule.waitForIdle()
-        rule.onNodeWithTag("options_thread_expander").assertExists()
-    }
-
-    @Test
     fun `the undercut options panel carries the Drawn depth slider`() {
         val vm = vm()
         rule.setContent {
             MaterialTheme {
-                UndercutOptionsSheet(vm = vm, blankDraft = false, onSetBlankDraft = {}, showThreadControls = false)
+                UndercutOptionsSheet(vm = vm, blankDraft = false, onSetBlankDraft = {})
             }
         }
         rule.onNodeWithTag("pdf_undercut_exaggeration_slider").performScrollTo().assertExists()

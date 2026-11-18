@@ -8,6 +8,7 @@ import com.android.shaftschematic.gfx.fontMetrics
 import com.android.shaftschematic.gfx.left
 import com.android.shaftschematic.gfx.Paint
 import com.android.shaftschematic.gfx.PaintStyle
+import com.android.shaftschematic.gfx.Rect
 import com.android.shaftschematic.gfx.right
 import com.android.shaftschematic.gfx.strokeWidth
 import com.android.shaftschematic.gfx.style
@@ -18,11 +19,15 @@ import com.android.shaftschematic.geom.DiameterCalloutLayout
 import com.android.shaftschematic.geom.formatBlendAngleDeg
 import com.android.shaftschematic.pdf.formatDiaWithUnitDualLabel
 import com.android.shaftschematic.pdf.formatLenWithUnitDualLabel
+import com.android.shaftschematic.pdf.formatTolerancedDiaWithUnit
 import com.android.shaftschematic.util.DualLabel
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.drawDualLabel
+import com.android.shaftschematic.util.drawRichText
 import com.android.shaftschematic.util.dualStackMetrics
 import com.android.shaftschematic.util.measureDualLabel
+import com.android.shaftschematic.util.measureRichText
+import com.android.shaftschematic.util.setsStacked
 
 /**
  * Renders simple diameter leaders with a dog-leg and "Ø" label.
@@ -46,6 +51,14 @@ import com.android.shaftschematic.util.measureDualLabel
  * same Ø) prints its value once: both leaders drop from the shaft's bottom edge to the same row, one
  * line joins them, and the value hangs past the outer leader. Placement, occupancy and ink all read
  * the same [DiameterCalloutLayout.Placement.secondAnchorX].
+ *
+ * A value with a tolerance ([DiaCallout.tolerance] — a liner OD's or a body Ø's, on-device request)
+ * sets it the drafting way: the two limits stacked in smaller text right after the PRIMARY value,
+ * upper over lower, left edges aligned, the pair centred on the value's digits; an inline dual
+ * secondary follows the stack, a stacked one stays on its own line. A whole inch value takes the
+ * limits' decimal places (`Ø 9.000"`, [formatTolerancedDiaWithUnit]). ONE [TolLayout] gives the
+ * width the planner places, the box [occupancy] reserves and the positions [drawOne] inks. A
+ * blank draft prints no tolerance.
  */
 class DiameterLeaderRenderer(
     private val pageX: (Double) -> Float,   // mm → page X
@@ -218,12 +231,15 @@ class DiameterLeaderRenderer(
                 val textY = kinkY + textDrop
                 val textLeft = placements[i].labelLeft
                 val textRight = textLeft + labelWidth(call)
+                // A tolerance's stack may stand a little above or below the value's own box.
+                val tol = tolLayout(call)
                 add(
                     BelowShaftLabelLayout.Box(
                         left = textLeft,
                         right = textRight,
-                        top = textY - above,
-                        bottom = textY - above + textH,
+                        top = if (tol == null) textY - above else minOf(textY - above, textY + tol.topDy),
+                        bottom = if (tol == null) textY - above + textH
+                                 else maxOf(textY - above + textH, textY + tol.bottomDy),
                     )
                 )
                 // Leader: the vertical drop(s) from the shaft plus the horizontal dogleg into the
@@ -246,8 +262,15 @@ class DiameterLeaderRenderer(
      */
     private fun label(call: DiaCallout): DualLabel = when (call.kind) {
         CalloutKind.DIAMETER -> {
-            if (blankValues) DualLabel.single("Ø")
-            else formatDiaWithUnitDualLabel(call.valueMm, call.unit, call.dual).let { it.copy(primary = "Ø " + it.primary) }
+            val tol = call.tolerance
+            when {
+                blankValues -> DualLabel.single("Ø")
+                // A toleranced inch value takes its limits' decimal places (`Ø 9.000"`).
+                tol != null -> formatDiaWithUnitDualLabel(call.valueMm, call.unit, call.dual).let {
+                    it.copy(primary = "Ø " + formatTolerancedDiaWithUnit(call.valueMm, call.unit, tol))
+                }
+                else -> formatDiaWithUnitDualLabel(call.valueMm, call.unit, call.dual).let { it.copy(primary = "Ø " + it.primary) }
+            }
         }
         // A blank draft keeps the identifier and leaves the number to be written in, as for Ø.
         CalloutKind.ANGLE -> when {
@@ -258,8 +281,96 @@ class DiameterLeaderRenderer(
     }
 
     private fun labelWidth(call: DiaCallout): Float =
-        textPaint.measureDualLabel(label(call), dualStacked) +
+        (tolLayout(call)?.width ?: textPaint.measureDualLabel(label(call), dualStacked)) +
             if (blankValues) 4f + blankRuleWidth else 0f
+
+    /** The tolerance limits' paint: the value's own, at [TOL_TEXT_SCALE] of its size. */
+    private val tolPaint: Paint by lazy {
+        Paint(textPaint).apply { textSize = textPaint.textSize * TOL_TEXT_SCALE }
+    }
+
+    /**
+     * Where a toleranced value's pieces sit, x from the label's left edge and y from its first
+     * baseline (negative = up). Null when [call] prints no tolerance — a blank draft, an angle
+     * callout, or none stored — and the label is set exactly as before.
+     *
+     * The limits start [TOL_GAP_FRAC] of a text size after the primary value; the pair is centred
+     * on half the value's digit height, [TOL_ROW_GAP_FRAC] of the limits' size between the upper's
+     * baseline and the lower's digits. An inline dual secondary (` [228.6 mm]`) follows the stack;
+     * a stacked one keeps its own line, and the label is as wide as its wider line.
+     */
+    private class TolLayout(
+        val text: DiaToleranceText,
+        val primary: String,
+        /** The inline secondary as drawn after the stack (` [228.6 mm]`), or null. */
+        val inlineSecondary: String?,
+        /** The stacked secondary on the second line, or null. */
+        val stackedSecondary: String?,
+        val tolX: Float,
+        val afterTolX: Float,
+        val upperDy: Float,
+        val lowerDy: Float,
+        val topDy: Float,
+        val bottomDy: Float,
+        val width: Float,
+    )
+
+    private fun tolLayout(call: DiaCallout): TolLayout? {
+        if (blankValues || call.kind != CalloutKind.DIAMETER) return null
+        val tol = call.tolerance ?: return null
+        val lbl = label(call)
+        val stacked = lbl.setsStacked(dualStacked)
+        val primaryW = textPaint.measureRichText(lbl.primary)
+        val tolX = primaryW + textPaint.textSize * TOL_GAP_FRAC
+        val tolW = maxOf(tolPaint.measureRichText(tol.upper), tolPaint.measureRichText(tol.lower))
+        val afterTolX = tolX + tolW
+        val inlineSecondary = lbl.secondary?.takeIf { !stacked }?.let { " [$it]" }
+        val stackedSecondary = lbl.secondary?.takeIf { stacked }
+        val width = when {
+            inlineSecondary != null -> afterTolX + textPaint.measureRichText(inlineSecondary)
+            stackedSecondary != null -> maxOf(afterTolX, textPaint.measureRichText(stackedSecondary))
+            else -> afterTolX
+        }
+        val centreDy = -digitCapHeight(textPaint) * 0.5f
+        val tolCap = digitCapHeight(tolPaint)
+        val rowGap = tolPaint.textSize * TOL_ROW_GAP_FRAC
+        val upperDy = centreDy - rowGap * 0.5f
+        val lowerDy = centreDy + rowGap * 0.5f + tolCap
+        val tfm = tolPaint.fontMetrics
+        return TolLayout(
+            text = tol,
+            primary = lbl.primary,
+            inlineSecondary = inlineSecondary,
+            stackedSecondary = stackedSecondary,
+            tolX = tolX,
+            afterTolX = afterTolX,
+            upperDy = upperDy,
+            lowerDy = lowerDy,
+            topDy = upperDy + tfm.ascent,
+            bottomDy = lowerDy + tfm.descent,
+            width = width,
+        )
+    }
+
+    private val capScratch = Rect()
+
+    /** The digits' cap height in [paint]; a typical ratio when the font cannot be measured. */
+    private fun digitCapHeight(paint: Paint): Float {
+        paint.getTextBounds("0", 0, 1, capScratch)
+        val measured = -capScratch.top.toFloat()
+        return if (measured > 0f) measured else paint.textSize * 0.72f
+    }
+
+    /** Draws a toleranced value at ([x], [baseline]) from its [TolLayout]. */
+    private fun drawToleranced(canvas: Canvas, t: TolLayout, x: Float, baseline: Float) {
+        canvas.drawRichText(t.primary, x, baseline, textPaint)
+        canvas.drawRichText(t.text.upper, x + t.tolX, baseline + t.upperDy, tolPaint)
+        canvas.drawRichText(t.text.lower, x + t.tolX, baseline + t.lowerDy, tolPaint)
+        t.inlineSecondary?.let { canvas.drawRichText(it, x + t.afterTolX, baseline, textPaint) }
+        t.stackedSecondary?.let {
+            canvas.drawRichText(it, x, baseline + textPaint.dualStackMetrics().advance, textPaint)
+        }
+    }
 
     private fun drawOne(canvas: Canvas, call: DiaCallout, tier: Int, textX: Float, x: Float, second: Float? = null) {
         val (startY, kinkY, textY) = when (call.side) {
@@ -293,7 +404,9 @@ class DiameterLeaderRenderer(
         }
 
         val lbl = label(call)
-        canvas.drawDualLabel(lbl, textX, textY, textPaint, dualStacked)
+        val tol = tolLayout(call)
+        if (tol != null) drawToleranced(canvas, tol, textX, textY)
+        else canvas.drawDualLabel(lbl, textX, textY, textPaint, dualStacked)
         if (blankValues) {
             // Writable rule after the "Ø" so the machinist can pencil the measured OD in.
             val ruleStart = textX + textPaint.measureDualLabel(lbl, dualStacked) + 4f
@@ -327,6 +440,15 @@ fun blendAngleRadiusCalloutLabel(angleDeg: Float, radiusMm: Double, unit: UnitSy
     blendRadiusCalloutLabel(radiusMm, unit, dual).let {
         it.copy(primary = blendAngleCalloutText(angleDeg) + ", " + it.primary)
     }
+
+/** A tolerance's limits print at this fraction of the value's text size. */
+private const val TOL_TEXT_SCALE = 0.65f
+
+/** Gap between a value and its tolerance stack, as a fraction of the value's text size. */
+private const val TOL_GAP_FRAC = 0.25f
+
+/** Air between the upper limit's baseline and the lower limit's digits, as a fraction of the limits' size. */
+private const val TOL_ROW_GAP_FRAC = 0.3f
 
 /** How far inside its component's ends a slid Ø leader stays. */
 private const val ANCHOR_END_INSET_PT = 6f

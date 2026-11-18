@@ -132,6 +132,12 @@ import com.android.shaftschematic.util.randomUuidString
  *   request: an explicit body exists to sit at an exact point, often off the coupling end).
  *   Canonical [startFromAftMm] never moves on a reference SWITCH. Default AFT, so every
  *   document saved before the field decodes unchanged.
+ * @property diaTolPlusMm The Ø's upper deviation, a MAGNITUDE in canonical mm, stored verbatim
+ *   (0 = none). With [diaTolMinusMm] it prints as a stacked tolerance after the body's Ø callout
+ *   value (`+.002` over `-.000` — on-device request), so it shows only where that callout does
+ *   ([showDiaOnDrawing]). Print-only: nothing in geometry, resolve, OAL or collision reads it.
+ *   Split fragments both keep it and a merge takes the AFT fragment's ([carryBodyDisplay]).
+ * @property diaTolMinusMm The Ø's lower deviation, a magnitude in canonical mm (0 = none).
  */
 @Serializable
 data class Body(
@@ -167,7 +173,12 @@ data class Body(
     val fiberglass: Boolean = false,
     /** Optional user-defined label for display (not used for geometry). */
     val label: String? = null,
+    val diaTolPlusMm: Float = 0f,
+    val diaTolMinusMm: Float = 0f,
 ) : Segment
+
+/** True when this body's Ø carries a tolerance (either side > 0). */
+val Body.hasDiaTolerance: Boolean get() = diaTolPlusMm > 0f || diaTolMinusMm > 0f
 
 /** Basic invariants for a Body. */
 fun Body.isValid(overallLengthMm: Float): Boolean =

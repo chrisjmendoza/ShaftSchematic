@@ -506,13 +506,20 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
     internal val _wearPitBrushSizeFactor = MutableStateFlow(PIT_SIZE_FACTOR_DEFAULT)
     val wearPitBrushSizeFactor: StateFlow<Float> = _wearPitBrushSizeFactor.asStateFlow()
 
-    // Sheet text sizes — multipliers on the footer block's text and on the dimension values.
+    // Sheet text sizes — multipliers on the footer block's text and on the dimension values, one
+    // pair per sheet group (`SheetTextGroup`): the first two are the SCHEMATIC group's.
     // Also preview re-render keys: the composers read them through the PdfPrefs snapshot, which
     // is not snapshot state.
     internal val _pdfFooterTextScale = MutableStateFlow(PdfPrefs().footerTextScale)
     val pdfFooterTextScale: StateFlow<Float> = _pdfFooterTextScale.asStateFlow()
     internal val _pdfDimTextScale = MutableStateFlow(PdfPrefs().dimTextScale)
     val pdfDimTextScale: StateFlow<Float> = _pdfDimTextScale.asStateFlow()
+    internal val _pdfRunoutFooterTextScale = MutableStateFlow(PdfPrefs().runoutFooterTextScale)
+    val pdfRunoutFooterTextScale: StateFlow<Float> = _pdfRunoutFooterTextScale.asStateFlow()
+    internal val _pdfRunoutDimTextScale = MutableStateFlow(PdfPrefs().runoutDimTextScale)
+    val pdfRunoutDimTextScale: StateFlow<Float> = _pdfRunoutDimTextScale.asStateFlow()
+    internal val _pdfUndercutDimTextScale = MutableStateFlow(PdfPrefs().undercutDimTextScale)
+    val pdfUndercutDimTextScale: StateFlow<Float> = _pdfUndercutDimTextScale.asStateFlow()
 
     // Thread-hatch slant factor. The composers read it via `ThreadHatchStyle.slant` (not
     // snapshot state), so this flow keys each preview's re-render; the Compose canvases take
@@ -1367,6 +1374,24 @@ class ShaftViewModel(application: Application) : AndroidViewModel(application) {
             SettingsStore.pdfDimTextScaleFlow(getApplication()).collectLatest { persisted ->
                 _pdfDimTextScale.value = persisted
                 SettingsStore.updatePdfPrefs { it.copy(dimTextScale = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfRunoutFooterTextScaleFlow(getApplication()).collectLatest { persisted ->
+                _pdfRunoutFooterTextScale.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(runoutFooterTextScale = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfRunoutDimTextScaleFlow(getApplication()).collectLatest { persisted ->
+                _pdfRunoutDimTextScale.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(runoutDimTextScale = persisted) }
+            }
+        }
+        viewModelScope.launch {
+            SettingsStore.pdfUndercutDimTextScaleFlow(getApplication()).collectLatest { persisted ->
+                _pdfUndercutDimTextScale.value = persisted
+                SettingsStore.updatePdfPrefs { it.copy(undercutDimTextScale = persisted) }
             }
         }
         viewModelScope.launch {

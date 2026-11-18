@@ -130,14 +130,15 @@ fallback), so it carries neither the height slider nor the S-break slider.
 - **What earns a sheet row.** Every Settings choice that changes a printed sheet also gets
   a row on the options sheet of each document it changes, grouped into that sheet's
   sections (ruling 2026-11-07, below) — line weight, S-break, shading, fractions, the output
-  font, arrows, text sizes, dual-unit layout, the units note, the optional footer lines,
-  Template mode, the wear sliders, runout bubbles. It stays Settings-only when it is a
+  font, arrows, text sizes, the optional footer lines, Template mode, the wear sliders,
+  runout bubbles. It stays Settings-only when it is a
   baseline the sheet's own controls already stand on (the sizing-curve anchors, "Default
   drawing size" — the app-wide range every shaft starts from; the per-job Shaft height on the
   sheet multiplies it, so a copy beside that slider would read as a per-sheet choice), a
   capability gate (per-component units, liner shoulders), a default for a document field
-  (dual-units default), export plumbing that prints nothing (open after export), or profile
-  management. A control that only means something on one document
+  (dual-units default), export plumbing that prints nothing (open after export), profile
+  management, or a rare change the user ruled off the sheets: the thread hatch (slant, density)
+  and the units (dual units, dual-unit layout, units note) — ruling 2026-11-18, below. A control that only means something on one document
   may live on that document's sheet alone (runout bubble size/height) — still app-wide,
   still captured by profiles. Legibility rule: a sheet's header says its drawing settings
   are app-wide, and the per-job controls on it say "saved with this job" in their own
@@ -296,6 +297,15 @@ waits for the button.
   option was for the user to be able to set overall default range"): the baseline stays
   Settings-only. The Q3 posture is unchanged: every sheet row is a remote control for the one
   app-wide pref, never a per-document copy. → §3.3.
+
+### Resolved 2026-11-18
+
+- **Thread and units leave the preview menu.** Chris: "let's migrate the thread options to the
+  settings only and remove from the pdf preview. I don't change it enough to have it matter
+  there. The units too can live in settings, that's a rare change." The Thread section (slant,
+  density) and the Units section (dual units, dual-unit layout, units note) are gone from every
+  PDF options panel; Settings → Drawing keeps all five. The previews still redraw when one of
+  them changes in Settings. → §3.3.
 
 ### Open
 

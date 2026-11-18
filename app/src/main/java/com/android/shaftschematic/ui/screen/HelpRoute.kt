@@ -896,7 +896,9 @@ internal val helpSections: List<HelpSection> = listOf(
                 "Prints every dimension in both units — the primary value with the converted one " +
                     "beside it or stacked under it (Settings → Drawing → \"Dual-unit layout\"). " +
                     "Both terms always carry their unit, and the converted one is a courtesy " +
-                    "reading, never a second measurement.",
+                    "reading, never a second measurement. Turn it on or off in Settings → " +
+                    "Drawing → \"Dual-unit display\" — the units are a rare change, so they are " +
+                    "not on the PDF options panels.",
                 manualAnchor = "reading-units",
             ),
             HelpTopic(
@@ -1140,6 +1142,19 @@ internal val helpSections: List<HelpSection> = listOf(
                 manualAnchor = "settings-drawing-wear",
             ),
             HelpTopic(
+                "Drawing — Thread slant and density",
+                "Settings → Drawing, after the text sizes. Only here — they are a rare change, " +
+                    "so the PDF options panels do not carry them.\n\n" +
+                    "• \"Thread slant\" — how far the thread hatch leans: it follows each " +
+                    "thread's own pitch, 1× being the true crest angle.\n" +
+                    "• \"Thread density\" — how many of the thread's crests the hatch draws, " +
+                    "100% being every crest at true pitch; fine threads stay at a legible " +
+                    "minimum spacing.\n\n" +
+                    "Both restyle the on-screen drawings and every printed sheet, and apply when " +
+                    "you let go of the slider. An open preview redraws with the new value.",
+                manualAnchor = "settings-drawing-lines",
+            ),
+            HelpTopic(
                 "Drawing — $UNITS_NOTE_SETTING_TITLE",
                 "Settings → Drawing, under \"Dual-unit layout\". Default off. On, every " +
                     "printed sheet — schematic (Final included), runout, consolidated, wear and " +
@@ -1150,8 +1165,7 @@ internal val helpSections: List<HelpSection> = listOf(
                     "the converted second value on a dual-units job, still carries its own unit " +
                     "suffix.\n\n" +
                     "App-wide and captured by Drawing profiles; \"Restore Drawing defaults\" " +
-                    "turns it off. Also on every document's PDF options panel, in the Units " +
-                    "section.",
+                    "turns it off. Settings is the only place to change it.",
                 manualAnchor = "settings-drawing-lines",
             ),
             HelpTopic(
@@ -1419,8 +1433,8 @@ internal val helpSections: List<HelpSection> = listOf(
                     "reference, and — on the schematic and the runout/consolidated sheets, the " +
                     "drawings that can break — Body S-break: the same app-wide settings, " +
                     "reachable without leaving the drawing.\n" +
-                    "• Every sheet's \"Lines & text\" carries the Output font and its \"Units\" " +
-                    "the Units note; the schematic and consolidated sheets add \"Footer lines\" " +
+                    "• Every sheet's \"Lines & text\" carries the Output font; the schematic " +
+                    "and consolidated sheets add \"Footer lines\" " +
                     "(captured keyway inset, bolt hole Ø); and the schematic's Content chips " +
                     "include \"Template\" (shaft only). Default drawing size stays in Settings: " +
                     "each sheet's Shaft height adjusts from it.\n" +
@@ -1436,7 +1450,12 @@ internal val helpSections: List<HelpSection> = listOf(
                     "too narrow to hold both; on the undercut strips a larger head also needs " +
                     "more room before a value fits in its line.\n" +
                     "• \"Footer text size\" and \"Dimension text size\" — 100% / 125% / 150% / " +
-                    "175%, on the schematic and consolidated sheets (and the Final tab's). " +
+                    "175%, set separately for three groups of sheets: the schematic, Final and " +
+                    "section sheets; the runout and consolidated sheets; and the undercut sheet " +
+                    "(Dimension only — it has no footer). Each options panel's chips change " +
+                    "only its own group and name the sheets they change; Settings → Drawing " +
+                    "shows all three. Each group started at the size you had before, so nothing " +
+                    "changed until you adjust one. " +
                     "Footer sizes the job and spec block at the foot of the sheet, plus the TIR " +
                     "and dye pen row above it on the consolidated sheet; Dimension sizes the " +
                     "lengths on the rails, the Ø values and the schematic's component names. Larger text takes room from the " +
@@ -1445,13 +1464,6 @@ internal val helpSections: List<HelpSection> = listOf(
                     "busy consolidated sheet with the coupling end view most often. The " +
                     "Original + Final sheet holds its footer at 125% and its dimensions at " +
                     "150%.\n" +
-                    "• \"Thread slant\" — in the Thread section of every document's sheet, " +
-                    "shown whenever the shaft has a thread. How far the thread " +
-                    "hatch leans: it follows each thread's own pitch, 1× being the true crest " +
-                    "angle. This one applies when you let go rather than while you drag.\n" +
-                    "• \"Thread density\" — beside it. How many of the thread's crests the " +
-                    "hatch draws, 100% being every crest at true pitch; fine threads stay at a " +
-                    "legible minimum spacing. It also applies when you let go.\n" +
                     "• \"Keyways\" — the undercut sheet's \"Lines & text\", also under the " +
                     "Undercut Drawing's \"Drawing settings\". Off unless turned on: a keyway that " +
                     "falls in a section draws on the printed sheet.\n\n" +

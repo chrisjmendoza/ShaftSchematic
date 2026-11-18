@@ -14,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.LinerAuthoredReference
@@ -39,7 +40,7 @@ import com.android.shaftschematic.ui.theme.strongChipLabel
 
 /**
  * Carousel editor card for a liner: the "Measure From: AFT | FWD" chips, Start/Length/Outer Ø,
- * the Ø-callout switch, and the capability-gated shoulder section.
+ * the OD tolerance row, the Ø-callout switch, and the capability-gated shoulder section.
  *
  * The shoulder controls appear when [linerShouldersEnabled] is on OR the liner already carries
  * shoulder values — a device pref may hide empty entry fields, never authored work. The
@@ -67,6 +68,8 @@ internal fun LinerPagerCard(
     onUpdateLinerShowLabel: (Int, Boolean) -> Unit,
     onUpdateLinerShade: (Int, Boolean) -> Unit = { _, _ -> },
     onUpdateLinerShoulder: (Int, LinerAuthoredReference, Float, Float, Float) -> Unit,
+    /** The OD tolerance's upper and lower deviations, mm magnitudes. */
+    onUpdateLinerDiaTol: (Int, Float, Float) -> Unit = { _, _, _ -> },
     linerShouldersEnabled: Boolean,
     onUpdateLinerLabel: (Int, String?) -> Unit,
     onUpdateLinerReference: (Int, LinerAuthoredReference) -> Unit,
@@ -169,6 +172,20 @@ internal fun LinerPagerCard(
         ) { s ->
             toMmOrNull(s, unit)?.let { onUpdateLiner(idx, ln.startFromAftMm, ln.lengthMm, it) }
         }
+        DiaToleranceRow(
+            plus = { m ->
+                CommitNum(
+                    diaTolPlusLabel(unit), diaTolFieldText(ln.diaTolPlusMm, unit),
+                    modifier = m.testTag("liner_dia_tol_plus"), parseValid = ::isDiaTolText,
+                ) { s -> diaTolMmOrNull(s, unit)?.let { onUpdateLinerDiaTol(idx, it, ln.diaTolMinusMm) } }
+            },
+            minus = { m ->
+                CommitNum(
+                    diaTolMinusLabel(unit), diaTolFieldText(ln.diaTolMinusMm, unit),
+                    modifier = m.testTag("liner_dia_tol_minus"), parseValid = ::isDiaTolText,
+                ) { s -> diaTolMmOrNull(s, unit)?.let { onUpdateLinerDiaTol(idx, ln.diaTolPlusMm, it) } }
+            },
+        )
         ShowDiaToggleRow(
             label = "Show Ø on drawing",
             checked = ln.showDiaOnDrawing,

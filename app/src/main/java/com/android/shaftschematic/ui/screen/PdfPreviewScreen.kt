@@ -220,8 +220,8 @@ fun PdfPreviewScreen(
     val pdfOutputFont by vm.pdfOutputFont.collectAsState()
     // "Seal areas" changes only what the `PdfPrefs` snapshot carries, so it rides along as a key.
     val pdfSealAreas by vm.pdfInspectionSealAreas.collectAsState()
-    // The units note and the optional footer lines: switches on the options sheet that change
-    // only what the `PdfPrefs` snapshot carries, so they ride along as keys.
+    // The units note (Settings → Drawing) and the optional footer lines (the options sheet):
+    // switches that change only what the `PdfPrefs` snapshot carries, so they ride along as keys.
     val pdfShowUnitsNote by vm.pdfShowUnitsNote.collectAsState()
     val pdfFooterCapturedKwInset by vm.pdfFooterCapturedKwInset.collectAsState()
     val pdfFooterBoltHoleDia by vm.pdfFooterBoltHoleDia.collectAsState()
@@ -758,11 +758,7 @@ fun PdfPreviewScreen(
                         arrowSizePt = pdfArrowSizePt,
                         footerTextScale = pdfFooterTextScale,
                         dimTextScale = pdfDimTextScale,
-                        threadSlant = pdfThreadSlant,
-                        threadDensity = pdfThreadDensity,
                         fractionStyle = pdfFractionStyle,
-                        dualUnitLayout = pdfDualUnitLayout,
-                        dualUnits = dualUnits,
                         heightScale = runoutConfig.heightScale,
                         linersProportional = runoutConfig.linersProportional,
                         linerCompression = runoutConfig.linerCompression,
@@ -929,11 +925,7 @@ internal fun PdfOptionsSheet(
     arrowSizePt: Float,
     footerTextScale: Float,
     dimTextScale: Float,
-    threadSlant: Float,
-    threadDensity: Float,
     fractionStyle: FractionStyle,
-    dualUnitLayout: DualUnitLayout,
-    dualUnits: Boolean,
     heightScale: Float,
     linersProportional: Boolean,
     linerCompression: Float,
@@ -983,7 +975,6 @@ internal fun PdfOptionsSheet(
         // the host — the host already collects each one as a render-loop key.
         val pdfExportMode by vm.pdfExportMode.collectAsState()
         val outputFont by vm.pdfOutputFont.collectAsState()
-        val showUnitsNote by vm.pdfShowUnitsNote.collectAsState()
         val footerCapturedKwInset by vm.pdfFooterCapturedKwInset.collectAsState()
         val footerBoltHoleDia by vm.pdfFooterBoltHoleDia.collectAsState()
         val taperRatePerFoot by vm.pdfTaperRatePerFoot.collectAsState()
@@ -1104,7 +1095,7 @@ internal fun PdfOptionsSheet(
         Spacer(Modifier.height(8.dp))
 
         // ── Sections ─────────────────────────────────────────────────────────
-        // Laid out in `OptionsSection` order (most-used first, Units last) whatever order
+        // Laid out in `OptionsSection` order (most-used first) whatever order
         // they are supplied in here — the same list `RunoutWearOptionsSheet` builds from.
         val sliderDiaMm = remember(spec) { heightSliderMaxDiaFor(spec) }
         val sliderBase = schematicHeightSliderBase(sliderDiaMm, curveLoHeightIn, curveHiHeightIn)
@@ -1143,23 +1134,6 @@ internal fun PdfOptionsSheet(
             )
         }
 
-        // ── Thread ───────────────────────────────────────────────────────────
-        // Only on a shaft that draws a thread: on any other the hatch controls tune nothing.
-        if (hasDrawnThreads(spec)) {
-            sections[OptionsSection.THREAD] = OptionsSectionBody(
-                summary = threadSectionSummary(threadSlant, threadDensity),
-            ) {
-                ThreadSlantSlider(
-                    threadSlant = threadSlant,
-                    onCommit = { vm.setPdfThreadSlant(it) },
-                )
-                ThreadDensitySlider(
-                    threadDensity = threadDensity,
-                    onCommit = { vm.setPdfThreadDensity(it) },
-                )
-            }
-        }
-
         // ── Lines & text ─────────────────────────────────────────────────────
         sections[OptionsSection.LINES] = OptionsSectionBody(
             summary = linesSectionSummary(lineThicknessScale),
@@ -1178,6 +1152,9 @@ internal fun PdfOptionsSheet(
                 dimTextScale = dimTextScale,
                 onCommitFooter = { vm.setPdfFooterTextScale(it) },
                 onCommitDim = { vm.setPdfDimTextScale(it) },
+                // The SCHEMATIC group: this panel tunes the schematic, every Final sheet (the
+                // bubbled one included) and the section sheets.
+                sheets = SCHEMATIC_TEXT_SIZE_SHEETS,
             )
             val sealAreas by vm.pdfInspectionSealAreas.collectAsState()
             InspectionSealAreasRow(
@@ -1229,21 +1206,6 @@ internal fun PdfOptionsSheet(
                 pdfTieringMode = pdfTieringMode,
                 onCommit = { vm.setPdfTieringMode(it) },
             )
-        }
-
-        // ── Units ────────────────────────────────────────────────────────────
-        // The document's own `dual_units` flag plus the app-wide layout it is set in. The
-        // layout chips style what the switch turns on, so they read as disabled until it is.
-        sections[OptionsSection.UNITS] = OptionsSectionBody(
-            summary = unitsSectionSummary(dualUnits, dualUnitLayout),
-        ) {
-            DualUnitsSwitchRow(dualUnits = dualUnits, onDualUnitsChange = { vm.setDualUnits(it) })
-            DualUnitLayoutChips(
-                layout = dualUnitLayout,
-                enabled = dualUnits,
-                onCommit = { vm.setPdfDualUnitLayout(it) },
-            )
-            UnitsNoteSwitchRow(checked = showUnitsNote, onCheckedChange = { vm.setPdfShowUnitsNote(it) })
         }
 
         OptionsSections(sections)
