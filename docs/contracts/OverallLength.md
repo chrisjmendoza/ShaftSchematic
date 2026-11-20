@@ -1,4 +1,4 @@
-# Overall Length (v2.8, 2026-11-10)
+# Overall Length (v2.9, 2026-11-20)
 
 ## Scope
 Defines how the **Overall Length** field behaves, how it interacts with components, and how the
@@ -12,7 +12,8 @@ UI signals errors. Applies to `ShaftViewModel`, `ShaftRoute`, `ShaftScreen`, and
   shrinks `ShaftSpec.overallLengthMm` on the user's behalf. It is a component value under the
   golden rule (`CLAUDE.md`) — a typed length stands exactly as typed.
 - **Default**: Overall starts at **0** — "not set yet", not "a zero-length shaft". The field
-  shows `0`; focusing it selects the text, so the first keystroke replaces it.
+  shows an EMPTY box while the OAL is 0 (on-device request: the `0` had to be deleted before the
+  first entry) — the Shaft diameter field's posture. A blur with the box still empty commits nothing.
 - **The field lives on the start card.** The carousel's first page — "Shaft & job"
   (`ui/screen/StartCard.kt`), on the Schematic and Final tabs at every width — opens with Overall
   Length, then Shaft diameter, then the project information (on-device request: the OAL row standing
@@ -206,6 +207,8 @@ template card's preview can never disagree with the drawing it becomes.
 ---
 
 ## Change Log
+**v2.9 (2026-11-20)** — An OAL not typed yet (0) shows an empty box instead of `0`.
+
 **v2.8 (2026-11-10)** — **The OAL moves onto the start card** (on-device request: the always-on OAL
 row nagged). Overall Length, a new Shaft diameter field and the project information are the
 carousel's first card; the field commits like every card field (Save bar, IME Done,

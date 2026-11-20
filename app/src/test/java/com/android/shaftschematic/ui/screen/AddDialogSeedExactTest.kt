@@ -5,6 +5,7 @@ import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
@@ -70,6 +71,9 @@ class AddDialogSeedExactTest {
                 )
             }
         }
+        rule.waitForIdle()
+        // A thread opens excluded from the OAL; the Start field shows once it is included.
+        rule.onNodeWithTag("add_thread_include_oal").performClick()
         rule.waitForIdle()
     }
 

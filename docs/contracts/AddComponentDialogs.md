@@ -1,4 +1,4 @@
-# AddComponentDialogs Contract (v1.18, 2026-11-18)
+# AddComponentDialogs Contract (v1.19, 2026-11-20)
 
 ## Purpose
 Composable dialogs for adding new components: `AddBodyDialog`, `AddLinerDialog`,
@@ -94,6 +94,17 @@ flush against a liner ending at 35.42422" showed 35.424 and opened on a false "O
 Liner", and rounding the other way left a hairline auto body (emulator QA). A blur or Done that
 hands back the same text is not an edit. The captured-keyway inset preset (0.5 in) displays exactly
 in either keyway unit and stays plain text, since the keyway-unit chip reinterprets what it means.
+
+## An untyped field empties on focus
+Every Add-dialog field (`CommitNumField`) that the user has not typed into empties its box when it
+gains focus (`untypedFocusClear`; on-device request: a seed had to be deleted before the first real
+entry). The seed is NOT committed away: the caller keeps it, the box shows it as a greyed
+placeholder, the Add gate and the submitted value still read it, and a blur or Done with nothing
+typed puts the text back. The first keystroke is typing; from then on the field never clears (a
+second focus keeps the typed value). A reseed from outside (a unit switch, a preset filled in when
+a section opens) makes the field untyped again. The editor cards' `NumericInputField` is unchanged
+— it selects its text on focus. The start card's Overall Length shows an EMPTY box while the OAL
+is 0 (not typed yet), the Shaft diameter field's posture.
 
 ## The keyboard never covers the dialog
 All five Add dialogs are `ImeResizingAlertDialog`s (`ui/screen/DialogImeResize.kt`, shared with
@@ -271,7 +282,7 @@ by definition, so there is nothing to toggle. This is intentional and not a pari
 ### AddThreadDialog
 | Field / control | Condition |
 |-----------------|-----------|
-| "Include thread in OAL" switch | Always — the card's label, verbatim (the dialog once said "Count in OAL"; one control, one name on both surfaces). FIRST row, as on the card: it decides whether the next row is Start or the Thread end chips (on-device report) |
+| "Include thread in OAL" switch (`add_thread_include_oal`) | Always — the card's label, verbatim (the dialog once said "Count in OAL"; one control, one name on both surfaces). FIRST row, as on the card: it decides whether the next row is Start or the Thread end chips (on-device report). Default OFF — a new thread opens excluded from the OAL, on the Thread end chips (on-device request); the model's serialization default (`excludeFromOAL = false`) is unchanged, so saved threads read as they did |
 | Start | Only when `countInOal = true` |
 | Thread end: AFT \| FWD chips | Only when `countInOal = false` |
 | Thread spec mode: Imperial (TPI) \| Metric (mm) chips | Always |
@@ -560,6 +571,11 @@ the aft-most center as `startFromAftMm = OAL − enteredFwd − (count−1)·spa
 ---
 
 ## Change log
+**v1.19 (2026-11-20)**
+- `AddThreadDialog` opens with "Include thread in OAL" OFF (tag `add_thread_include_oal`).
+- An Add-dialog field not yet typed into empties on focus, its seed kept as a placeholder and put
+  back on a blur with nothing typed. On-device requests.
+
 **v1.18 (2026-11-18)**
 - `AddLinerDialog` and `AddBodyDialog` gain the "Ø tol + / Ø tol −" row under the Ø, mirroring the
   liner card and the explicit-body card (ONE `DiaToleranceRow`); both `onSubmit`s take a trailing

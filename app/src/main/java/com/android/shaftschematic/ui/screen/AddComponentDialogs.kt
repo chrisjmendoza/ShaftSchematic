@@ -1123,7 +1123,9 @@ fun AddThreadDialog(
     var tpiText by rememberSaveable(initialTpi) { mutableStateOf(formatTpi(initialTpi)) }
     // Saveable: a configuration change (a system font-scale change recreates the activity) would
     // otherwise reset every switch and chip while the dialog itself stays open (on-device report).
-    var countInOal by rememberSaveable { mutableStateOf(true) }
+    // Default OFF (on-device request): a new thread opens excluded from the OAL, on the
+    // "Thread end" chips; the switch brings back the Start field.
+    var countInOal by rememberSaveable { mutableStateOf(false) }
     var isAftEnd by rememberSaveable { mutableStateOf(true) }
 
     // Thread relief: local switch (default OFF) revealing the two fields and the end chips. While
@@ -1224,7 +1226,8 @@ fun AddThreadDialog(
                     Text("Include thread in OAL")
                     DialogSwitch(
                         checked = countInOal,
-                        onCheckedChange = { countInOal = it }
+                        onCheckedChange = { countInOal = it },
+                        modifier = Modifier.testTag("add_thread_include_oal"),
                     )
                 }
                 Spacer(Modifier.height(8.dp))
@@ -1803,8 +1806,20 @@ private fun CommitNumField(
     // changes it (e.g., unit toggle). Using LaunchedEffect instead of remember(initial)
     // avoids a cursor-to-end jump on every keystroke echo-back.
     var text by remember { mutableStateOf(initial) }
+    // Whether the user has typed into this field. Until they do, its text is the dialog's seed.
+    var typed by rememberSaveable { mutableStateOf(false) }
+    // The seed a focus gain cleared out of the box (see [untypedFocusClear]); null otherwise.
+    var clearedSeed by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(initial) {
-        if (text != initial) text = initial
+        // Only a change from outside reaches here — a keystroke's echo already matches. A reseed
+        // (a unit switch, a preset filled in when a section opens) is a seed again, not typing.
+        val cleared = clearedSeed
+        if (cleared != null) {
+            if (cleared != initial) clearedSeed = initial
+        } else if (text != initial) {
+            text = initial
+            typed = false
+        }
     }
     val shownError = errorText
         ?: parseValid?.let { unreadableEntryError(text, it) }
@@ -1814,10 +1829,20 @@ private fun CommitNumField(
     val cursor = rememberFieldCursor()
     fun applyEdit(raw: TextFieldValue) {
         val newText = inputFilter?.invoke(raw.text) ?: raw.text
-        if (newText != text) edits?.mark()
+        if (newText != text) {
+            edits?.mark()
+            typed = true
+            clearedSeed = null
+        }
         cursor.track(if (newText == raw.text) raw else raw.copy(text = newText))
         text = newText
         onCommit(newText)   // commit on every keystroke so Add always has the current value
+    }
+    /** Puts a cleared seed back when the user leaves the field without typing. */
+    fun restoreUntypedSeed() {
+        val seed = clearedSeed ?: return
+        clearedSeed = null
+        text = seed
     }
     OutlinedTextField(
         value = cursor.valueFor(text),
@@ -1825,6 +1850,9 @@ private fun CommitNumField(
         trailingIcon = if (fractionKey && enabled && cursor.focused && LocalFractionKeyEnabled.current) {
             { FractionKey(onClick = { applyEdit(cursor.valueFor(text).insertAtCursor("/")) }) }
         } else null,
+        // While a cleared seed is out of the box it shows greyed in its place: it is still the
+        // value Add submits until something is typed.
+        placeholder = clearedSeed?.let { seed -> { Text(seed) } },
         label = { Text(label) },
         enabled = enabled,
         singleLine = true,
@@ -1841,15 +1869,31 @@ private fun CommitNumField(
             {}
         } else null,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-        keyboardActions = KeyboardActions(onDone = { onCommit(text) }),
+        keyboardActions = KeyboardActions(onDone = { restoreUntypedSeed(); onCommit(text) }),
         modifier = modifier
             .fillMaxWidth()
             .onFocusChanged { f ->
                 cursor.focused = f.isFocused
-                if (!f.isFocused) onCommit(text)
+                if (f.isFocused) {
+                    if (untypedFocusClear(typed, text)) {
+                        clearedSeed = text
+                        text = ""
+                    }
+                } else {
+                    restoreUntypedSeed()
+                    onCommit(text)
+                }
             }
     )
 }
+
+/**
+ * Whether an Add-dialog field empties its box on focus (on-device request: a seeded value had to
+ * be deleted before the first real entry): only while the user has not typed into it and it holds
+ * a seed. The seed is not committed away — the caller keeps it, the box shows it as a placeholder,
+ * and leaving the field with nothing typed puts it back.
+ */
+internal fun untypedFocusClear(typed: Boolean, text: String): Boolean = !typed && text.isNotEmpty()
 
 /** The error line a numeric field shows under text that does not read as a number. */
 internal const val NOT_A_NUMBER_ERROR = "Not a number"

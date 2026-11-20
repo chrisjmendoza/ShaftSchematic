@@ -256,6 +256,7 @@ class StartCardTest {
         val vm = freshVm()
         host(vm)
         rule.onNodeWithTag(OAL_FIELD_TAG).assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.Error))
+        assertEquals("a length not typed yet shows an empty box", "", fieldText(OAL_FIELD_TAG))
 
         vm.importJson(
             freshVm().also {

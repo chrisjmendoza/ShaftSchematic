@@ -6,6 +6,18 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-11-20
+
+### feat(editor): new threads leave the OAL out; untyped fields empty when tapped
+
+- The Add Thread dialog now opens with **Include thread in OAL** off, on the **Thread end: AFT |
+  FWD** chips (on-device request). Switch it on to place the thread by its Start as before. Threads
+  already in a drawing are unchanged.
+- In every Add dialog, tapping a field you have not typed in empties it, with the suggested value
+  shown faintly in its place, so the first entry needs no deleting (on-device request). Leave it
+  without typing and the suggestion comes back; a value you typed is never cleared.
+- The **Overall Length** field on a new shaft shows an empty box instead of 0.
+
 ## 2026-11-18
 
 ### fix(undercut): a liner face between two butted cuts is retraced; the key reads "Original shaft surface"
