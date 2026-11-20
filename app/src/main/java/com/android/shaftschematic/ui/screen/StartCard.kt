@@ -121,7 +121,9 @@ internal fun ShaftStartCard(
                     first = {
                         CommitNum(
                             label = if (shortLabels) "OAL (${abbr(unit)})" else oalFieldLabel(unit, fontScale),
-                            initialDisplay = formatDisplay(spec.overallLengthMm, unit),
+                            // Not typed yet (0) shows an empty box, so the first entry needs no
+                            // deleting (on-device request) — the Shaft diameter field's posture.
+                            initialDisplay = if (spec.overallLengthMm > 0f) formatDisplay(spec.overallLengthMm, unit) else "",
                             modifier = Modifier.testTag(OAL_FIELD_TAG),
                             externalIssueText = if (isOversized) OAL_OVERSIZE_NOTICE else null,
                         ) { t -> toMmOrNull(t, unit)?.let(onSetOverallLengthMm) }

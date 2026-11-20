@@ -269,7 +269,7 @@
   <p  class="keep">The <span class="ui">Overall Length</span> field, the first field on the <span class="ui">Shaft &amp; job</span> card, holds the shaft's OAL (overall length), end to end. It is always the number you type; nothing in the app sets, grows or shrinks it for you.</p>
   <h3>Entering and changing it</h3>
   <ol class="steps">
-    <li  class="keep">Swipe to the <span class="ui">Shaft &amp; job</span> card (or tap <span class="ui">Project information</span> on the toolbar) and tap the <span class="ui">Overall Length</span> field. A shaft with no length yet shows 0; what you type replaces it.</li>
+    <li  class="keep">Swipe to the <span class="ui">Shaft &amp; job</span> card (or tap <span class="ui">Project information</span> on the toolbar) and tap the <span class="ui">Overall Length</span> field. A shaft with no length yet shows an empty box; type the length into it.</li>
     <li  class="keep">Type the length.</li>
     <li  class="keep">Press the keyboard's Done key, move to another field, or tap the green ✓ on the Save bar above the cards.</li>
   </ol>
@@ -314,7 +314,7 @@
     <li  class="keep"><strong>Start</strong> is pre-filled at the end of the last taper, thread or liner, so working AFT to FWD needs little typing. A new body is pre-filled to run from there to the OAL.</li>
     <li  class="keep"><strong>Sizes</strong> are pre-filled from the last component of the same kind you added or edited in this session, or from the opened drawing. A run of identical liners takes one diameter typed once.</li>
   </ul>
-  <p  class="keep">These are suggestions in the box. Whatever you type replaces them, and the app stores exactly what you typed.</p>
+  <p  class="keep">These are suggestions in the box. Tap a field you have not typed in and it empties, with the suggestion shown faintly in its place, so the first entry needs no deleting. Whatever you type replaces it, and the app stores exactly what you typed. Leave the field without typing and the suggestion comes back; it is also what <span class="ui">Add</span> uses while the field is empty that way. A field you have typed in keeps your value when you tap it again.</p>
 
   <h3>When the Add button is greyed, or asks first</h3>
   <ul>
@@ -653,7 +653,7 @@
   <table class="ref">
     <thead><tr><th>Field / control</th><th>What it means</th></tr></thead>
     <tbody>
-      <tr><td><span class="ui">Include thread in OAL</span></td><td>On (default): the thread is part of the overall length and is placed by its Start. Off: the thread sits outside the OAL, beyond the end of the shaft. On the card, tapping it asks whether the overall length should change with the thread (see below).</td></tr>
+      <tr><td><span class="ui">Include thread in OAL</span></td><td>On: the thread is part of the overall length and is placed by its Start. Off (the Add dialog's default): the thread sits outside the OAL, beyond the end of the shaft, at the end the <span class="ui">Thread end</span> chips pick. On the card, tapping it asks whether the overall length should change with the thread (see below).</td></tr>
       <tr><td><span class="ui">Start</span></td><td>Distance from the AFT end to the start of the thread. Shown only while the thread counts in the OAL (overall length).</td></tr>
       <tr><td><span class="ui">Thread end:</span> <span class="ui">AFT</span> | <span class="ui">FWD</span></td><td>Replaces Start when the thread is excluded from the OAL: which end of the shaft the thread hangs off. Default AFT.</td></tr>
       <tr><td><span class="ui">Major Ø</span>, <span class="ui">TPI</span></td><td>Imperial threads only. TPI accepts decimals and fractions.</td></tr>
