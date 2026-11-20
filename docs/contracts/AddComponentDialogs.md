@@ -275,7 +275,8 @@ by definition, so there is nothing to toggle. This is intentional and not a pari
 |-----------------|-----------|
 | Measure From: AFT \| FWD chips | Always |
 | Start from AFT / FWD | Always (label follows chip) |
-| Length | Always |
+| Length (`add_liner_length`) | Always. While a typed End decides it, it shows End − Start under the note "Start to End"; typing a Length takes the decision back |
+| End from AFT / FWD (`add_liner_end`; card: `liner_end`) | Always (label follows chip). The liner's far edge from the same end as the Start — under FWD the Start is the FWD edge and the End the AFT edge. Shows Start + Length until typed; a typed End keeps the Start and sets the length to End − Start (`linerSpanFromEnd`, `ui/screen/LinerEndEntry.kt`; on-device request: measured positions, no subtracting). Not stored — only the length is; an End at or before the Start reads "Must be past the start". In the dialog a typed End holds while the Start is retyped (the length follows); on the card a typed End commits like a typed Length (the same FWD-edge-stays rule) |
 | Outer Ø | Always |
 | Ø tol + / Ø tol − | Always, side by side directly under Outer Ø — the same `DiaToleranceRow` as the liner card (`add_liner_dia_tol_plus` / `add_liner_dia_tol_minus`; card: `liner_dia_tol_plus` / `liner_dia_tol_minus`). Magnitudes in the document unit, blank = 0, stored verbatim (`Liner.diaTolPlusMm` / `diaTolMinusMm`); `onSubmit` hands them on as a `DiaToleranceDraft` |
 
@@ -572,6 +573,8 @@ the aft-most center as `startFromAftMm = OAL − enteredFwd − (count−1)·spa
 
 ## Change log
 **v1.19 (2026-11-20)**
+- `AddLinerDialog` and the liner card gain "End from AFT / FWD": a typed End sets the length to
+  End − Start. On-device request.
 - `AddThreadDialog` opens with "Include thread in OAL" OFF (tag `add_thread_include_oal`).
 - An Add-dialog field not yet typed into empties on focus, its seed kept as a placeholder and put
   back on a blur with nothing typed. On-device requests.

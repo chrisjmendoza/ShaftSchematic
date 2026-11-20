@@ -56,7 +56,11 @@ Specifically:
   it OPENS with the switch OFF (on-device request — the model's serialization default is unchanged) —
   a confirmation on a stored thread, not a control. A thread switched IN lands INSIDE the shaft at
   its end, and one switched OUT goes out at the end it sits at.
-- **Liner AFT/FWD reference**: `AddLinerDialog` must show "Measure From: AFT | FWD" chips.
+- **Liner AFT/FWD reference**: `AddLinerDialog` must show "Measure From: AFT | FWD" chips. The
+  card and the dialog both carry "End from AFT | FWD" beside Start and Length (`liner_end` /
+  `add_liner_end`, `ui/screen/LinerEndEntry.kt`): a typed End sets the length to End − Start from
+  the same end, keeping the Start — on-device request, measured positions with no subtracting. The
+  End is never stored; it reads Start + Length back.
 - **Body keyway**: `AddBodyDialog` and the explicit-body carousel card must both expose
   the keyway section behind the Keyway gate (below): KW from AFT | FWD chips, W × D, L,
   "Captured keyway" toggle + the "KW Inset from AFT|FWD" field shown only while it is on,

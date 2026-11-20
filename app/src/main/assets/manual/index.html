@@ -300,7 +300,7 @@
     <thead><tr><th>Choice</th><th>The Add dialog asks for</th></tr></thead>
     <tbody>
       <tr class="short"><td><span class="ui">Body</span></td><td><span class="ui">Measure From:</span> AFT | FWD, start from that end, Length and Diameter; an optional component blend (Square or Blend) and seal areas at each end; an optional keyway behind the <span class="ui">Keyway</span> checkbox.</td></tr>
-      <tr><td><span class="ui">Liner</span></td><td><span class="ui">Measure From:</span> AFT | FWD, start from that end, Length, Outer Ø; shoulders when they are switched on in Settings.</td></tr>
+      <tr><td><span class="ui">Liner</span></td><td><span class="ui">Measure From:</span> AFT | FWD, start from that end, Length or the end from that same end (the app works out the length), Outer Ø; shoulders when they are switched on in Settings.</td></tr>
       <tr><td><span class="ui">Taper</span></td><td><span class="ui">Measure From:</span> AFT | FWD, start from that end, Length, S.E.T. (small end of taper) Ø, L.E.T. (large end of taper) Ø, rate (Auto or Manual), and an optional keyway.</td></tr>
       <tr><td><span class="ui">Thread</span></td><td>Start (or AFT | FWD end when the thread is not counted in the OAL), Imperial (TPI — threads per inch) or Metric (mm, a designation such as M20×2.5), diameter and pitch, Length, optional thread relief, and <span class="ui">Include thread in OAL</span>.</td></tr>
       <tr><td><span class="ui">Coupler Bolt Slot / Hole</span></td><td>Hole style (Seam or Cross-drilled), Measure From, position, hole Ø, count, spacing, and through or blind.</td></tr>
@@ -707,6 +707,7 @@
       <tr class="short"><td><span class="ui">Measure From:</span> <span class="ui">AFT</span> | <span class="ui">FWD</span></td><td>Which shaft end you measure the liner from. Display and entry only; switching it never moves the liner. Default AFT.</td></tr>
       <tr><td><span class="ui">Start from AFT</span> / <span class="ui">Start from FWD</span></td><td>Distance from the chosen shaft end to the near edge of the liner.</td></tr>
       <tr><td><span class="ui">Length</span></td><td>Axial length. On a FWD-measured liner, the FWD edge stays put and the liner grows toward AFT.</td></tr>
+      <tr><td><span class="ui">End from AFT</span> / <span class="ui">End from FWD</span></td><td>Distance from the same shaft end to the far edge of the liner. Type it instead of the length when you have measured where the liner starts and where it ends: the app sets the length to End minus Start, so there is nothing to subtract. The start stays where it is. It always shows Start plus Length, so typing a length moves it too.</td></tr>
       <tr><td><span class="ui">Outer Ø</span></td><td>The liner OD (outside diameter).</td></tr>
       <tr><td><span class="ui">Ø tol +</span> / <span class="ui">Ø tol −</span></td><td>Optional tolerance on the OD: how far over (+) and under (−) the size may be, typed as plain amounts in the drawing's unit (for example <span class="ui">.002</span> and blank). Leave a side blank for zero. It prints after the OD callout, stacked: <span class="ui">Ø 9.000″</span> then <span class="ui">+.002</span> over <span class="ui">-.000</span>.</td></tr>
       <tr><td><span class="ui">Shoulders</span> section</td><td>Optional stepped ends; see below. Hidden unless switched on in Settings.</td></tr>
