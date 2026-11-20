@@ -8,6 +8,14 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-20
 
+### feat(liner): enter a liner by where it starts and where it ends
+
+The liner card and the Add Liner dialog have a new **End from AFT** / **End from FWD** field under
+Start and Length (on-device request). When you have measured both edges of a liner from the
+S.E.T., type the Start and the End and the app works out the length — nothing to subtract. The End
+is measured from the same end as the Start; it always shows Start + Length, and typing a Length
+still works as before. An End at or before the Start says "Must be past the start".
+
 ### feat(editor): new threads leave the OAL out; untyped fields empty when tapped
 
 - The Add Thread dialog now opens with **Include thread in OAL** off, on the **Thread end: AFT |

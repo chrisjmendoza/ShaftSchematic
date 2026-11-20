@@ -125,6 +125,13 @@ internal fun LinerPagerCard(
                 border = if (isFwdRef) BorderStroke(1.dp, strongChipContainer()) else null)
         }
 
+        // The span a new length makes: a FWD-referenced liner keeps its FWD end and grows
+        // AFT-ward. ONE derivation for the Length and End fields' overlap gates and commits.
+        fun physStartForLength(newLen: Float): Float = if (isFwdRef) {
+            spec.overallLengthMm - authoredStartMm - newLen
+        } else {
+            ln.startFromAftMm
+        }
         FieldPair(
             first = {
                 CommitNum(
@@ -142,14 +149,6 @@ internal fun LinerPagerCard(
                 }
             },
             second = {
-                // The span a new length makes: a FWD-referenced liner keeps its FWD end and grows
-                // AFT-ward. ONE derivation for the overlap gate and the commit.
-                fun physStartForLength(newLen: Float): Float = if (isFwdRef) {
-                    val authored = spec.overallLengthMm - ln.startFromAftMm - ln.lengthMm
-                    spec.overallLengthMm - authored - newLen
-                } else {
-                    ln.startFromAftMm
-                }
                 CommitNum(
                     "Length (${abbr(unit)})", disp(ln.lengthMm, unit),
                     // The span the new length makes is checked exactly like a typed Start:
@@ -166,6 +165,21 @@ internal fun LinerPagerCard(
                 }
             },
         )
+        // "End from AFT | FWD" — Start + Length read back; a typed End keeps the Start and sets
+        // the length to End − Start (`LinerEndEntry.kt`; mirrored in AddLinerDialog).
+        CommitNum(
+            linerEndFieldLabel(isFwdRef, unit), disp(authoredStartMm + ln.lengthMm, unit),
+            modifier = Modifier.testTag("liner_end"),
+            validator = { raw ->
+                val span = linerSpanFromEnd(authoredStartMm, raw, toMmOrNull(raw, unit))
+                span.error ?: span.lengthMm?.let {
+                    spanOverlapErrorMm(spec, ln.id, ComponentKind.LINER, physStartForLength(it), it)
+                }
+            },
+        ) { s ->
+            val newLen = linerSpanFromEnd(authoredStartMm, s, toMmOrNull(s, unit)).lengthMm ?: return@CommitNum
+            onUpdateLiner(idx, physStartForLength(newLen), newLen, ln.odMm)
+        }
         CommitNum(
             "Outer Ø (${abbr(unit)})", disp(ln.odMm, unit),
             validator = { raw -> positiveDiaErrorMm(toMmOrNull(raw, unit)) },

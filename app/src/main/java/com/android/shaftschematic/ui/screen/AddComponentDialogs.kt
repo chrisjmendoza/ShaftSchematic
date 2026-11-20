@@ -761,9 +761,23 @@ fun AddLinerDialog(
     var shFwdOd by remember(unit) { mutableStateOf("") }
     var shFwdRadiusMm by remember { mutableStateOf(0f) }
 
+    // "End from AFT/FWD": a typed End decides the length (End − Start, both from the same end),
+    // so measured positions need no subtracting (on-device request). Per reference end like the
+    // Start strings; null = the End field shows Start + Length and the Length field decides.
+    var endAftTyped by remember(unit) { mutableStateOf<String?>(null) }
+    var endFwdTyped by remember(unit) { mutableStateOf<String?>(null) }
+    val endTyped = if (isFwd) endFwdTyped else endAftTyped
+    fun setEndTyped(text: String?) { if (isFwd) endFwdTyped = text else endAftTyped = text }
+
     val startEnteredOrNull = (if (isFwd) startFwd else startAft).mm(unit)
     val startEntered = startEnteredOrNull ?: -1f
-    val lengthMm = length.mm(unit) ?: -1f
+    val typedLengthMm = length.mm(unit) ?: -1f
+    val endSpan = linerSpanFromEnd(startEnteredOrNull, endTyped, endTyped?.let { toMmOrNull(it, unit) })
+    val lengthMm = if (endTyped != null) endSpan.lengthMm ?: -1f else typedLengthMm
+    val lengthShown = if (endTyped != null) endSpan.lengthMm?.let { toDisplayString(it, unit) } ?: "" else length.text
+    val endShown = endTyped ?: if (startEntered >= 0f && typedLengthMm > 0f) {
+        toDisplayString(startEntered + typedLengthMm, unit)
+    } else ""
     val odMm = od.mm(unit) ?: -1f
 
     // Physical start from AFT. A FWD-measured liner that would reach past the AFT face is NOT
@@ -839,7 +853,19 @@ fun AddLinerDialog(
                     highlight = overlapNote != null,
                 ) { (if (isFwd) startFwd else startAft).onText(it) }
                 Spacer(Modifier.height(8.dp))
-                CommitNumField("Length (${abbr(unit)})", length.text, requirePositive = true) { length.onText(it) }
+                // A blur hands back the text it shows; only a different text is an entry, so leaving
+                // the derived field never takes the decision away from the one that was typed.
+                CommitNumField(
+                    "Length (${abbr(unit)})", lengthShown, requirePositive = true,
+                    modifier = Modifier.testTag("add_liner_length"),
+                    supportingText = if (endTyped != null && endSpan.error == null) LINER_LENGTH_FROM_END_NOTE else null,
+                ) { if (it != lengthShown) { setEndTyped(null); length.onText(it) } }
+                Spacer(Modifier.height(8.dp))
+                CommitNumField(
+                    linerEndFieldLabel(isFwd, unit), endShown,
+                    modifier = Modifier.testTag("add_liner_end"),
+                    errorText = endSpan.error,
+                ) { if (it != endShown) setEndTyped(it) }
                 Spacer(Modifier.height(8.dp))
                 CommitNumField("Outer Ø (${abbr(unit)})", od.text, requirePositive = true) { od.onText(it) }
                 Spacer(Modifier.height(8.dp))

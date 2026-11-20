@@ -113,7 +113,7 @@ class AddDialogDiscardGuardTest {
         rule.waitForIdle()
         assertEquals(false, promptShown())
         assertEquals(0, cancelled)
-        rule.onNode(hasSetTextAction() and hasText("12")).assertExists()
+        rule.onNode(hasSetTextAction() and hasText("Length (in)") and hasText("12")).assertExists()
     }
 
     @Test
@@ -125,7 +125,7 @@ class AddDialogDiscardGuardTest {
         pressBack()
         assertEquals(false, promptShown())
         assertEquals(0, cancelled)
-        rule.onNode(hasSetTextAction() and hasText("12")).assertExists()
+        rule.onNode(hasSetTextAction() and hasText("Length (in)") and hasText("12")).assertExists()
     }
 
     @Test
