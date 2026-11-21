@@ -320,9 +320,14 @@ fun wearLinerTraces(
     spots: List<Triple<String, Float, Float>>,
     readings: List<Triple<String, Float, Float>>,
     maxDepthFrac: Float,
+    /**
+     * The record's trace baseline when the caller has one ([wearTraceBaselineMm] — liners AND
+     * named body zones); null derives it from the liners alone, as before zones existed.
+     */
+    deepestDepthMm: Float? = null,
 ): Map<String, List<WearTraceVertex>> {
     val odById = liners.associate { it.id to it.odMm }
-    val deepestMm = deepestWearDepthMm(
+    val deepestMm = deepestDepthMm ?: deepestWearDepthMm(
         readings.mapNotNull { (id, _, diaMm) -> odById[id]?.let { od -> od to diaMm } }
     )
     return liners.mapNotNull { ln ->
@@ -407,3 +412,86 @@ fun buildLinerWearTrace(
         .sortedBy { it.first().localMm }
     return LinerWearTrace(bandTraces, sequenceWearTraces(pieces))
 }
+
+/**
+ * A body run as the zone trace sees it: its RESOLVED run id (the key its wear areas and Ø
+ * readings carry), its Ø and its length (mm).
+ */
+data class WearTraceBody(val id: String, val diaMm: Float, val lengthMm: Float)
+
+/**
+ * The readings that trace on a body: valued readings on [body] that fall inside one of its
+ * named [zones] (`(hostId, startMm, lengthMm)`, body-local) — a NAMED wear area is the zone a
+ * body's wear is traced in (on-device request: packing and grounding-strap wear where there is no
+ * liner). A reading outside every zone, or on an unnamed area, still never traces.
+ */
+private fun zoneReadingsOn(
+    body: WearTraceBody,
+    zones: List<Pair<Float, Float>>,
+    readings: List<Triple<String, Float, Float>>,
+): List<WearTraceReading> = readings
+    .filter { (id, axialMm, diaMm) ->
+        id == body.id && diaMm > 0f && zones.any { (s, l) -> axialMm >= s && axialMm <= s + l }
+    }
+    .map { WearTraceReading(it.second, it.third) }
+
+/** [zones] on [body], clamped to it (rendering only; the stored area never moves), AFT→FWD. */
+private fun zonesOn(body: WearTraceBody, zones: List<Triple<String, Float, Float>>): List<Pair<Float, Float>> =
+    zones.filter { it.first == body.id }.sortedBy { it.second }.map { (_, startMm, lengthMm) ->
+        val s = startMm.coerceIn(0f, body.lengthMm)
+        val e = (startMm + lengthMm).coerceIn(0f, body.lengthMm)
+        s to (e - s).coerceAtLeast(0f)
+    }
+
+/**
+ * The ONE trace baseline of a record: the deepest valued reading on any liner AND on any body
+ * inside a named zone ([deepestWearDepthMm] over both pools), so every traced surface on a
+ * drawing exaggerates against the same worst wear. With no named zones it is exactly the liner
+ * baseline it always was.
+ */
+fun wearTraceBaselineMm(
+    liners: List<WearTraceLiner>,
+    bodies: List<WearTraceBody>,
+    zones: List<Triple<String, Float, Float>>,
+    readings: List<Triple<String, Float, Float>>,
+): Float {
+    val odById = liners.associate { it.id to it.odMm }
+    val linerPool = readings.mapNotNull { (id, _, diaMm) -> odById[id]?.let { od -> od to diaMm } }
+    val zonePool = bodies.flatMap { b ->
+        zoneReadingsOn(b, zonesOn(b, zones), readings).map { b.diaMm to it.diaMm }
+    }
+    return deepestWearDepthMm(linerPool + zonePool)
+}
+
+/**
+ * Every body's worn-profile trace inside its named zones — body run id → the left-to-right vertex
+ * run (body-local mm, depth fraction of the drawn radius) its surface edges follow over the zones.
+ * Each zone is traced like a liner's wear band ([buildLinerWearTrace] with no gaps: the surface
+ * at both zone ends, dipping through the valued readings inside), so outside its zones a body's
+ * surface stays straight. Bodies with no valued reading below nominal inside a zone are absent.
+ *
+ * [zones] are the NAMED wear areas only (`(hostId, startMm, lengthMm)`); [deepestDepthMm] is the
+ * record's [wearTraceBaselineMm].
+ */
+fun wearBodyZoneTraces(
+    bodies: List<WearTraceBody>,
+    zones: List<Triple<String, Float, Float>>,
+    readings: List<Triple<String, Float, Float>>,
+    deepestDepthMm: Float,
+    maxDepthFrac: Float,
+): Map<String, List<WearTraceVertex>> = bodies.mapNotNull { b ->
+    if (b.lengthMm <= 0f || b.diaMm <= 0f) return@mapNotNull null
+    val bodyZones = zonesOn(b, zones)
+    if (bodyZones.isEmpty()) return@mapNotNull null
+    val traceReadings = zoneReadingsOn(b, bodyZones, readings)
+    if (traceReadings.isEmpty()) return@mapNotNull null
+    val verts = buildLinerWearTrace(
+        linerLengthMm = 0f,
+        bands = bodyZones,
+        readings = traceReadings,
+        nominalOdMm = b.diaMm,
+        deepestDepthMm = deepestDepthMm,
+        maxDepthFrac = maxDepthFrac,
+    ).run
+    if (verts.isEmpty()) null else b.id to verts
+}.toMap()

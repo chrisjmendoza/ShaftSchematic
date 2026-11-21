@@ -33,7 +33,9 @@ import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
 import com.android.shaftschematic.geom.buildWearTrace
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
-import com.android.shaftschematic.geom.deepestWearDepthMm
+import com.android.shaftschematic.geom.WearTraceBody
+import com.android.shaftschematic.geom.wearBodyZoneTraces
+import com.android.shaftschematic.geom.wearTraceBaselineMm
 import com.android.shaftschematic.geom.WearTraceLiner
 import com.android.shaftschematic.geom.wearLinerTraces
 import com.android.shaftschematic.geom.pitCenterY
@@ -281,7 +283,8 @@ fun composeWearPdfOnCanvas(
     // elected liner in a combined window (see `collectWearStripWindows`). A liner-only election
     // — the default — makes one single-component window per liner, exactly the historical sheet.
     val stripComponents = wearStripComponentsFor(spec, resolvedComponents)
-    val stripTitles = buildWearStripTitleById(spec, stripComponents)
+    // A host's named wear areas follow its name in the strip title — "Bare shaft (Packing)".
+    val stripTitles = withWearZoneNames(buildWearStripTitleById(spec, stripComponents), effectiveRecord.spots)
     val windows = collectWearStripWindows(
         stripComponents, wearRecord.stripComponentIds, pdfPrefs.wearJoinGapMaxMm,
     )
@@ -499,20 +502,23 @@ fun composeWearPdfOnCanvas(
     // Worn-profile trace baseline (geom/WearTraceMath.kt): the deepest valued reading on ANY
     // liner, computed ONCE so every strip on the sheet exaggerates against the same worst
     // wear. Body/taper readings never trace, so they stay out of the baseline.
-    val linerOdMmById = docSpec.liners.associate { it.id to it.odMm }
-    val deepestLinerWearMm = deepestWearDepthMm(
-        effectiveRecord.diaReadings.mapNotNull { r ->
-            val odMm = linerOdMmById[r.componentId] ?: return@mapNotNull null
-            odMm to r.diaMm
-        }
-    )
+    // A body's readings inside a NAMED wear area (a wear zone) trace too, so they join the pool.
+    val traceLiners = docSpec.liners.map { WearTraceLiner(it.id, it.odMm, it.lengthMm) }
+    val traceBodies = docSpec.bodies.map { WearTraceBody(it.id, it.diaMm, it.lengthMm) }
+    val traceZones = effectiveRecord.spots.filter { it.isNamedZone }.map { Triple(it.linerId, it.startMm, it.lengthMm) }
+    val traceReadings = effectiveRecord.diaReadings.map { Triple(it.componentId, it.axialMm, it.diaMm) }
+    val deepestLinerWearMm = wearTraceBaselineMm(traceLiners, traceBodies, traceZones, traceReadings)
     // Every liner's worn-profile trace for the MAIN profile — ONE builder, the strips' construction
     // (on-device report: the "Trace depth exaggeration" slider changed nothing on the shaft).
     val profileLinerTraces = wearLinerTraces(
-        liners = docSpec.liners.map { WearTraceLiner(it.id, it.odMm, it.lengthMm) },
+        liners = traceLiners,
         spots = effectiveRecord.spots.map { Triple(it.linerId, it.startMm, it.lengthMm) },
-        readings = effectiveRecord.diaReadings.map { Triple(it.componentId, it.axialMm, it.diaMm) },
+        readings = traceReadings,
         maxDepthFrac = traceDepthFrac,
+        deepestDepthMm = deepestLinerWearMm,
+    )
+    val profileBodyZoneTraces = wearBodyZoneTraces(
+        traceBodies, traceZones, traceReadings, deepestLinerWearMm, traceDepthFrac,
     )
 
     // ── Shaft profile + OAL line ──────────────────────────────────────────────
@@ -551,6 +557,7 @@ fun composeWearPdfOnCanvas(
             // liner shoulders) — the thread relief groove included.
             threadRelief = false,
             linerTraces = profileLinerTraces,
+            bodyZoneTraces = profileBodyZoneTraces,
         )
 
         // Vertical-stroke wear bands + pit "X"s at true position on the profile. Bands clamp to
@@ -576,7 +583,16 @@ fun composeWearPdfOnCanvas(
 
         // Liner names centered under their span on the main profile — a reference tying each wear band
         // to its broken-out (zoomed) strip below. Only the liners that get a strip on this page.
-        drawWearLinerNamesOnProfile(c, onPageGroups, shaftCy + rPxProfile(maxDiaMm), profileBottom, contentLeft, contentRight, ::xAt, text, linerTitles)
+        val linerNameXs = drawWearLinerNamesOnProfile(c, onPageGroups, shaftCy + rPxProfile(maxDiaMm), profileBottom, contentLeft, contentRight, ::xAt, text, linerTitles)
+        // Each named wear area's name under its band, in the same row, slid clear of the liner
+        // names (WearZoneNames.kt). No named area, nothing drawn.
+        if (resolvedComponents != null) {
+            drawWearZoneNamesOnProfile(
+                c, resolveWearAreaSpans(effectiveRecord.spots, wearAreaHosts(resolvedComponents)),
+                effectiveRecord.spots, linerNameXs, shaftCy + rPxProfile(maxDiaMm), profileBottom,
+                contentLeft, contentRight, ::xAt, text,
+            )
+        }
 
         // Measured-Ø callouts (body/taper readings): leader from the drawn bottom surface at the
         // station down to the value, in the band reserved below the names/direction row. Same
@@ -749,20 +765,58 @@ private fun drawWearLinerNamesOnProfile(
     xAt: (Float) -> Float,
     text: Paint,
     linerTitles: Map<String, String>,
-) {
-    if (groups.isEmpty()) return
+): List<ClosedFloatingPointRange<Float>> {
+    if (groups.isEmpty()) return emptyList()
     val p = Paint(text).apply { textAlign = PaintAlign.CENTER }
-    val y = (shaftBottomY + p.textSize + 12f).coerceAtMost(bandBottom - 2f)
+    val y = wearProfileNamesBaseline(shaftBottomY, bandBottom, p)
     // Reserve the edge zones where "← AFT" / "FWD →" sit (drawn with the same [text] size).
     val loX = contentLeft + text.measureText("← AFT") + 10f
     val hiX = contentRight - text.measureText("FWD →") - 10f
-    if (hiX <= loX) return
+    if (hiX <= loX) return emptyList()
+    val drawn = mutableListOf<ClosedFloatingPointRange<Float>>()
     groups.forEach { g ->
         val ln = g.liner
         if (ln.lengthMm <= 0f) return@forEach
         val label = ellipsizeToWidth(linerTitles[ln.id] ?: "Liner", p, hiX - loX)
         val spanCx = (xAt(ln.startFromAftMm) + xAt(ln.startFromAftMm + ln.lengthMm)) * 0.5f
-        c.drawText(label, wearProfileNameCenterX(spanCx, p.measureText(label), loX, hiX), y, p)
+        val w = p.measureText(label)
+        val cx = wearProfileNameCenterX(spanCx, w, loX, hiX)
+        c.drawText(label, cx, y, p)
+        drawn += (cx - w * 0.5f)..(cx + w * 0.5f)
+    }
+    return drawn
+}
+
+/** The baseline of the main profile's names row — liner names and wear-zone names share it. */
+private fun wearProfileNamesBaseline(shaftBottomY: Float, bandBottom: Float, p: Paint): Float =
+    (shaftBottomY + p.textSize + 12f).coerceAtMost(bandBottom - 2f)
+
+/**
+ * Each named wear area's name (`WearSpot.label`) under its band on the main profile, in the
+ * liner-names row, placed by [placeWearZoneNames] clear of the liner names already drawn there
+ * ([linerNameXs]) and of each other.
+ */
+private fun drawWearZoneNamesOnProfile(
+    c: Canvas,
+    spans: List<WearAreaSpan>,
+    spots: List<WearSpot>,
+    linerNameXs: List<ClosedFloatingPointRange<Float>>,
+    shaftBottomY: Float,
+    bandBottom: Float,
+    contentLeft: Float,
+    contentRight: Float,
+    xAt: (Float) -> Float,
+    text: Paint,
+) {
+    val p = Paint(text).apply { textAlign = PaintAlign.LEFT }
+    val loX = contentLeft + text.measureText("← AFT") + 10f
+    val hiX = contentRight - text.measureText("FWD →") - 10f
+    if (hiX <= loX) return
+    val requests = wearZoneNameRequests(spans, spots, xAt) { s -> p.measureText(ellipsizeToWidth(s, p, hiX - loX)) }
+    if (requests.isEmpty()) return
+    val y = wearProfileNamesBaseline(shaftBottomY, bandBottom, p)
+    placeWearZoneNames(requests, linerNameXs, loX, hiX).forEach { placed ->
+        c.drawText(ellipsizeToWidth(placed.text, p, hiX - loX), placed.left, y, p)
     }
 }
 

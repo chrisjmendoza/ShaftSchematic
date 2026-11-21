@@ -79,6 +79,11 @@ enum class WearSpotReference { LINER_AFT, LINER_FWD, AFT_SET, FWD_SET }
  * @property authoredReference Which reference point [startMm] was authored against
  *   (display-only; additive field, default [WearSpotReference.LINER_AFT] preserves the
  *   pre-existing behavior for old files — no envelope version bump needed).
+ * @property label What runs on the area — "Packing", "Grounding strap", "Seal" or a typed name
+ *   ([WearAreaName]) — stored verbatim; blank = an unnamed area (every area saved before the
+ *   field). A NAMED area is a wear zone (on-device request: wear where there is no liner): the
+ *   wear sheet prints its name, and on a body its valued Ø readings trace a worn profile the way
+ *   a liner's do (`wearBodyZoneTraces`). Additive and defaulted, so older files decode unchanged.
  */
 @Serializable
 data class WearSpot(
@@ -89,7 +94,26 @@ data class WearSpot(
     val minDiaMm: Float = 0f,
     val note: String = "",
     val authoredReference: WearSpotReference = WearSpotReference.LINER_AFT,
+    val label: String = "",
 )
+
+/** True when this area is named — a wear zone (see [WearSpot.label]). */
+val WearSpot.isNamedZone: Boolean get() = label.isNotBlank()
+
+/**
+ * The preset names a wear area's "Area:" chips offer. Each writes its [text] into
+ * [WearSpot.label]; a label matching none of them is an Other name.
+ */
+enum class WearAreaName(val text: String) {
+    PACKING("Packing"),
+    GROUNDING_STRAP("Grounding strap"),
+    SEAL("Seal");
+
+    companion object {
+        /** The preset [label] reads as, or null for a blank or typed name. */
+        fun presetFor(label: String): WearAreaName? = entries.firstOrNull { it.text == label }
+    }
+}
 
 /**
  * The drawn size of a wear [WearPit] "X" symbol. Machinists mark small pits/holes with a

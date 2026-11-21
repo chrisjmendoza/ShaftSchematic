@@ -103,6 +103,20 @@ fun ShaftViewModel.updateWearSpotReference(id: String, reference: WearSpotRefere
 }
 
 /**
+ * Name a wear spot by [id] — what runs there ("Packing", "Grounding strap", a typed name), stored
+ * verbatim; blank clears it. Geometry-free, like [updateWearSpotReference].
+ */
+fun ShaftViewModel.updateWearSpotLabel(id: String, label: String) {
+    _wearRecord.update { rec ->
+        rec.copy(
+            spots = rec.spots.map { spot ->
+                if (spot.id != id || spot.label == label) spot else spot.copy(label = label)
+            }
+        )
+    }
+}
+
+/**
  * Remove a wear spot by [id]. Confirm-free, as authored in the detail-view UI — the page offers
  * a snackbar Undo that puts the exact spot back ([restoreWearSpot]).
  */

@@ -2,6 +2,8 @@ package com.android.shaftschematic.pdf
 
 import com.android.shaftschematic.gfx.alpha
 import com.android.shaftschematic.gfx.Canvas
+import com.android.shaftschematic.gfx.Color
+import com.android.shaftschematic.gfx.color
 import com.android.shaftschematic.gfx.left
 import com.android.shaftschematic.gfx.Paint
 import com.android.shaftschematic.gfx.PaintStyle
@@ -87,6 +89,12 @@ fun drawSimpleShaftProfile(
      */
     linerTraces: Map<String, List<WearTraceVertex>> = emptyMap(),
     /**
+     * Worn-profile traces by drawn body-run id inside its named wear zones (`wearBodyZoneTraces`):
+     * a run with an entry has its surface cleared and re-stroked through the measured diameters
+     * there ([drawBodyZoneTrace]). Empty — every caller but the wear document — draws plain runs.
+     */
+    bodyZoneTraces: Map<String, List<WearTraceVertex>> = emptyMap(),
+    /**
      * Whether a long body run draws its centre S-break. The Final tab's Full length band passes
      * false — its whole point is the shaft at true length, unbroken — and draws every run plain.
      */
@@ -166,6 +174,14 @@ fun drawSimpleShaftProfile(
             drawBreakEdge(c, rBeg, top, bot, amp, capPaint, eyeAtTop = true)
             c.drawLine(rBeg, top, x1, top, outline); c.drawLine(rBeg, bot, x1, bot, outline)
             c.drawLine(x1, top, x1, bot, outline)
+        }
+        val zoneVerts = bodyZoneTraces[b.id].orEmpty()
+        if (zoneVerts.isNotEmpty()) {
+            drawBodyZoneTrace(
+                c, zoneVerts, { mm -> xAt(b.startFromAftMm + mm) }, cy, r, outline,
+                paper = Paint().apply { color = Color.WHITE; style = PaintStyle.FILL },
+                visibleX = brk?.let { listOf(x0..it.leftEnd, it.rightBeg..x1) },
+            )
         }
     }
     // Tapers — the trapezoid, square-faced at both ends.

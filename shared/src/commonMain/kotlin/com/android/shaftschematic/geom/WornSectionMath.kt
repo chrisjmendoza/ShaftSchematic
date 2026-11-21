@@ -127,3 +127,52 @@ fun layoutWornSectionValues(
         overflows = groupWidth + thickness > (x1 - x0),
     )
 }
+
+/**
+ * In-profile value [columns] on ONE component moved so their knockout halos stay inside the
+ * component's drawn span `[spanLeft, spanRight]`, [clearance] clear of each end line (on-device
+ * report: a Ø read near a liner end printed its knockout over the liner's end line — the outline
+ * takes precedence, and a value need not sit exactly on its station). A column already clear
+ * does not move. Columns the push would stack are then spread apart in order, still held inside
+ * the span; a span too narrow for them all keeps them centred on it. Pure x shifts: each column's
+ * height and thickness are unchanged.
+ */
+fun keepValueColumnsInsideSpan(
+    columns: List<WornValueColumn>,
+    spanLeft: Float,
+    spanRight: Float,
+    clearance: Float,
+): List<WornValueColumn> {
+    if (columns.isEmpty()) return columns
+    val lo = spanLeft + clearance
+    val hi = spanRight - clearance
+    fun WornValueColumn.width() = haloRight - haloLeft
+    fun WornValueColumn.shiftedBy(dx: Float) =
+        if (dx == 0f) this else copy(cx = cx + dx, haloLeft = haloLeft + dx, haloRight = haloRight + dx)
+    fun WornValueColumn.withLeft(left: Float) = shiftedBy(left - haloLeft)
+
+    val order = columns.indices.sortedBy { columns[it].cx }
+    val total = order.sumOf { columns[it].width().toDouble() }.toFloat()
+    val out = columns.toMutableList()
+    if (total > hi - lo) {
+        // No room for every column clear of both ends: one centred group, as close as they fit.
+        var left = (spanLeft + spanRight - total) / 2f
+        order.forEach { i -> out[i] = columns[i].withLeft(left); left += columns[i].width() }
+        return out
+    }
+    // Into the span, then apart left to right, then back off the right end right to left.
+    var cursor = lo
+    order.forEach { i ->
+        val col = columns[i]
+        val left = col.haloLeft.coerceIn(lo, hi - col.width()).coerceAtLeast(cursor)
+        out[i] = col.withLeft(left)
+        cursor = left + col.width()
+    }
+    var limit = hi
+    order.reversed().forEach { i ->
+        val col = out[i]
+        if (col.haloRight > limit) out[i] = col.withLeft(limit - col.width())
+        limit = out[i].haloLeft
+    }
+    return out
+}

@@ -101,7 +101,10 @@ import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
 import com.android.shaftschematic.geom.buildLinerWearTrace
 import com.android.shaftschematic.geom.computeOalWindow
 import com.android.shaftschematic.geom.computeSetPositionsInMeasureSpace
-import com.android.shaftschematic.geom.deepestWearDepthMm
+import com.android.shaftschematic.geom.WearTraceBody
+import com.android.shaftschematic.geom.WearTraceLiner
+import com.android.shaftschematic.geom.wearBodyZoneTraces
+import com.android.shaftschematic.geom.wearTraceBaselineMm
 import com.android.shaftschematic.geom.pickDiaReadingAt
 import com.android.shaftschematic.geom.pitCenterY
 import com.android.shaftschematic.geom.PIT_SIZE_FACTOR_DEFAULT
@@ -126,6 +129,7 @@ import com.android.shaftschematic.model.WearPit
 import com.android.shaftschematic.model.WearRecord
 import com.android.shaftschematic.model.WearSpot
 import com.android.shaftschematic.model.WearSpotReference
+import com.android.shaftschematic.model.isNamedZone
 import com.android.shaftschematic.geom.RETURN_SWEEP_FULLNESS
 import com.android.shaftschematic.pdf.WearRailSpan
 import com.android.shaftschematic.pdf.formatDiaWithUnit
@@ -218,6 +222,8 @@ fun ComponentWearDetailOverlay(
     onAddSpot: (hostId: String) -> Unit,
     onUpdateSpot: (id: String, startMm: Float, lengthMm: Float, minDiaMm: Float, note: String) -> Unit,
     onUpdateSpotReference: (id: String, reference: WearSpotReference) -> Unit,
+    /** The area's name (`WearSpot.label`), verbatim; blank clears it. */
+    onUpdateSpotLabel: (id: String, label: String) -> Unit = { _, _ -> },
     onRemoveSpot: (id: String) -> Unit,
     onAddPit: (componentId: String, axialMm: Float, acrossFrac: Float, sizeFactor: Float) -> Unit,
     onRemovePit: (id: String) -> Unit,
@@ -316,13 +322,16 @@ fun ComponentWearDetailOverlay(
     // The exaggeration baseline is the deepest valued reading on ANY liner in the record — one
     // record-wide reference, the same the wear PDF computes, so a given wear draws to the same
     // depth here and on the printed strip. Body/taper readings never trace, so they stay out.
+    // The record's ONE trace baseline — liners and named body zones alike (wearTraceBaselineMm),
+    // so this page exaggerates against the same worst wear the sheet does.
     val deepestWearDepth = remember(wearRecord, resolvedComponents) {
-        val odByLinerId = resolvedComponents.filterIsInstance<ResolvedLiner>().associate { it.id to it.odMm }
-        deepestWearDepthMm(
-            wearRecord.diaReadings.mapNotNull { r ->
-                val odMm = odByLinerId[r.componentId] ?: return@mapNotNull null
-                odMm to r.diaMm
-            }
+        wearTraceBaselineMm(
+            liners = resolvedComponents.filterIsInstance<ResolvedLiner>()
+                .map { WearTraceLiner(it.id, it.odMm, it.endMmPhysical - it.startMmPhysical) },
+            bodies = resolvedComponents.filterIsInstance<ResolvedBody>()
+                .map { WearTraceBody(it.id, it.diaMm, it.endMmPhysical - it.startMmPhysical) },
+            zones = wearRecord.spots.filter { it.isNamedZone }.map { Triple(it.linerId, it.startMm, it.lengthMm) },
+            readings = wearRecord.diaReadings.map { Triple(it.componentId, it.axialMm, it.diaMm) },
         )
     }
     val traceReadings = remember(diaReadings, lenMm) {
@@ -755,7 +764,8 @@ fun ComponentWearDetailOverlay(
                         // sites read identically.
                         val rStart = rPx(startDiaMm)
                         val rEnd = rPx(endDiaMm)
-                        val traceVerts = if (liner == null) emptyList() else buildLinerWearTrace(
+                        val bodyComponent = component as? ResolvedBody
+                        val traceVerts = if (liner != null) buildLinerWearTrace(
                             linerLengthMm = lenMm,
                             bands = spots.map { spot ->
                                 val band = clampWearBandToLiner(spot.startMm, spot.lengthMm, lenMm)
@@ -765,7 +775,16 @@ fun ComponentWearDetailOverlay(
                             nominalOdMm = liner.odMm,
                             deepestDepthMm = deepestWearDepth,
                             maxDepthFrac = traceDepthFrac,
-                        ).run
+                        ).run else if (bodyComponent != null) {
+                            // A body traces inside its NAMED areas only — the sheet's builder.
+                            wearBodyZoneTraces(
+                                bodies = listOf(WearTraceBody(bodyComponent.id, bodyComponent.diaMm, lenMm)),
+                                zones = spots.filter { it.isNamedZone }.map { Triple(it.linerId, it.startMm, it.lengthMm) },
+                                readings = diaReadings.map { Triple(it.componentId, it.axialMm, it.diaMm) },
+                                deepestDepthMm = deepestWearDepth,
+                                maxDepthFrac = traceDepthFrac,
+                            )[bodyComponent.id].orEmpty()
+                        } else emptyList()
                         fun traceXPx(localMm: Float) = startPx + localMm * lay.pxPerMm
                         val bodyPath = Path().apply {
                             moveTo(startPx, cy - rStart)
@@ -1111,6 +1130,7 @@ fun ComponentWearDetailOverlay(
                             oalMm = spec.overallLengthMm,
                             onCommit = { s, l, d, n -> onUpdateSpot(spot.id, s, l, d, n) },
                             onUpdateReference = { ref -> onUpdateSpotReference(spot.id, ref) },
+                            onUpdateLabel = { label -> onUpdateSpotLabel(spot.id, label) },
                             onDelete = { deleteSpot(spot) },
                         )
                     }
@@ -1358,6 +1378,7 @@ private fun WearSpotCard(
     oalMm: Float,
     onCommit: (startMm: Float, lengthMm: Float, minDiaMm: Float, note: String) -> Unit,
     onUpdateReference: (WearSpotReference) -> Unit,
+    onUpdateLabel: (String) -> Unit,
     onDelete: () -> Unit,
 ) {
     val reference = spot.authoredReference
@@ -1405,6 +1426,9 @@ private fun WearSpotCard(
                     Icon(Icons.Filled.Delete, contentDescription = "Delete spot ${index + 1}")
                 }
             }
+
+            // What runs on the area — a named area is a wear zone (WearSpot.label).
+            WearAreaNameRow(spotId = spot.id, label = spot.label, onCommit = onUpdateLabel)
 
             // "Measure from" — Start's authoring reference (Change 1, post-review
             // spec): AFT SET / FWD SET / Liner AFT / Liner FWD. Tapping a chip persists the

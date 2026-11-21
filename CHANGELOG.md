@@ -8,6 +8,23 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-20
 
+### feat(wear): name a wear area — packing, grounding strap, seal — and trace a body's wear there
+
+A wear area's card has a new **Area:** row — Packing | Grounding strap | Seal | Other (type your
+own) — for wear where there is no liner (on-device request). A named area stays a wear area:
+nothing is added to the schematic. On the wear sheet its name prints under its band on the shaft
+drawing and after the part's name in its detail strip title ("Bare shaft (Packing)"), and the
+measured diameters inside a named area on a body or bare shaft now trace the worn profile there,
+the way a liner's do, on the sheet, the Wear tab and the detail page. Unnamed areas print exactly
+as before; the consolidated sheet shows the band but not the name.
+
+### fix(consolidated): a Ø value near a part's end no longer covers its end line
+
+A measured diameter printed inside the profile close to the end of a liner (or any part) now sits
+a little way in from that end, so its white knockout no longer hides the end line (on-device
+report). Values that would then land on top of each other are spread apart in order. Values clear
+of the ends do not move.
+
 ### fix(wear, undercut): pinch to zoom the shaft on the Wear and Undercut tabs
 
 The shaft drawing on the Wear tab and on the Undercut tab now zooms with two fingers, up to 6×, so

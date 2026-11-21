@@ -26,6 +26,8 @@ import com.android.shaftschematic.geom.WearTraceReading
 import com.android.shaftschematic.geom.WearTraceVertex
 import com.android.shaftschematic.geom.WEAR_TRACE_MAX_DEPTH_FRAC
 import com.android.shaftschematic.geom.buildLinerWearTrace
+import com.android.shaftschematic.geom.WearTraceBody
+import com.android.shaftschematic.geom.wearBodyZoneTraces
 import com.android.shaftschematic.geom.pitCenterY
 import com.android.shaftschematic.geom.pitHalfArm
 import com.android.shaftschematic.geom.planDiaCallouts
@@ -249,7 +251,7 @@ internal fun drawWearStripWindow(
     // before any px geometry and mapped through the strip's scale below — the same output the
     // detail overlay's canvas walks. A reading traces whether or not a band covers it; each band's
     // own grey fill walks its own trace ([LinerWearTrace.bandTraces]) and the surface edges walk
-    // the whole run. Only a liner traces: body/taper readings never drive a worn profile.
+    // the whole run. A taper never traces; a body traces inside its named zones only (below).
     val traceReadings = if (linerComp == null) emptyList() else valuedReadings
         .filter { it.componentId == linerComp.id }
         .map { WearTraceReading(it.axialMm.coerceIn(0f, linerComp.lengthMm), it.diaMm) }
@@ -452,9 +454,10 @@ internal fun drawWearStripWindow(
     val bandFill = Paint(ANTI_ALIAS_FLAG).apply {
         style = PaintStyle.FILL; color = Color.argb(bandShadeAlpha, 0, 0, 0)
     }
-    // A body's wear areas: the same grey band and edge ticks at the body's own height, always a
-    // plain rectangle — a body never traces. A window may hold a liner and bodies together.
-    comps.filter { it.kind == WearStripComponentKind.BODY }.forEach { body ->
+    // A body's wear areas: the same grey band and edge ticks at the body's own height. A window
+    // may hold a liner and bodies together.
+    val stripBodies = comps.filter { it.kind == WearStripComponentKind.BODY }
+    stripBodies.forEach { body ->
         val r = rOf(body.aftDiaMm)
         clampedBandsOf(body).forEach { clamp ->
             if (clamp.lengthMm <= 0f) return@forEach
@@ -462,6 +465,22 @@ internal fun drawWearStripWindow(
             val x1 = xAtStrip(body.startMm + clamp.startMm + clamp.lengthMm)
             c.drawRect(x0, cy - r, x1, cy + r, bandFill)
             c.drawLine(x0, cy - r, x0, cy + r, dimPaint); c.drawLine(x1, cy - r, x1, cy + r, dimPaint)
+        }
+    }
+    // A body's NAMED areas (wear zones) trace like a liner's bands (wearBodyZoneTraces): the
+    // material measured away is cleared to paper over the band, and the edge re-stroked through
+    // the readings. Outside its zones a body's surface stays straight.
+    val bodyZoneTraces = if (stripBodies.isEmpty()) emptyMap() else wearBodyZoneTraces(
+        stripBodies.map { WearTraceBody(it.id, it.aftDiaMm, it.lengthMm) },
+        spots.filter { it.isNamedZone }.map { Triple(it.linerId, it.startMm, it.lengthMm) },
+        diaReadings.map { Triple(it.componentId, it.axialMm, it.diaMm) },
+        deepestWearDepthMm, traceDepthFrac,
+    )
+    if (bodyZoneTraces.isNotEmpty()) {
+        val paper = Paint().apply { color = Color.WHITE; style = PaintStyle.FILL }
+        stripBodies.forEach { body ->
+            val verts = bodyZoneTraces[body.id] ?: return@forEach
+            drawBodyZoneTrace(c, verts, { mm -> xAtStrip(body.startMm + mm) }, cy, rOf(body.aftDiaMm), outline, paper)
         }
     }
     if (linerComp != null) {

@@ -555,6 +555,21 @@ draw across one.
   pruned against the liner list, since a bare-shaft id is unknown to the codec. An area whose
   host no longer resolves is skipped at the render layer and comes back with Undo.
 
+**Named areas — wear zones.** A wear area may carry a name (`WearSpot.label`, verbatim, blank =
+unnamed — every older area), set by the card's "Area: Packing | Grounding strap | Seal | Other"
+row (`WearAreaNameRow`; `WearAreaName` presets, Other a typed name, a re-tap of the selected chip
+clears it; on-device request: wear where there is no liner, such as packing or a grounding strap).
+A named area stays a reference feature — never a component, never in `ShaftSpec`. On the WEAR
+sheet only: its name follows its host's strip title in parentheses (`withWearZoneNames`) and
+prints under its band in the main profile's names row, placed with the liner names as obstacles
+by `BelowShaftLabelLayout` (`placeWearZoneNames`, `pdf/WearZoneNames.kt`); the consolidated sheet
+prints no zone name. On a BODY, the valued readings inside its named areas trace a worn profile
+(`wearBodyZoneTraces`, each zone a liner-style band — surface at both ends) drawn by ONE
+`drawBodyZoneTrace` (`pdf/BodyZoneTraceDraw.kt`) on the wear sheet's main profile and strips and
+the Wear tab canvas, and through the detail canvas's own silhouette path; a body reading outside
+every named area, or in an unnamed one, never traces. `wearTraceBaselineMm` is the ONE baseline
+for liners and zones alike (the liner baseline when nothing is named).
+
 **One resolution.** `resolveWearAreaSpans(spots, hosts)` (`geom/WearAreaMath.kt`, pure) turns the
 record into clamped shaft-space spans; hosts come from `wearAreaHosts(resolved)`
 (`ui/resolved/WearAreaHosts.kt`). Draw sites:
@@ -1143,7 +1158,12 @@ On-device request following the worn-sections review:
   `layoutWornSectionValues` with a degenerate span so the column centers on the station.
   Labels: `Ø` + `formatDiaWithUnit` (the wear doc's own callout engine keeps its
   prefix-free labels; two conventions until consolidation settles). Value-less readings
-  and orphans skipped, as ever.
+  and orphans skipped, as ever. **The outline takes precedence over the station** (on-device
+  report: a value read near a liner end knocked out the liner's end line): each component's
+  columns are held inside its drawn span, the outline stroke + `IN_PROFILE_FACE_GAP_PT` clear of
+  its end lines, and spread apart in order where that push would stack them; a span too narrow
+  keeps them centred on it (`keepValueColumnsInsideSpan`, `geom/WornSectionMath.kt`). A column
+  already clear does not move.
 - **Wear Ø values print the primary unit only — never dual** (on-device ruling: on a
   dual-units job the in-profile columns carried `[278.9 mm]` and stood taller than the shaft).
   ONE term, inline or stacked layout alike, from the reading's own print unit
