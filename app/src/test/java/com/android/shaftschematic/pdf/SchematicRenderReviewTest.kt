@@ -88,6 +88,59 @@ class SchematicRenderReviewTest {
     )
 
     /**
+     * Named wear zones: packing wear on bare shaft beside a liner, and a grounding-strap band, with
+     * readings inside the packing zone — its name under the band and in the strip title, its
+     * surface traced like a liner's.
+     */
+    @Test
+    fun `wear sheet named zones`() {
+        val inch = 25.4f
+        val spec = com.android.shaftschematic.model.ShaftSpec(
+            overallLengthMm = 200f * inch,
+            liners = listOf(com.android.shaftschematic.model.Liner(id = "L1", startFromAftMm = 40f * inch, lengthMm = 30f * inch, odMm = 11f * inch)),
+            bodies = listOf(com.android.shaftschematic.model.Body(id = "B1", startFromAftMm = 70f * inch, lengthMm = 130f * inch, diaMm = 10f * inch)),
+        )
+        val record = WearRecord(
+            spots = listOf(
+                WearSpot(id = "p", linerId = "B1", startMm = 4f * inch, lengthMm = 14f * inch, label = "Packing"),
+                WearSpot(id = "g", linerId = "B1", startMm = 100f * inch, lengthMm = 3f * inch, label = "Grounding strap"),
+                WearSpot(id = "w", linerId = "L1", startMm = 8f * inch, lengthMm = 10f * inch),
+            ),
+            diaReadings = listOf(
+                WearDiaReading(componentId = "B1", axialMm = 8f * inch, diaMm = 9.985f * inch),
+                WearDiaReading(componentId = "B1", axialMm = 12f * inch, diaMm = 9.97f * inch),
+                WearDiaReading(componentId = "L1", axialMm = 12f * inch, diaMm = 10.99f * inch),
+            ),
+            stripComponentIds = listOf("L1", "B1"),
+        )
+        val (bmp, c) = bitmapPage()
+        composeWearPdf(
+            page = pageOn(c, PDF_PAGE_WIDTH_PT, PDF_PAGE_HEIGHT_PT),
+            spec = spec, project = ProjectInfo(), unit = UnitSystem.INCHES,
+            resolvedComponents = resolveComponents(spec), wearRecord = record,
+        )
+        save("wear_named_zones.png", bmp)
+
+        // In-profile readings at a liner's very ends: pushed in off its end lines.
+        val (bmp2, c2) = bitmapPage()
+        composeRunoutPdfOnCanvas(
+            c2, PDF_PAGE_WIDTH_PT.toFloat(), PDF_PAGE_HEIGHT_PT.toFloat(),
+            spec = spec, config = RunoutConfig(), project = ProjectInfo(), unit = UnitSystem.INCHES,
+            pdfPrefs = PdfPrefs(), resolvedComponents = resolveComponents(spec),
+            wearRecord = WearRecord(
+                diaReadings = listOf(
+                    WearDiaReading(componentId = "L1", axialMm = 0.1f * inch, diaMm = 10.955f * inch),
+                    WearDiaReading(componentId = "L1", axialMm = 0.6f * inch, diaMm = 10.995f * inch),
+                    WearDiaReading(componentId = "L1", axialMm = 15f * inch, diaMm = 10.999f * inch),
+                    WearDiaReading(componentId = "L1", axialMm = 29.8f * inch, diaMm = 10.971f * inch),
+                ),
+            ),
+            consolidated = true, includeBubbles = false, includeWearInfo = true,
+        )
+        save("consolidated_readings_at_liner_ends.png", bmp2)
+    }
+
+    /**
      * Blend by angle: the hand sketch's 9.750" liner stepping down to a 9.030" body through a 45°
      * chamfer with a 3/8" R at its foot — to the liner OD, and from the default seat.
      */

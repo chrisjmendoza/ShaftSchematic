@@ -289,10 +289,27 @@ the chained rail belongs to the window's liner, else its first body carrying are
 consolidated sheet (`consolidatedWearBandRects`, following `PdfPrefs.wearAreaStyle` like a
 liner's). A resolved body run is already trimmed around liners and tapers, so a body's band never
 crosses one, and on a whole-shaft profile it stops at each side of the run's S-break gap
-(`spanPiecesClearOf` over the body pass's own gaps — bare paper). Only a LINER traces a worn
-profile; Ø readings on a body never start one. `LINER_AFT`/`LINER_FWD` mean the host's own edges
+(`spanPiecesClearOf` over the body pass's own gaps — bare paper). A liner traces a worn profile
+wherever its readings sit; a body traces ONLY inside a NAMED area (below) — an unnamed body area
+or a body reading outside every named area never starts one. `LINER_AFT`/`LINER_FWD` mean the host's own edges
 and read "Body AFT"/"Body FWD" on a body's page through the ONE helper `wearReferenceChipLabel`;
 the stored enum is unchanged. A sheet with no body areas prints exactly as before.
+
+**A named wear area is a wear zone, not a component** (on-device request: wear where there is no
+liner — packing, a grounding strap). `WearSpot.label` (verbatim, blank = unnamed — every older
+area) is set by the card's ONE "Area: Packing | Grounding strap | Seal | Other" row
+(`WearAreaNameRow`; Other opens a typed name, re-tapping the selected chip clears it). It never
+enters `ShaftSpec` — nothing splits, collides or reaches the schematic. On the WEAR sheet only, the
+name prints after its host's strip title ("Bare shaft (Packing)", `withWearZoneNames`) and under
+its band in the main profile's names row, slid clear of the liner names by the schematic's own
+`BelowShaftLabelLayout` (`placeWearZoneNames`, `pdf/WearZoneNames.kt`); the consolidated sheet
+prints no zone name. A body's valued readings inside its named areas trace through the ONE
+`wearBodyZoneTraces` (`geom/WearTraceMath.kt` — each zone a liner-style band, surface at both
+ends), drawn by the ONE `drawBodyZoneTrace` (`pdf/BodyZoneTraceDraw.kt`: the body draws plain, then
+the worn-away metal is cleared to paper and the edge re-stroked, kept off an S-break gap) on the
+wear sheet's main profile and strips and the Wear tab canvas; the wear detail canvas walks the
+same vertices in its own silhouette path. Liners and zones share ONE baseline,
+`wearTraceBaselineMm`; with no named area it is the liner baseline, byte-identical.
 
 **The start / end bars are the ONE place a stored wear-area value changes without being typed**
 (on-device request: size an area on the drawing instead of measuring its length). Every drawn
@@ -332,7 +349,11 @@ inline or stacked (on-device ruling: the mm term stood taller than the shaft); t
 take no `dual` parameter, and rails and footer keep dual. On the **consolidated runout sheet** the same
 readings instead draw INSIDE the profile at their station — one rotated haloed column via
 `drawDiaReadingsInProfile` (`RunoutPdfComposer`), liners included, `Ø`-prefixed — replacing
-below-shaft callouts there; the wear document itself (the authoring surface) keeps its
+below-shaft callouts there. **The outline takes precedence over the station**: each value's
+knockout is held inside its component's drawn span, the outline stroke + `IN_PROFILE_FACE_GAP_PT`
+clear of its end lines, and values the push would stack are spread apart in order
+(`keepValueColumnsInsideSpan`, `geom/WornSectionMath.kt`; on-device report: a value read near a
+liner end knocked out the liner's end line — a value need not sit exactly on its station); the wear document itself (the authoring surface) keeps its
 callout engine unchanged. Valued **liner** readings additionally drive the drawn **worn-profile
 trace** WHEREVER they sit — a wear band is a highlight, never a gate (on-device report: a 9.973"
 reading on a 10" liner drew nothing until a wear area was added): the liner is split into its

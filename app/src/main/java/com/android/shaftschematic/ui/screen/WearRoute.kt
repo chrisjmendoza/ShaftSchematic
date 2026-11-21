@@ -66,7 +66,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.geom.WearTraceLiner
 import com.android.shaftschematic.geom.effectiveWearTraceDepthFrac
+import com.android.shaftschematic.geom.WearTraceBody
+import com.android.shaftschematic.geom.wearBodyZoneTraces
 import com.android.shaftschematic.geom.wearLinerTraces
+import com.android.shaftschematic.geom.wearTraceBaselineMm
+import com.android.shaftschematic.model.isNamedZone
+import com.android.shaftschematic.pdf.drawBodyZoneTrace
 import com.android.shaftschematic.model.DyePenResult
 import com.android.shaftschematic.model.ProjectInfo
 import com.android.shaftschematic.model.forSheet
@@ -110,6 +115,7 @@ import com.android.shaftschematic.ui.viewmodel.setWearShowShaftProfile
 import com.android.shaftschematic.ui.viewmodel.setWearStripComponents
 import com.android.shaftschematic.ui.viewmodel.updateWearDiaReading
 import com.android.shaftschematic.ui.viewmodel.updateWearSpot
+import com.android.shaftschematic.ui.viewmodel.updateWearSpotLabel
 import com.android.shaftschematic.ui.viewmodel.updateWearSpotReference
 import com.android.shaftschematic.util.DisplayUnits
 import com.android.shaftschematic.util.OutputFont
@@ -415,13 +421,23 @@ fun WearRoute(
     // Every liner's worn-profile trace for the shaft canvas above the slider — the wear sheet's
     // main-profile builder, so this drawing answers "Trace depth exaggeration" the way the
     // sheet does (on-device report: the slider changed nothing on the shaft).
-    val linerTraces = remember(wearRecord, spec.liners, traceDepthFrac) {
+    // A body traces inside its NAMED wear areas (wear zones), against the same baseline.
+    val traceBodies = remember(resolvedComponents) {
+        resolvedComponents.filterIsInstance<ResolvedBody>()
+            .map { WearTraceBody(it.id, it.diaMm, it.endMmPhysical - it.startMmPhysical) }
+    }
+    val (linerTraces, bodyZoneTraces) = remember(wearRecord, spec.liners, traceBodies, traceDepthFrac) {
+        val liners = spec.liners.map { WearTraceLiner(it.id, it.odMm, it.lengthMm) }
+        val zones = wearRecord.spots.filter { it.isNamedZone }.map { Triple(it.linerId, it.startMm, it.lengthMm) }
+        val readings = wearRecord.diaReadings.map { Triple(it.componentId, it.axialMm, it.diaMm) }
+        val baseline = wearTraceBaselineMm(liners, traceBodies, zones, readings)
         wearLinerTraces(
-            liners = spec.liners.map { WearTraceLiner(it.id, it.odMm, it.lengthMm) },
+            liners = liners,
             spots = wearRecord.spots.map { Triple(it.linerId, it.startMm, it.lengthMm) },
-            readings = wearRecord.diaReadings.map { Triple(it.componentId, it.axialMm, it.diaMm) },
+            readings = readings,
             maxDepthFrac = traceDepthFrac,
-        )
+            deepestDepthMm = baseline,
+        ) to wearBodyZoneTraces(traceBodies, zones, readings, baseline, traceDepthFrac)
     }
     val previewOpts = remember(outlineArgb, bodyFillArgb, hatchArgb, pdfThreadSlant, pdfThreadDensity, linerTraces) {
         RenderOptions(
@@ -513,6 +529,25 @@ fun WearRoute(
                     )
                     with(ShaftRenderer) {
                         draw(spec, layout, previewOpts, resolvedComponents)
+                    }
+                    // Named wear zones on bodies trace through their readings — the sheet's own
+                    // draw routine, on this canvas's native canvas.
+                    if (bodyZoneTraces.isNotEmpty()) {
+                        val native = drawContext.canvas.nativeCanvas
+                        val paper = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                            color = SheetInk.Paper.toArgb(); style = android.graphics.Paint.Style.FILL
+                        }
+                        val edge = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                            color = outlineArgb; style = android.graphics.Paint.Style.STROKE
+                            strokeWidth = previewOpts.outlineWidthPx
+                        }
+                        resolvedComponents.filterIsInstance<ResolvedBody>().forEach { b ->
+                            val verts = bodyZoneTraces[b.id] ?: return@forEach
+                            drawBodyZoneTrace(
+                                native, verts, { mm -> layout.xPx(b.startMmPhysical + mm) },
+                                layout.centerlineYPx, layout.rPx(b.diaMm), edge, paper,
+                            )
+                        }
                     }
                     drawWearAffordances(
                         layout = layout,
@@ -785,6 +820,7 @@ fun WearRoute(
             onAddSpot = vm::addWearSpot,
             onUpdateSpot = vm::updateWearSpot,
             onUpdateSpotReference = vm::updateWearSpotReference,
+            onUpdateSpotLabel = vm::updateWearSpotLabel,
             onRemoveSpot = vm::removeWearSpot,
             onAddPit = vm::addWearPit,
             onRemovePit = vm::removeWearPit,
