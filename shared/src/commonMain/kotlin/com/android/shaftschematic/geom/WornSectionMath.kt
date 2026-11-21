@@ -20,8 +20,13 @@ package com.android.shaftschematic.geom
 /** Column pitch (center-to-center) as a multiple of the text line height. */
 const val WORN_VALUE_COLUMN_PITCH_FACTOR = 1.7f
 
-/** Halo padding around the rotated text, as a multiple of the text line height. */
-const val WORN_VALUE_HALO_PAD_FACTOR = 0.3f
+/**
+ * Halo padding around the rotated text, as a multiple of the thickness the caller lays the value
+ * out at — the value's INK thickness on the consolidated sheet (the digits' measured height, not the
+ * font's line box), so the white box hugs the digits and neighbouring values can sit close
+ * (on-device request: "tighten the white box behind the wear values").
+ */
+const val WORN_VALUE_HALO_PAD_FACTOR = 0.25f
 
 /**
  * Fraction of the local band height (surface line to surface line) a value + halo may
@@ -129,50 +134,98 @@ fun layoutWornSectionValues(
 }
 
 /**
- * In-profile value [columns] on ONE component moved so their knockout halos stay inside the
- * component's drawn span `[spanLeft, spanRight]`, [clearance] clear of each end line (on-device
- * report: a Ø read near a liner end printed its knockout over the liner's end line — the outline
- * takes precedence, and a value need not sit exactly on its station). A column already clear
- * does not move. Columns the push would stack are then spread apart in order, still held inside
- * the span; a span too narrow for them all keeps them centred on it. Pure x shifts: each column's
- * height and thickness are unchanged.
+ * One in-profile value to place: its planned [column], the drawn x span of the part it is on, and
+ * its halo [pad] (the knockout's margin round the digits — `WORN_VALUE_HALO_PAD_FACTOR` × its line
+ * height), so the digits' own box is the halo inset by [pad].
  */
-fun keepValueColumnsInsideSpan(
-    columns: List<WornValueColumn>,
-    spanLeft: Float,
-    spanRight: Float,
-    clearance: Float,
-): List<WornValueColumn> {
-    if (columns.isEmpty()) return columns
-    val lo = spanLeft + clearance
-    val hi = spanRight - clearance
-    fun WornValueColumn.width() = haloRight - haloLeft
-    fun WornValueColumn.shiftedBy(dx: Float) =
-        if (dx == 0f) this else copy(cx = cx + dx, haloLeft = haloLeft + dx, haloRight = haloRight + dx)
-    fun WornValueColumn.withLeft(left: Float) = shiftedBy(left - haloLeft)
+data class ValueColumnRequest(
+    val column: WornValueColumn,
+    val spanLeft: Float,
+    val spanRight: Float,
+    val pad: Float = 0f,
+)
 
-    val order = columns.indices.sortedBy { columns[it].cx }
-    val total = order.sumOf { columns[it].width().toDouble() }.toFloat()
-    val out = columns.toMutableList()
-    if (total > hi - lo) {
-        // No room for every column clear of both ends: one centred group, as close as they fit.
-        var left = (spanLeft + spanRight - total) / 2f
-        order.forEach { i -> out[i] = columns[i].withLeft(left); left += columns[i].width() }
-        return out
-    }
-    // Into the span, then apart left to right, then back off the right end right to left.
-    var cursor = lo
-    order.forEach { i ->
-        val col = columns[i]
-        val left = col.haloLeft.coerceIn(lo, hi - col.width()).coerceAtLeast(cursor)
-        out[i] = col.withLeft(left)
-        cursor = left + col.width()
-    }
-    var limit = hi
-    order.reversed().forEach { i ->
-        val col = out[i]
-        if (col.haloRight > limit) out[i] = col.withLeft(limit - col.width())
-        limit = out[i].haloLeft
+/**
+ * A value already on the sheet that a placed one must respect: its halo x range, halo pad, and
+ * [orderX] — where it was planned, which side of it a placed value must stay on (defaults to its
+ * centre).
+ */
+data class ValueBox(
+    val haloLeft: Float,
+    val haloRight: Float,
+    val pad: Float = 0f,
+    val orderX: Float = (haloLeft + haloRight) / 2f,
+)
+
+/**
+ * The in-profile value columns of [requests], each moved — only as far as it must — so that
+ *  - its DIGITS stay inside its own part's drawn span, [clearance] clear of each end line (the
+ *    caller clips the knockout to the part, so the pad round the digits never erases the line —
+ *    on-device report: a Ø read near a liner end knocked out the liner's end line; the outline
+ *    takes precedence, and a value need not sit exactly on its station); and
+ *  - its knockout never covers the digits of another value and its digits sit under no other
+ *    knockout — the worn-section values in [obstacles] (placed first) and every reading placed
+ *    before it. Two knockouts' pads may overlap: both are paper.
+ * A column already clear does not move. A value moves at most two knockout widths and never
+ * past another value — "pushed in a little", always in station order (a reading 2" from the AFT
+ * end once jumped to the FWD end). Within that reach it takes the NEAREST clear spot; with none,
+ * the spot inside its span that overlaps the other values least (the outline still wins); with
+ * its span too narrow for the digits it stays where it was planned. Readings are placed AFT to FWD. Pure x shifts: each
+ * column's height and thickness are unchanged.
+ */
+fun placeValueColumnsClear(
+    requests: List<ValueColumnRequest>,
+    clearance: Float,
+    obstacles: List<ValueBox> = emptyList(),
+): List<WornValueColumn> {
+    val eps = 1e-3f
+    val placedBoxes = obstacles.toMutableList()
+    fun overlapLen(a0: Float, a1: Float, b0: Float, b1: Float) = (minOf(a1, b1) - maxOf(a0, b0)).coerceAtLeast(0f)
+    /** How far a knockout at [left] runs onto other digits, and its digits under other knockouts. */
+    fun clash(left: Float, w: Float, pad: Float) = placedBoxes.sumOf { b ->
+        (overlapLen(left, left + w, b.haloLeft + b.pad, b.haloRight - b.pad) +
+            overlapLen(left + pad, left + w - pad, b.haloLeft, b.haloRight)).toDouble()
+    }.toFloat()
+    val out = requests.map { it.column }.toMutableList()
+    requests.indices.sortedBy { requests[it].column.cx }.forEach { i ->
+        val req = requests[i]
+        val col = req.column
+        val w = col.haloRight - col.haloLeft
+        val pad = req.pad.coerceIn(0f, w / 2f)
+        // Halo-left bounds that keep the digits [clearance] inside the span.
+        val lo = req.spanLeft + clearance - pad
+        val hi = req.spanRight - clearance - w + pad
+        val left = if (lo <= hi) {
+            buildList {
+                add(col.haloLeft.coerceIn(lo, hi))
+                placedBoxes.forEach { b ->
+                    add(b.haloRight - pad)          // digits start where its knockout ends
+                    add(b.haloRight - b.pad)        // knockout starts where its digits end
+                    add(b.haloLeft - w + pad)       // digits end where its knockout starts
+                    add(b.haloLeft + b.pad - w)     // knockout ends where its digits start
+                }
+            }
+                .filter { cand ->
+                    val centre = cand + w / 2f
+                    cand >= lo - eps && cand <= hi + eps &&
+                        kotlin.math.abs(cand - col.haloLeft) <= 2f * w + eps &&
+                        // Station order: never past a value it was planned on the other side of.
+                        placedBoxes.all { b ->
+                            val bCentre = (b.haloLeft + b.haloRight) / 2f
+                            if (col.cx >= b.orderX) centre >= bCentre - eps else centre <= bCentre + eps
+                        }
+                }
+                .minWithOrNull(
+                    compareBy<Float>({ if (clash(it, w, pad) <= eps) 0f else clash(it, w, pad) })
+                        .thenBy { kotlin.math.abs(it - col.haloLeft) },
+                )
+        } else null
+        // No candidate (the reach or the station order ruled them all out): the end-line spot,
+        // which the outline is owed; a span too narrow for the digits keeps the planned spot.
+        val l = left ?: if (lo <= hi) col.haloLeft.coerceIn(lo, hi) else col.haloLeft
+        val placed = if (l == col.haloLeft) col else col.copy(cx = col.cx + (l - col.haloLeft), haloLeft = l, haloRight = l + w)
+        out[i] = placed
+        placedBoxes += ValueBox(placed.haloLeft, placed.haloRight, pad, orderX = col.cx)
     }
     return out
 }

@@ -560,10 +560,12 @@ unnamed — every older area), set by the card's "Area: Packing | Grounding stra
 row (`WearAreaNameRow`; `WearAreaName` presets, Other a typed name, a re-tap of the selected chip
 clears it; on-device request: wear where there is no liner, such as packing or a grounding strap).
 A named area stays a reference feature — never a component, never in `ShaftSpec`. On the WEAR
-sheet only: its name follows its host's strip title in parentheses (`withWearZoneNames`) and
-prints under its band in the main profile's names row, placed with the liner names as obstacles
-by `BelowShaftLabelLayout` (`placeWearZoneNames`, `pdf/WearZoneNames.kt`); the consolidated sheet
-prints no zone name. On a BODY, the valued readings inside its named areas trace a worn profile
+sheet only: its name follows its host's strip title in parentheses (`withWearZoneNames`) and, on
+a BODY, prints under its band in the main profile's names row, sliding along its body clear of the
+liner names and of the Ø callout leaders that cross the row (`placeWearZoneNames`,
+`pdf/WearZoneNames.kt`, through `BelowShaftLabelLayout`; the callouts are planned first). A LINER's
+zone keeps off that row, where the liner's own name sits, and prints in the strip title only. The
+consolidated sheet prints no zone name. Overlapping named zones on one body trace as one. On a BODY, the valued readings inside its named areas trace a worn profile
 (`wearBodyZoneTraces`, each zone a liner-style band — surface at both ends) drawn by ONE
 `drawBodyZoneTrace` (`pdf/BodyZoneTraceDraw.kt`) on the wear sheet's main profile and strips and
 the Wear tab canvas, and through the detail canvas's own silhouette path; a body reading outside
@@ -941,9 +943,8 @@ Same-day review feedback on step 4; supersedes step 4's picker placement:
   Preview/Print/Export of the consolidated sheet.
 - **"Dye pen test" row** (on-device request): a per-job switch, `RunoutConfig.showDyePenTest`
   (additive, default OFF — existing sheets byte-identical; `RunoutConfigDyePenTest`), prints
-  `Dye pen test: ☐ PASS ☐ FAIL` in the TIR line's lane above the footer — after the write-in
-  rule when bubbles print, at the left when they are elected out (the lane is reserved either
-  way). The boxes mark from the ONE `WearRecord.dyePenResult` the wear sheet prints, through
+  `Dye pen test: ☐ PASS ☐ FAIL` in the lane above the footer, at its left — the TIR line prints
+  under the footer on this sheet (below). The boxes mark from the ONE `WearRecord.dyePenResult` the wear sheet prints, through
   the ONE construction `drawDyePenBoxes` (`pdf/WearPdfComposer.kt`): **none or one, never
   both** — the shared `DyePenResultChips` (Wear tab, Output tab, consolidated preview panel)
   toggles Pass | Fail and tapping the selected chip clears it, leaving both boxes blank for
@@ -1140,9 +1141,12 @@ consolidated drawing —
   columns"), work-order center (Customer/Vessel/Job#/Date, bold Side, keyway-clocking note),
   blank-draft write-in rules. Replaces
   the sheet's old one-line header. No compression note — the S-break pair on a
-  foreshortened body run already says it. The TIR line sits directly above the footer.
+  foreshortened body run already says it. The TIR line prints UNDER the footer — below the
+  taper columns, in a row of its own (`tirBelowHAt`, `TIR_LINE_HEIGHT_PT` at the footer size,
+  baseline `TIR_BELOW_FOOTER_BASELINE_PT` under the block; on-device request). The classic sheet,
+  which has no footer, keeps it in the lane above its foot.
 - **Page order:** margin → OAL rail → dim tiers → shaft (compressed, with wear info) →
-  bubbles → TIR line → footer → margin. Rail count feeds the vertical budget before the
+  bubbles → test rows / coupling face lane → footer → TIR line → margin. Rail count feeds the vertical budget before the
   diameter-scale solve, so tall tier stacks squeeze the shaft area, not the page.
 
 ---
@@ -1159,11 +1163,20 @@ On-device request following the worn-sections review:
   Labels: `Ø` + `formatDiaWithUnit` (the wear doc's own callout engine keeps its
   prefix-free labels; two conventions until consolidation settles). Value-less readings
   and orphans skipped, as ever. **The outline takes precedence over the station** (on-device
-  report: a value read near a liner end knocked out the liner's end line): each component's
-  columns are held inside its drawn span, the outline stroke + `IN_PROFILE_FACE_GAP_PT` clear of
-  its end lines, and spread apart in order where that push would stack them; a span too narrow
-  keeps them centred on it (`keepValueColumnsInsideSpan`, `geom/WornSectionMath.kt`). A column
-  already clear does not move.
+  report: a value read near a liner end knocked out the liner's end line): each reading's column
+  is held inside its own component's drawn span, the outline stroke + `IN_PROFILE_FACE_GAP_PT`
+  clear of its end lines, and clear of the worn-section values (planned first) and every reading
+  placed before it, AFT to FWD — moved only to the NEAREST clear spot, and left where it was
+  planned when its span has none (`placeValueColumnsClear`, `geom/WornSectionMath.kt`; a push
+  blind to the worn-section values once printed one value over another). A column already clear
+  does not move.
+  **The knockout hugs the digits** (on-device request: "tighten the white box behind the wear
+  values"): every in-profile value — worn-section and reading alike — is laid out round its label's
+  measured INK thickness (`valueInk`, `getTextBounds` at a 100 pt probe, scaled), not the font's line
+  box, with `WORN_VALUE_HALO_PAD_FACTOR` (0.25) × that thickness of pad; `drawRotatedValueColumn`
+  centres the ink on the column. The column pitch (`WORN_VALUE_COLUMN_PITCH_FACTOR` × thickness)
+  follows, so a worn section's values sit closer. The band fit along the text length still reads the
+  line height.
 - **Wear Ø values print the primary unit only — never dual** (on-device ruling: on a
   dual-units job the in-profile columns carried `[278.9 mm]` and stood taller than the shaft).
   ONE term, inline or stacked layout alike, from the reading's own print unit
@@ -1600,19 +1613,22 @@ lean (runouts only). There is no canvas twin, so no draw-both-sites rule applies
 
 ### Placement + vertical budget
 
-The face sits bottom-right, sharing the band above the footer with the TIR line. Everything
-above therefore reserves the **taller of the two lanes**:
+The face sits bottom-right, sharing the band above the footer with the dye pen / spark rows
+(and, on the classic sheet, the TIR line). Everything above therefore reserves the **taller of the
+lanes**, and on the consolidated sheet the TIR row under the footer is paid for beside it:
 
 ```
-bottomLaneH   = max(drawBubbles ? TIR_LINE_HEIGHT_PT : 0, drawFace ? COUPLING_FACE_BLOCK_PT : 0)
-bottomLaneTopY = footerTop − bottomLaneH
-availableH     = bottomLaneTopY − shaftTopBudgetY      // prelim AND final pass, one value
+laneAboveFooterH = max(textLane, drawFace ? COUPLING_FACE_BLOCK_PT : 0)  // textLane: TIR (classic) / test rows
+bottomLaneH      = laneAboveFooterH + tirBelowH                          // tirBelowH: consolidated + bubbles
+footerTop        = pageBottom − tirBelowH − footerBlockH
+bottomLaneTopY   = footerTop − laneAboveFooterH
+availableH       = bottomLaneTopY − shaftTopBudgetY      // prelim AND final pass, one value
 ```
 
 `COUPLING_FACE_OUTER_R_PT = 36` (1 in dia on paper), `COUPLING_FACE_BLOCK_PT = 96`
 (2·R + caption lane + pads), `COUPLING_FACE_PAD_PT = 8`. Reserving off `tirY` alone would let the
-shaft and its bubbles run down through the face. The TIR line itself keeps its own y
-(`footerTop − TIR_LINE_HEIGHT_PT`); its write-in rule is **clamped** to stop short of the face's
+shaft and its bubbles run down through the face. On the classic sheet the TIR line keeps its
+own y (`footerTop − TIR_LINE_HEIGHT_PT`); its write-in rule is **clamped** to stop short of the face's
 block rather than running under it (`drawTirLine`'s `right` parameter). The face draws after the
 profile, marks, bubbles, and TIR line — it owns a reserved block, so the consolidated sheet's
 "marks first, text last" in-profile ordering is untouched.

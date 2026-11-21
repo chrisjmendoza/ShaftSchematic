@@ -436,12 +436,20 @@ private fun zoneReadingsOn(
     .map { WearTraceReading(it.second, it.third) }
 
 /** [zones] on [body], clamped to it (rendering only; the stored area never moves), AFT→FWD. */
-private fun zonesOn(body: WearTraceBody, zones: List<Triple<String, Float, Float>>): List<Pair<Float, Float>> =
-    zones.filter { it.first == body.id }.sortedBy { it.second }.map { (_, startMm, lengthMm) ->
-        val s = startMm.coerceIn(0f, body.lengthMm)
-        val e = (startMm + lengthMm).coerceIn(0f, body.lengthMm)
-        s to (e - s).coerceAtLeast(0f)
+private fun zonesOn(body: WearTraceBody, zones: List<Triple<String, Float, Float>>): List<Pair<Float, Float>> {
+    val clamped = zones.filter { it.first == body.id }.map { (_, startMm, lengthMm) ->
+        startMm.coerceIn(0f, body.lengthMm) to (startMm + lengthMm).coerceIn(0f, body.lengthMm)
+    }.filter { it.second > it.first }.sortedBy { it.first }
+    // Overlapping or touching zones trace as ONE: two traces over the same stretch would run the
+    // surface back over itself, and the sequencing drops the second.
+    val merged = mutableListOf<Pair<Float, Float>>()
+    clamped.forEach { (s, e) ->
+        val last = merged.lastOrNull()
+        if (last != null && s <= last.second) merged[merged.lastIndex] = last.first to maxOf(last.second, e)
+        else merged += s to e
     }
+    return merged.map { (s, e) -> s to (e - s) }
+}
 
 /**
  * The ONE trace baseline of a record: the deepest valued reading on any liner AND on any body

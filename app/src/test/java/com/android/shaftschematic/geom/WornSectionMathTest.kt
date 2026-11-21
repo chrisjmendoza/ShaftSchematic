@@ -87,8 +87,9 @@ class WornSectionMathTest {
 
     @Test
     fun `text shrinks proportionally when the band is too short`() {
-        val fitted = fittedValueTextSize(10f, 1f, 60f, 12f, 33.6f)
-        // needed at base = 67.2; band = 33.6 → exactly half size.
+        // needed at base = 60 + 2 × pad × 12; a band of half that → exactly half size.
+        val neededAtBase = 60f + 2f * WORN_VALUE_HALO_PAD_FACTOR * 12f
+        val fitted = fittedValueTextSize(10f, 1f, 60f, 12f, neededAtBase / 2f)
         assertEquals(5f, fitted, 1e-4f)
     }
 

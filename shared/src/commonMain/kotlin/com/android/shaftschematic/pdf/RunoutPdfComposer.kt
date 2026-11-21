@@ -19,6 +19,7 @@ import com.android.shaftschematic.gfx.PaintCap
 import com.android.shaftschematic.gfx.PaintStyle
 import com.android.shaftschematic.gfx.Path
 import com.android.shaftschematic.gfx.pathEffect
+import com.android.shaftschematic.gfx.Rect
 import com.android.shaftschematic.gfx.RectF
 import com.android.shaftschematic.gfx.right
 import com.android.shaftschematic.gfx.strokeCap
@@ -65,7 +66,10 @@ import com.android.shaftschematic.geom.oalRailEndsMm
 import com.android.shaftschematic.geom.WORN_VALUE_BAND_FIT_FRAC
 import com.android.shaftschematic.geom.WornValueColumn
 import com.android.shaftschematic.geom.fittedValueTextSize
-import com.android.shaftschematic.geom.keepValueColumnsInsideSpan
+import com.android.shaftschematic.geom.ValueBox
+import com.android.shaftschematic.geom.ValueColumnRequest
+import com.android.shaftschematic.geom.WORN_VALUE_HALO_PAD_FACTOR
+import com.android.shaftschematic.geom.placeValueColumnsClear
 import com.android.shaftschematic.geom.layoutWornSectionValues
 import com.android.shaftschematic.geom.planRunoutBubbles
 import com.android.shaftschematic.geom.wornValueBandHeightNeeded
@@ -524,6 +528,13 @@ fun composeRunoutPdfOnCanvas(
     // The TIR row's lane at a footer size: its baseline sits `TIR_LINE_HEIGHT_PT × s` above the
     // footer, and the lane grows by the ascent the scale added, so the row's text rises no
     // further above its lane — toward the bubble rows — than it does at 100%.
+    // On the consolidated sheet the TIR line prints UNDER the footer — below the taper columns
+    // (on-device request) — in a row of its own reserved under the footer block; the lane above
+    // the footer then carries only the dye pen / spark rows and the coupling face. The classic
+    // sheet has no footer and keeps the line at the foot of its lane.
+    val tirBelowFooter = consolidated && drawBubbles
+    fun tirBelowHAt(footerScale: Float): Float = if (tirBelowFooter) TIR_LINE_HEIGHT_PT * footerScale else 0f
+    val tirInLane = drawBubbles && !tirBelowFooter
     fun tirLaneHAt(footerScale: Float): Float {
         val extraRise = if (footerScale <= 1f) 0f
             else -sheetTextPaint(TEXT_PT * footerScale).fontMetrics.ascent * (1f - 1f / footerScale)
@@ -540,17 +551,23 @@ fun composeRunoutPdfOnCanvas(
         val p = sheetTextPaint(TEXT_PT * footerScale)
         val rowsW = dyePenRowWidth(p, "Dye pen test:", footerScale) + TEST_ROW_GAP_PT * footerScale +
             dyePenRowWidth(p, SPARK_TEST_LABEL, footerScale)
-        val start = if (drawBubbles) {
+        val start = if (tirInLane) {
             contentLeft + p.measureText("TIR's taken looking:  ") + TIR_MIN_RULE_PT + DYE_PEN_GAP_PT
         } else contentLeft
         return start + rowsW > laneRightEdge
     }
-    fun bottomLaneHAt(footerScale: Float): Float = maxOf(
-        if (drawBubbles || drawTestRows) {
+    /** The lane ABOVE the footer: the TIR line on the classic sheet, the test rows, the face. */
+    fun laneAboveFooterHAt(footerScale: Float): Float = maxOf(
+        if (tirInLane || drawTestRows) {
             tirLaneHAt(footerScale) + (if (sparkWrapsAt(footerScale)) TIR_LINE_HEIGHT_PT * footerScale else 0f)
         } else 0f,
         if (drawFace) COUPLING_FACE_BLOCK_PT else 0f,
+        // With the TIR line under the footer, a sheet with no test row or face still keeps a little
+        // paper between the lowest bubble row and the footer's first line.
+        if (tirBelowFooter) BUBBLES_FOOTER_MIN_GAP_PT * footerScale else 0f,
     )
+    /** Everything besides the footer block the page pays for at the bottom: the lane + the TIR row under the footer. */
+    fun bottomLaneHAt(footerScale: Float): Float = laneAboveFooterHAt(footerScale) + tirBelowHAt(footerScale)
     fun footerCfgAt(footerScale: Float): FooterConfig =
         sheetFooterConfig(spec, pdfPrefs.copy(footerTextScale = footerScale))
 
@@ -773,7 +790,8 @@ fun composeRunoutPdfOnCanvas(
         }
     }
 
-    val footerTop = pageH - margin - footerBlockH
+    val tirBelowH = tirBelowHAt(footerScale)
+    val footerTop = pageH - margin - tirBelowH - footerBlockH
     layoutProbe?.invoke(
         RunoutSheetLayout(
             diaPtPerMm = diaPtPerMm,
@@ -794,9 +812,9 @@ fun composeRunoutPdfOnCanvas(
     val sparkWraps = sparkWrapsAt(footerScale)
     // With the spark row on a line of its own, the TIR / dye pen line moves up one line over it.
     val sparkY = footerTop - tirLineH
-    val tirY = footerTop - (if (drawBubbles || drawTestRows) tirLineH else 0f) -
+    val tirY = footerTop - (if (tirInLane || drawTestRows) tirLineH else 0f) -
         (if (sparkWraps) tirLineH else 0f)
-    val bottomLaneTopY = footerTop - bottomLaneH
+    val bottomLaneTopY = footerTop - laneAboveFooterHAt(footerScale)
     val railsBlockH = railsBlockHFor(dualStacked, railLiftReserve)
     val shaftTopBudgetY = margin + railsBlockH
     val availableH     = bottomLaneTopY - shaftTopBudgetY
@@ -941,6 +959,8 @@ fun composeRunoutPdfOnCanvas(
             displayUnits = sheetUnits, text = valueText,
             minTextSize = WORN_VALUE_MIN_TEXT_PT,
             faceClearancePt = outline.strokeWidth + IN_PROFILE_FACE_GAP_PT,
+            endLineHalfWidthPt = outline.strokeWidth / 2f,
+            obstacles = wornValues.map { ValueBox(it.column.haloLeft, it.column.haloRight, inProfileHaloPad(it.paint, it.label)) },
         )
     } else emptyList()
     // Settings → Drawing "Wear areas on the shaft drawing" (`PdfPrefs.wearAreaStyle`): where the
@@ -971,7 +991,7 @@ fun composeRunoutPdfOnCanvas(
             bodyGapsX = wearBodyGapsX,
             cy = shaftCy, xAt = ::xAt, rPx = ::rPx, outline = outline,
             pitSmallHalf = WEAR_PIT_SMALL_HALF_PROFILE_PT,
-            valueHalos = (wornValues + readingValues).map { it.column },
+            valueHalos = (wornValues + readingValues).map { it.drawnKnockout },
             style = wearAreaStyle,
         )
     }
@@ -1016,7 +1036,7 @@ fun composeRunoutPdfOnCanvas(
         (if (drawDyePen) dyePenRowWidth(footerText, dyePenLabel, footerScale) else 0f) +
             (if (drawDyePen && drawSpark) TEST_ROW_GAP_PT * footerScale else 0f) +
             (if (drawSpark) dyePenRowWidth(footerText, sparkLabel, footerScale) else 0f)
-    val dyePenX = if (!drawTestRows) laneRight else if (drawBubbles) {
+    val dyePenX = if (!drawTestRows) laneRight else if (tirInLane) {
         val labelEnd = contentLeft + footerText.measureText("TIR's taken looking:  ")
         val preferred = labelEnd + TIR_FILL_RULE_PT + DYE_PEN_GAP_PT
         min(preferred, laneRight - testRowsW)
@@ -1025,8 +1045,14 @@ fun composeRunoutPdfOnCanvas(
     // Runout content only — elected out with the bubbles on a Schematic + Wear sheet.
     if (drawBubbles) {
         val effectiveTir = if (blankValues) TirDirection.UNSET else config.tirDirection
-        val tirRight = if (drawTestRows) min(laneRight, dyePenX - DYE_PEN_GAP_PT) else laneRight
-        drawTirLine(c, footerText, contentLeft, tirRight, tirY, effectiveTir)
+        if (tirBelowFooter) {
+            // Under the footer's taper columns, in the row reserved for it below the block.
+            val baseline = footerTop + footerBlockH + TIR_BELOW_FOOTER_BASELINE_PT * footerScale
+            drawTirLine(c, footerText, contentLeft, contentRight, baseline, effectiveTir)
+        } else {
+            val tirRight = if (drawTestRows) min(laneRight, dyePenX - DYE_PEN_GAP_PT) else laneRight
+            drawTirLine(c, footerText, contentLeft, tirRight, tirY, effectiveTir)
+        }
     }
     // ONE construction with the wear sheet's notes row (drawDyePenBoxes); a blank draft leaves
     // both boxes empty for hand-marking.
@@ -1076,7 +1102,7 @@ fun composeRunoutPdfOnCanvas(
     // sheet carries its job info in the one-line header instead.
     if (footerCfg != null) {
         drawFooter(
-            c, RectF(contentLeft, footerTop, contentRight, pageH - margin),
+            c, RectF(contentLeft, footerTop, contentRight, footerTop + footerBlockH),
             spec, unit, project,
             filename = "", appVersion = "",
             text = footerText, cfg = footerCfg, blankValues = blankValues,
@@ -1265,7 +1291,45 @@ internal class InProfileValue(
     val column: WornValueColumn,
     val label: String,
     val paint: Paint,
+    /**
+     * The x range the value's knockout is clipped to — its part's drawn span, inside the end
+     * lines — so the pad round the digits never erases the part's outline (a reading's; null —
+     * a worn-section value — draws unclipped).
+     */
+    val clipX: ClosedFloatingPointRange<Float>? = null,
 )
+
+/**
+ * A value's ink across the shaft once rotated — its glyphs' measured height — and where that ink's
+ * centre sits from the baseline. The white box is laid out round THIS, not the font's line box
+ * (which leaves room for descenders digits never have), so it hugs the digits. Measured at 100 pt
+ * and scaled: integer text bounds at sheet sizes are too coarse.
+ */
+private class ValueInk(val thickness: Float, val centreFromBaseline: Float)
+
+private fun valueInk(paint: Paint, label: String): ValueInk {
+    val probe = Paint(paint).apply { textSize = VALUE_INK_PROBE_PT }
+    val r = Rect()
+    probe.getTextBounds(label, 0, label.length, r)
+    val k = paint.textSize / VALUE_INK_PROBE_PT
+    return ValueInk((r.bottom - r.top) * k, (r.top + r.bottom) / 2f * k)
+}
+
+private const val VALUE_INK_PROBE_PT = 100f
+
+/** The knockout as drawn: [InProfileValue.column] cut to its clip, when it has one. */
+internal val InProfileValue.drawnKnockout: WornValueColumn
+    get() {
+        val clip = clipX ?: return column
+        return column.copy(
+            haloLeft = maxOf(column.haloLeft, clip.start),
+            haloRight = minOf(column.haloRight, clip.endInclusive),
+        )
+    }
+
+/** The halo pad of [label] set in [paint] — `WORN_VALUE_HALO_PAD_FACTOR` × its ink thickness. */
+private fun inProfileHaloPad(paint: Paint, label: String): Float =
+    valueInk(paint, label).thickness * WORN_VALUE_HALO_PAD_FACTOR
 
 /**
  * A worn section's drawn span in mm — clamped to the shaft ([clampUndercutSpan], stored record
@@ -1334,13 +1398,14 @@ internal fun planWornSectionValues(
         )
         val valueText = if (fitted == baseText.textSize) baseText
                         else Paint(baseText).apply { textSize = fitted }
-        val fm = valueText.fontMetrics
 
+        // Laid out round the digits' ink, not the line box, so the white boxes hug them.
+        val ink = labels.maxOf { valueInk(valueText, it).thickness }
         val layout = layoutWornSectionValues(
             x0 = xAt(startMm), x1 = xAt(endMm), cy = cy,
             labelLengths = labels.map { valueText.measureRichText(it) },
-            lineHeight = fm.descent - fm.ascent,
-            columnThickness = fm.descent - fm.ascent,
+            lineHeight = ink,
+            columnThickness = ink,
         )
         layout.columns.forEachIndexed { i, col ->
             out += InProfileValue(col, labels[i], valueText)
@@ -1405,11 +1470,17 @@ private fun drawInProfileValues(c: Canvas, values: List<InProfileValue>, shadeUn
     val seamShade = consolidatedWearShadePaint().apply { isAntiAlias = false }
     values.forEach { v ->
         val overBand = shadeUnder.any { overlaps(it, v.column) }
+        val clip = v.clipX
+        val saved = if (clip != null) c.save() else 0
+        if (clip != null) {
+            c.clipRect(clip.start, v.column.haloTop - 1f, clip.endInclusive, v.column.haloBottom + 1f)
+        }
         drawRotatedValueColumn(
             c, v.column, v.label, v.paint,
             halo = if (overBand) seamHalo else halo,
             shadeUnder = shadeUnder, shade = seamShade,
         )
+        if (clip != null) c.restoreToCount(saved)
     }
 }
 
@@ -1439,8 +1510,8 @@ private fun drawRotatedValueColumn(
         val b = minOf(band.bottom, col.haloBottom)
         if (l < r && t < b) c.drawRect(l, t, r, b, shade)
     }
-    val fm = valueText.fontMetrics
-    val centerBaseline = col.cy - (fm.ascent + fm.descent) / 2f
+    // The ink centred on the column, so the tight white box sits evenly round the digits.
+    val centerBaseline = col.cy - valueInk(valueText, label).centreFromBaseline
     c.save()
     c.rotate(-90f, col.cx, col.cy)
     c.drawText(label, col.cx, centerBaseline, valueText)
@@ -1584,10 +1655,17 @@ internal fun planDiaReadingsInProfile(
     /** Auto-fit floor, same rule as [planWornSectionValues] — fitted per reading. */
     minTextSize: Float,
     /**
-     * How far a value's knockout stays off its component's end lines ([keepValueColumnsInsideSpan]
+     * How far a value's digits stay off its component's end lines ([placeValueColumnsClear]
      * — the outline takes precedence over the value's exact station).
      */
     faceClearancePt: Float = 0f,
+    /**
+     * Half the end lines' stroke: each knockout is clipped this far inside its part's span, so
+     * the pad round the digits never erases the line.
+     */
+    endLineHalfWidthPt: Float = 0f,
+    /** Values the readings must also respect — the worn-section values, planned first. */
+    obstacles: List<ValueBox> = emptyList(),
 ): List<InProfileValue> {
     if (readings.isEmpty() || components == null) return emptyList()
     val byId = components.associateBy { it.id }
@@ -1617,27 +1695,42 @@ internal fun planDiaReadingsInProfile(
         )
         val valueText = if (fitted == baseText.textSize) baseText
                         else Paint(baseText).apply { textSize = fitted }
-        val fm = valueText.fontMetrics
 
-        // Degenerate span → the single column centers exactly on the station.
+        // Degenerate span → the single column centers exactly on the station, its white box
+        // laid out round the digits' ink.
+        val ink = valueInk(valueText, label).thickness
         val layout = layoutWornSectionValues(
             x0 = stationX, x1 = stationX, cy = cy,
             labelLengths = listOf(valueText.measureRichText(label)),
-            lineHeight = fm.descent - fm.ascent,
-            columnThickness = fm.descent - fm.ascent,
+            lineHeight = ink,
+            columnThickness = ink,
         )
         out += InProfileValue(layout.columns.single(), label, valueText)
         hostOf += rc
     }
-    // Each component's values held inside its drawn span, clear of its end lines.
-    hostOf.indices.groupBy { hostOf[it].id }.forEach { (_, idxs) ->
-        val rc = hostOf[idxs.first()]
-        val kept = keepValueColumnsInsideSpan(
-            idxs.map { out[it].column }, xAt(rc.startMmPhysical), xAt(rc.endMmPhysical), faceClearancePt,
+    // Each value held inside its own part's drawn span, clear of its end lines, of the worn-section
+    // values and of each other — moved only as far as it must.
+    val spans = out.indices.map { i -> xAt(hostOf[i].startMmPhysical) to xAt(hostOf[i].endMmPhysical) }
+    val placed = placeValueColumnsClear(
+        out.indices.map { i ->
+            ValueColumnRequest(out[i].column, spans[i].first, spans[i].second, inProfileHaloPad(out[i].paint, out[i].label))
+        },
+        clearance = faceClearancePt,
+        obstacles = obstacles,
+    )
+    return out.indices.map { i ->
+        val (l, r) = spans[i]
+        // The knockout is clipped to the part only when the digits fit inside it clear of its end
+        // lines: on a part too short for them the value prints whole, unclipped, as it did before.
+        val col = placed[i]
+        val pad = inProfileHaloPad(out[i].paint, out[i].label)
+        val digitsFit = col.haloLeft + pad >= l + faceClearancePt - 1e-3f &&
+            col.haloRight - pad <= r - faceClearancePt + 1e-3f
+        InProfileValue(
+            col, out[i].label, out[i].paint,
+            clipX = if (digitsFit) (l + endLineHalfWidthPt)..(r - endLineHalfWidthPt) else null,
         )
-        idxs.forEachIndexed { k, i -> out[i] = InProfileValue(kept[k], out[i].label, out[i].paint) }
     }
-    return out
 }
 
 /** Paper between an in-profile value's knockout and the end line it is kept off (pt). */
@@ -2222,6 +2315,10 @@ private const val TEXT_PT    = 10f
 private const val PAGE_MARGIN_PT   = 36f    // 0.5 in margins
 private const val TIR_LINE_HEIGHT_PT = 20f  // Space for TIR direction line at bottom
 private const val TIR_FILL_RULE_PT   = 180f // Write-in rule after "TIR's taken looking:"
+/** The least paper between the bubbles and the footer once the TIR line is under it (pt at 100%). */
+private const val BUBBLES_FOOTER_MIN_GAP_PT = 6f
+/** The TIR line's baseline below the footer block on the consolidated sheet (pt at 100%). */
+private const val TIR_BELOW_FOOTER_BASELINE_PT = 14f
 /** The spark test row's label on the consolidated sheet. */
 const val SPARK_TEST_LABEL = "Spark test:"
 /** Air between the dye pen row and the spark test row after it — the wear sheet's notes-row gap. */

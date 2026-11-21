@@ -8,6 +8,40 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-20
 
+### feat(consolidated): the TIR line prints under the footer
+
+On the consolidated sheet, "TIR's taken looking:" now prints below the footer's taper details
+instead of above the footer (on-device request). The dye pen and spark test rows keep the line
+above the footer, now starting at the left margin. The classic runout sheet is unchanged. With the
+coupling face on the sheet, the shaft drawing gives up one line of height to make room.
+
+### fix(schematic): every liner with "Show Ø on drawing" prints its own Ø
+
+Two liners of the same outside diameter printed one Ø callout between them, on the longer liner,
+so the other liner showed no Ø with its switch on (on-device report). Each liner now prints its
+own. Bodies of one diameter still share one callout.
+
+### fix(wear): zone names keep clear of the Ø leaders and the liner names
+
+On the wear sheet's shaft drawing, a named wear area's name now moves along its part to stay clear
+of the leader lines of the diameters measured inside it, and a named area on a liner prints its
+name in the liner's detail strip title only, since the liner's own name sits under the shaft there.
+Overlapping named areas on one body now trace as one.
+
+### feat(consolidated): tighter white boxes behind the in-profile wear values
+
+The white box behind each measured Ø and worn-section value printed inside the shaft now hugs the
+digits (on-device request): it is sized to the digits themselves rather than to the font's full
+line, with a smaller margin. Values sit closer together, and fewer pit marks are hidden behind a
+box. Lines under the digits are still knocked out.
+
+### fix(consolidated): an in-profile Ø value moved off an end line never lands on another value
+
+The previous fix pushed a value near a liner end inward without regard for the worn-section value
+beside it, and printed one over the other. Each value now takes the nearest spot inside its part
+that is clear of the end lines, the worn-section values and the other readings, and stays where it
+was when there is none.
+
 ### feat(wear): name a wear area — packing, grounding strap, seal — and trace a body's wear there
 
 A wear area's card has a new **Area:** row — Packing | Grounding strap | Seal | Other (type your
