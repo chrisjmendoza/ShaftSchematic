@@ -65,6 +65,7 @@ import com.android.shaftschematic.geom.oalRailEndsMm
 import com.android.shaftschematic.geom.WORN_VALUE_BAND_FIT_FRAC
 import com.android.shaftschematic.geom.WornValueColumn
 import com.android.shaftschematic.geom.fittedValueTextSize
+import com.android.shaftschematic.geom.keepValueColumnsInsideSpan
 import com.android.shaftschematic.geom.layoutWornSectionValues
 import com.android.shaftschematic.geom.planRunoutBubbles
 import com.android.shaftschematic.geom.wornValueBandHeightNeeded
@@ -939,6 +940,7 @@ fun composeRunoutPdfOnCanvas(
             cy = shaftCy, xAt = ::xAt, surfaceRAt = ::shaftOuterRPxAt,
             displayUnits = sheetUnits, text = valueText,
             minTextSize = WORN_VALUE_MIN_TEXT_PT,
+            faceClearancePt = outline.strokeWidth + IN_PROFILE_FACE_GAP_PT,
         )
     } else emptyList()
     // Settings → Drawing "Wear areas on the shaft drawing" (`PdfPrefs.wearAreaStyle`): where the
@@ -1581,6 +1583,11 @@ internal fun planDiaReadingsInProfile(
     text: Paint,
     /** Auto-fit floor, same rule as [planWornSectionValues] — fitted per reading. */
     minTextSize: Float,
+    /**
+     * How far a value's knockout stays off its component's end lines ([keepValueColumnsInsideSpan]
+     * — the outline takes precedence over the value's exact station).
+     */
+    faceClearancePt: Float = 0f,
 ): List<InProfileValue> {
     if (readings.isEmpty() || components == null) return emptyList()
     val byId = components.associateBy { it.id }
@@ -1588,6 +1595,7 @@ internal fun planDiaReadingsInProfile(
     val baseFm = baseText.fontMetrics
     val baseLine = baseFm.descent - baseFm.ascent
     val out = mutableListOf<InProfileValue>()
+    val hostOf = mutableListOf<ResolvedComponent>()
 
     readings.forEach { r ->
         if (r.diaMm <= 0f) return@forEach
@@ -1619,9 +1627,21 @@ internal fun planDiaReadingsInProfile(
             columnThickness = fm.descent - fm.ascent,
         )
         out += InProfileValue(layout.columns.single(), label, valueText)
+        hostOf += rc
+    }
+    // Each component's values held inside its drawn span, clear of its end lines.
+    hostOf.indices.groupBy { hostOf[it].id }.forEach { (_, idxs) ->
+        val rc = hostOf[idxs.first()]
+        val kept = keepValueColumnsInsideSpan(
+            idxs.map { out[it].column }, xAt(rc.startMmPhysical), xAt(rc.endMmPhysical), faceClearancePt,
+        )
+        idxs.forEachIndexed { k, i -> out[i] = InProfileValue(kept[k], out[i].label, out[i].paint) }
     }
     return out
 }
+
+/** Paper between an in-profile value's knockout and the end line it is kept off (pt). */
+internal const val IN_PROFILE_FACE_GAP_PT = 1.5f
 
 /**
  * Whether a printed sheet draws the bodies' seal areas: the app-wide
