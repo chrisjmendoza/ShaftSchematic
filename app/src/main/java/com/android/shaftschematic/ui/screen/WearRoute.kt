@@ -461,6 +461,8 @@ fun WearRoute(
     }
 
     // ── Interactive shaft canvas — tap a component to inspect wear ───────────
+    // Pinch to zoom in on a short part before tapping it (on-device report).
+    val zoom = rememberSheetCanvasZoom()
     val canvasBlock: @Composable ColumnScope.() -> Unit = {
         if (spec.overallLengthMm > 0f) {
             Box(
@@ -475,8 +477,10 @@ fun WearRoute(
                             diaReadingCount = wearRecord.diaReadings.size,
                         )
                     }
+                    .sheetCanvasZoomGestures(zoom)
                     .pointerInput(spec, resolvedComponents) {
-                        detectTapGestures { tapOffset ->
+                        detectTapGestures { rawTap ->
+                            val tapOffset = zoom.toCanvas(rawTap, size)
                             val layout = ShaftLayout.compute(
                                 spec               = spec,
                                 leftPx             = 0f,
@@ -496,7 +500,7 @@ fun WearRoute(
                         }
                     },
             ) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
+                Canvas(modifier = Modifier.fillMaxSize().sheetCanvasZoomLayer(zoom)) {
                     val marginPx = 12.dp.toPx()
                     val layout = ShaftLayout.compute(
                         spec               = spec,
@@ -522,7 +526,7 @@ fun WearRoute(
                 }
             }
             Text(
-                text = "Tap a body, taper, or liner to inspect wear and mark pits.",
+                text = "Tap a body, taper, or liner to inspect wear and mark pits. Pinch to zoom in on a short one.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

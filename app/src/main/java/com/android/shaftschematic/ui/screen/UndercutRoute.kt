@@ -843,6 +843,8 @@ fun UndercutRoute(
     }
 
     // ── Overview canvas — tap a cluster window to open its detail view ───────
+    // Pinch to zoom in on a short liner before tapping it (on-device report).
+    val zoom = rememberSheetCanvasZoom()
     val canvasBlock: @Composable ColumnScope.() -> Unit = {
         if (oalMm > 0f) {
             Box(
@@ -856,8 +858,10 @@ fun UndercutRoute(
                         contentDescription =
                             SheetSemantics.undercutOverview(undercutRecord.undercuts.size)
                     }
+                    .sheetCanvasZoomGestures(zoom)
                     .pointerInput(spec, resolvedComponents, strips, linerSpans) {
-                        detectTapGestures { tapOffset ->
+                        detectTapGestures { rawTap ->
+                            val tapOffset = zoom.toCanvas(rawTap, size)
                             val layout = ShaftLayout.compute(
                                 spec               = spec,
                                 leftPx             = 0f,
@@ -889,7 +893,7 @@ fun UndercutRoute(
                         }
                     },
             ) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
+                Canvas(modifier = Modifier.fillMaxSize().sheetCanvasZoomLayer(zoom)) {
                     val marginPx = 12.dp.toPx()
                     val layout = ShaftLayout.compute(
                         spec               = spec,
@@ -947,7 +951,8 @@ fun UndercutRoute(
             Text(
                 text = when {
                     linerSpans.isNotEmpty() ->
-                        "Tap a liner — or any highlighted section — to zoom in and record cuts there."
+                        "Tap a liner — or any highlighted section — to zoom in and record cuts there. " +
+                            "Pinch to zoom in on a short one."
                     freeWindows.isEmpty() ->
                         "No undercuts recorded yet — add one to start the drawing."
                     else ->
