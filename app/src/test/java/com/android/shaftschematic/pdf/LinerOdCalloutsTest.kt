@@ -39,17 +39,19 @@ class LinerOdCalloutsTest {
         assertEquals(350.0, calls[0].xMm, 0.001)
     }
 
-    // ── Same OD groups to one; distinct ODs each get their own ────────────────
+    // ── Every shown liner gets its own callout, whatever its Ø ────────────────
 
     @Test
-    fun `two liners same OD produce one callout at the longer liner center`() {
+    fun `two liners of one OD each print their own callout`() {
+        // On-device report: a FWD liner sharing the AFT liner's 5.001" OD printed no Ø with its
+        // switch on — liners are never grouped by Ø.
         val short = Liner(startFromAftMm = 0f,   lengthMm = 100f, odMm = 152f)
         val long  = Liner(startFromAftMm = 200f, lengthMm = 500f, odMm = 152f)
         val calls = buildLinerOdCallouts(listOf(short, long))
 
-        assertEquals(1, calls.size)
-        // Center of longer liner: 200 + 250 = 450
-        assertEquals(450.0, calls[0].xMm, 0.001)
+        assertEquals(2, calls.size)
+        assertEquals(setOf(50.0, 450.0), calls.map { it.xMm }.toSet())
+        assertTrue(calls.all { it.valueMm == 152.0 })
     }
 
     @Test
@@ -148,11 +150,15 @@ class LinerOdCalloutsTest {
         val bodies = listOf(body("short", 600f, 50f, 247.65f), body("long", 900f, 500f, 247.65f))
         val liners = listOf(liner("l1", 400f, 200f, 247.65f), liner("l2", 1400f, 300f, 247.65f))
 
-        val joined = joinSharedOdCallouts(bodies, liners).single()
+        val calls = joinSharedOdCallouts(bodies, liners)
+        val joined = calls.single { it.secondXMm != null }
 
-        // l2 (300 long) touches "long" at 1400; l1 (200) only touches "short". The longest liner wins.
+        // l2 (300 long) touches "long" at 1400; l1 (200) only touches "short". The longest liner
+        // claims the body group's value; l1 keeps its own callout.
         assertEquals(1550.0, joined.xMm, 0.001)
         assertEquals(1150.0, joined.secondXMm!!, 0.001)
+        assertEquals(2, calls.size)
+        assertEquals(500.0, calls.single { it.secondXMm == null }.xMm, 0.001)
     }
 
     @Test

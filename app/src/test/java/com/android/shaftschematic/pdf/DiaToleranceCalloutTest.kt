@@ -105,15 +105,16 @@ class DiaToleranceCalloutTest {
     }
 
     @Test
-    fun `liners of one OD with different tolerances print separately`() {
+    fun `liners of one OD print one callout each, each with its own tolerance`() {
+        // Liners are never grouped by Ø (on-device report: a liner sharing another's OD lost its
+        // callout) — so each carries its own tolerance, or none.
         val a = Liner(id = "a", startFromAftMm = 0f, lengthMm = 300f, odMm = 228.6f, diaTolPlusMm = 0.0508f)
         val b = Liner(id = "b", startFromAftMm = 1000f, lengthMm = 300f, odMm = 228.6f)
         val c = Liner(id = "c", startFromAftMm = 2000f, lengthMm = 400f, odMm = 228.6f, diaTolPlusMm = 0.0508f)
         val calls = buildLinerOdCallouts(listOf(a, b, c))
-        assertEquals(2, calls.size)
-        // The two toleranced liners still group, anchored on the longer of them.
-        val tol = calls.single { it.tolerance != null }
-        assertEquals(2200.0, tol.xMm, 1e-6)
+        assertEquals(3, calls.size)
+        assertEquals(listOf(150.0, 2200.0), calls.filter { it.tolerance != null }.map { it.xMm }.sorted())
+        assertEquals(1150.0, calls.single { it.tolerance == null }.xMm, 1e-6)
     }
 
     @Test

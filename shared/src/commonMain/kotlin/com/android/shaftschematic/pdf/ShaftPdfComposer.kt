@@ -2023,34 +2023,39 @@ fun buildBlendAngleCallouts(
 }
 
 /**
- * Liner mirror of [buildBodyOdCallouts]: one [DiaCallout] per unique liner OD, anchored at
- * the center of the longest liner with that OD, all BELOW the shaft. Bodies and liners are
- * separate groups — a liner OD is never silently deduped against a body OD; the one exception, a
- * liner and a touching shown body of the same Ø sharing one value, is [joinSharedOdCallouts].
+ * The liner counterpart of [buildBodyOdCallouts]: one [DiaCallout] for EVERY liner whose
+ * [Liner.showDiaOnDrawing] is on, anchored at its own center, all BELOW the shaft. Unlike bodies,
+ * liners are never grouped by Ø: a liner is a discrete measured part and its switch is a promise
+ * that its value prints (on-device report: a FWD liner sharing the AFT liner's OD lost its
+ * callout to the AFT one, with its switch on). Bodies and liners are separate — a liner OD is
+ * never silently deduped against a body OD; the one exception, a liner and a touching shown body
+ * of the same Ø sharing one value, is [joinSharedOdCallouts].
  *
- * [Liner.showDiaOnDrawing] is applied before the grouping, same rule as the body builder.
- * Liners are never fragmented, so the anchor's id resolves directly (no base-id stripping).
- * The OD tolerance groups and prints exactly as the body builder's does.
+ * Ordered largest Ø first, then AFT to FWD. Liners are never fragmented, so each id resolves
+ * directly (no base-id stripping). The OD tolerance prints as the body builder's does.
  */
 fun buildLinerOdCallouts(
     liners: List<Liner>,
     displayUnits: DisplayUnits = DisplayUnits.single(UnitSystem.INCHES),
-): List<DiaCallout> =
+): List<DiaCallout> = linerOdCallouts(liners, displayUnits).map { it.second }
+
+/** [buildLinerOdCallouts] with each callout's liner beside it, for [joinSharedOdCallouts]. */
+private fun linerOdCallouts(
+    liners: List<Liner>,
+    displayUnits: DisplayUnits,
+): List<Pair<Liner, DiaCallout>> =
     liners
         .filter { it.odMm > 0f && it.showDiaOnDrawing }
-        .groupBy { DiaGroupKey(it.odMm, it.diaTolPlusMm, it.diaTolMinusMm) }
-        .entries
-        .sortedByDescending { it.key.diaMm }
-        .mapNotNull { (key, group) ->
-            val anchor = group.maxByOrNull { it.lengthMm } ?: return@mapNotNull null
-            val centerMm = (anchor.startFromAftMm + anchor.lengthMm * 0.5).toDouble()
-            val unit = displayUnits.unitFor(anchor.id)
-            DiaCallout(
-                xMm = centerMm, valueMm = key.diaMm.toDouble(), side = LeaderSide.BELOW,
+        .sortedWith(compareByDescending<Liner> { it.odMm }.thenBy { it.startFromAftMm })
+        .map { ln ->
+            val unit = displayUnits.unitFor(ln.id)
+            ln to DiaCallout(
+                xMm = (ln.startFromAftMm + ln.lengthMm * 0.5).toDouble(),
+                valueMm = ln.odMm.toDouble(), side = LeaderSide.BELOW,
                 unit = unit, dual = displayUnits.dual,
-                spanStartMm = anchor.startFromAftMm.toDouble(),
-                spanEndMm = (anchor.startFromAftMm + anchor.lengthMm).toDouble(),
-                tolerance = formatDiaTolerance(key.tolPlusMm.toDouble(), key.tolMinusMm.toDouble(), unit),
+                spanStartMm = ln.startFromAftMm.toDouble(),
+                spanEndMm = (ln.startFromAftMm + ln.lengthMm).toDouble(),
+                tolerance = formatDiaTolerance(ln.diaTolPlusMm.toDouble(), ln.diaTolMinusMm.toDouble(), unit),
             )
         }
 
@@ -2060,13 +2065,13 @@ fun buildLinerOdCallouts(
  * value once, with a leader to each (on-device request: a 9.750" liner beside 9.750" bare shaft
  * printed `Ø 9.750"` twice in the most crowded stretch of the sheet).
  *
- * A liner OD group and a body Ø group join when their values agree within [SHARED_OD_EPS_MM],
- * both callouts resolve to the same display unit, and some shown body of that Ø ends where some
- * shown liner of that OD starts, or starts where it ends (within [SHARED_OD_TOUCH_EPS_MM]). Of
- * several touching pairs the one with the longest liner wins, then the longest body; the pair must
- * also resolve to that one unit. The joined callout takes the liner group's place in the list and
- * the body group's callout is dropped: its first leader is the pair's liner (centre + span), its
- * second the pair's body. Only a body joins a liner — never two liners, never two bodies — and
+ * A liner's callout (one per shown liner — [buildLinerOdCallouts]) and a body Ø group join when
+ * their values agree within [SHARED_OD_EPS_MM], both resolve to the same display unit, and a shown
+ * body of that Ø ends where THAT liner starts, or starts where it ends (within
+ * [SHARED_OD_TOUCH_EPS_MM]). Liners claim body groups longest first; a group joins one liner only,
+ * so a second liner of the same Ø keeps its own one-leader callout. Of the bodies touching a liner
+ * the longest is the pair. The joined callout takes the liner's place in the list and the body
+ * group's callout is dropped: its first leader is the liner (centre + span), its second the body. Only a body joins a liner — never two liners, never two bodies — and
  * everything that does not qualify is built exactly as the two builders build it. A pair joins
  * only when it carries the SAME tolerance too: one printed value stands for both components, so
  * a toleranced liner beside an untoleranced body keeps two callouts.
@@ -2080,11 +2085,10 @@ fun joinSharedOdCallouts(
     displayUnits: DisplayUnits = DisplayUnits.single(UnitSystem.INCHES),
 ): List<DiaCallout> {
     val bodyCalls = buildBodyOdCallouts(bodies, displayUnits)
-    val linerCalls = buildLinerOdCallouts(liners, displayUnits)
-    if (bodyCalls.isEmpty() || linerCalls.isEmpty()) return bodyCalls + linerCalls
+    val linerCalls = linerOdCallouts(liners, displayUnits)
+    if (bodyCalls.isEmpty() || linerCalls.isEmpty()) return bodyCalls + linerCalls.map { it.second }
 
     val shownBodies = bodies.filter { it.diaMm > 0f && it.showDiaOnDrawing }
-    val shownLiners = liners.filter { it.odMm > 0f && it.showDiaOnDrawing }
     fun touches(b: Body, l: Liner): Boolean {
         val bEnd = b.startFromAftMm + b.lengthMm
         val lEnd = l.startFromAftMm + l.lengthMm
@@ -2093,34 +2097,31 @@ fun joinSharedOdCallouts(
     }
 
     val droppedBodyCalls = HashSet<Int>()
-    val linerOut = linerCalls.map { lc ->
+    // Each liner's callout may take in ONE touching body group's — its own pairing only. The
+    // longest liner of a Ø claims a body group first, as it did when liners were grouped.
+    val linerOut = MutableList(linerCalls.size) { linerCalls[it].second }
+    linerCalls.indices
+        .sortedWith(compareByDescending<Int> { linerCalls[it].first.lengthMm }.thenBy { it })
+        .forEach { li ->
+        val (l, lc) = linerCalls[li]
         val bi = bodyCalls.indices.firstOrNull { i ->
             i !in droppedBodyCalls &&
                 abs(bodyCalls[i].valueMm - lc.valueMm) <= SHARED_OD_EPS_MM &&
                 bodyCalls[i].unit == lc.unit &&
                 bodyCalls[i].tolerance == lc.tolerance
-        } ?: return@map lc
-        val pair = shownLiners
+        } ?: return@forEach
+        val b = shownBodies
             .filter {
-                abs(it.odMm - lc.valueMm) <= SHARED_OD_EPS_MM && displayUnits.unitFor(it.id) == lc.unit &&
-                    formatDiaTolerance(it.diaTolPlusMm.toDouble(), it.diaTolMinusMm.toDouble(), lc.unit) == lc.tolerance
+                abs(it.diaMm - lc.valueMm) <= SHARED_OD_EPS_MM &&
+                    displayUnits.unitFor(resolvedBodyBaseId(it.id)) == lc.unit &&
+                    formatDiaTolerance(it.diaTolPlusMm.toDouble(), it.diaTolMinusMm.toDouble(), lc.unit) ==
+                    lc.tolerance &&
+                    touches(it, l)
             }
-            .flatMap { l ->
-                shownBodies
-                    .filter {
-                        abs(it.diaMm - lc.valueMm) <= SHARED_OD_EPS_MM &&
-                            displayUnits.unitFor(resolvedBodyBaseId(it.id)) == lc.unit &&
-                            formatDiaTolerance(it.diaTolPlusMm.toDouble(), it.diaTolMinusMm.toDouble(), lc.unit) ==
-                            lc.tolerance &&
-                            touches(it, l)
-                    }
-                    .map { b -> l to b }
-            }
-            .maxWithOrNull(compareBy({ it.first.lengthMm }, { it.second.lengthMm }))
-            ?: return@map lc
+            .maxByOrNull { it.lengthMm }
+            ?: return@forEach
         droppedBodyCalls += bi
-        val (l, b) = pair
-        lc.copy(
+        linerOut[li] = lc.copy(
             xMm = (l.startFromAftMm + l.lengthMm * 0.5).toDouble(),
             spanStartMm = l.startFromAftMm.toDouble(),
             spanEndMm = (l.startFromAftMm + l.lengthMm).toDouble(),
