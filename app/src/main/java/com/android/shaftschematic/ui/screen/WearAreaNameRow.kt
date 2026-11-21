@@ -13,6 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.WearAreaName
@@ -33,6 +34,9 @@ internal fun WearAreaNameRow(
     // Other is open for a typed name, or once tapped while the name is still blank.
     var otherTapped by remember(spotId) { mutableStateOf(false) }
     val otherOpen = (label.isNotBlank() && preset == null) || (otherTapped && label.isBlank())
+    // A chip clears focus before it commits: the typed-name field's blur commit then lands FIRST,
+    // and the chip's choice is the last word — never overwritten by a stale draft.
+    val focusManager = LocalFocusManager.current
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
@@ -45,6 +49,7 @@ internal fun WearAreaNameRow(
                     name.text, preset == name,
                     modifier = Modifier.testTag("wear_area_name_${name.name}_$spotId"),
                 ) {
+                    focusManager.clearFocus()
                     otherTapped = false
                     onCommit(if (preset == name) "" else name.text)
                 }
@@ -53,6 +58,7 @@ internal fun WearAreaNameRow(
                 "Other", otherOpen,
                 modifier = Modifier.testTag("wear_area_name_OTHER_$spotId"),
             ) {
+                focusManager.clearFocus()
                 if (otherOpen) {
                     otherTapped = false
                     if (label.isNotBlank()) onCommit("")

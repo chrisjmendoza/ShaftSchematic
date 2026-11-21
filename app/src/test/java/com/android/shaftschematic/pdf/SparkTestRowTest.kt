@@ -42,10 +42,15 @@ class SparkTestRowTest {
     )
     private val resolved = resolveComponents(spec)
 
-    private fun consolidated(config: RunoutConfig, wear: WearRecord = WearRecord(), prefs: PdfPrefs = PdfPrefs()) =
-        SheetTextRecorder(pageW, pageH).also { c ->
+    private fun consolidated(
+        config: RunoutConfig,
+        wear: WearRecord = WearRecord(),
+        prefs: PdfPrefs = PdfPrefs(),
+        w: Float = pageW,
+    ) =
+        SheetTextRecorder(w, pageH).also { c ->
             composeRunoutPdfOnCanvas(
-                c, pageW, pageH, spec,
+                c, w, pageH, spec,
                 config = config, project = ProjectInfo(jobNumber = "1"), unit = UnitSystem.INCHES,
                 resolvedComponents = resolved, consolidated = true, wearRecord = wear, pdfPrefs = prefs,
             )
@@ -80,9 +85,12 @@ class SparkTestRowTest {
 
     @Test
     fun `a pair too wide for the lane puts the spark row on its own line under the dye pen row`() {
+        // The TIR line prints under the footer, so the pair has the lane from the left margin to
+        // the coupling face; only a narrow page at the largest size is too tight for it.
         val rec = consolidated(
             RunoutConfig(showDyePenTest = true, showSparkTest = true, showCouplingFace = true),
             prefs = PdfPrefs(runoutFooterTextScale = PDF_TEXT_SCALE_MAX),
+            w = 380f,
         )
         val dye = rec.texts.single { it.text == "Dye pen test:" }
         val spark = rec.texts.single { it.text == SPARK_TEST_LABEL }

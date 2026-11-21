@@ -10,9 +10,11 @@ import com.android.shaftschematic.model.isNamedZone
  * packing or a grounding strap, where there is no liner). Two places, both on the WEAR sheet only:
  *  - after its host's name in the detail strip title — "Bare shaft (Packing)" — through
  *    [withWearZoneNames], so the strip says what the zone is;
- *  - under its band on the main profile, in the liner-names row — [placeWearZoneNames], through
- *    the schematic's own below-shaft collision engine ([BelowShaftLabelLayout]) so a zone name
- *    slides clear of a liner name rather than printing over it.
+ *  - for a zone on a BODY, under its band on the main profile, in the liner-names row —
+ *    [placeWearZoneNames], through the schematic's own below-shaft collision engine
+ *    ([BelowShaftLabelLayout]), sliding along its host part clear of the liner names and of the
+ *    Ø callout leaders that drop through that row. A LINER's zone prints only in its strip title:
+ *    the liner's own name holds that spot on the profile, and the liner always has a strip.
  * An unnamed area prints exactly as before, and a sheet with no named area is byte-identical.
  */
 
@@ -32,16 +34,27 @@ fun withWearZoneNames(titles: Map<String, String>, spots: List<WearSpot>): Map<S
     }
 }
 
-/** One zone name to place under the main profile: its text, measured width and drawn band x. */
-data class WearZoneNameRequest(val text: String, val width: Float, val bandLeftX: Float, val bandRightX: Float)
+/**
+ * One zone name to place under the main profile: its text, measured width, drawn band x (it is
+ * centred under the band) and the x it may slide within — its host part's drawn span.
+ */
+data class WearZoneNameRequest(
+    val text: String,
+    val width: Float,
+    val bandLeftX: Float,
+    val bandRightX: Float,
+    val slideLeftX: Float = bandLeftX,
+    val slideRightX: Float = bandRightX,
+)
 
 /** Where a zone name landed: its left edge; [fitted] false when it overlaps what it could not clear. */
 data class WearZoneNamePlacement(val text: String, val left: Float, val fitted: Boolean)
 
 /**
  * The zone names' left edges in the ONE names row: each centred under its band, free to slide
- * along the band (widened to hold the centred name) to clear [occupiedX] — the liner names already
- * in the row — and each other, held inside `[loX, hiX]` (clear of the "← AFT" / "FWD →" marks).
+ * along its host part (widened to hold the centred name) to clear [occupiedX] — the liner names
+ * already in the row and the Ø leaders crossing it — and each other, held inside `[loX, hiX]`
+ * (clear of the "← AFT" / "FWD →" marks).
  * A name that fits nowhere keeps its centred spot (the engine's least-bad rule) — never dropped.
  */
 fun placeWearZoneNames(
@@ -57,8 +70,8 @@ fun placeWearZoneNames(
         BelowShaftLabelLayout.Request(
             width = r.width,
             preferredLeft = centredLeft,
-            minLeft = minOf(r.bandLeftX, centredLeft).coerceAtLeast(loX),
-            maxRight = maxOf(r.bandRightX, centredLeft + r.width).coerceAtMost(hiX),
+            minLeft = minOf(r.slideLeftX, centredLeft).coerceAtLeast(loX),
+            maxRight = maxOf(r.slideRightX, centredLeft + r.width).coerceAtMost(hiX),
         )
     }
     val obstacles = occupiedX.map { BelowShaftLabelLayout.Box(it.start, it.endInclusive, row.top, row.bottom) }
@@ -66,7 +79,7 @@ fun placeWearZoneNames(
     return requests.indices.map { i -> WearZoneNamePlacement(requests[i].text, placed[i].left, placed[i].fitted) }
 }
 
-/** The named [spans] as requests, in record order ([spots] holds each span's area). */
+/** The named [spans] on BODIES as requests, in record order ([spots] holds each span's area). */
 fun wearZoneNameRequests(
     spans: List<WearAreaSpan>,
     spots: List<WearSpot>,
@@ -76,8 +89,11 @@ fun wearZoneNameRequests(
     val byId = spots.associateBy { it.id }
     return spans.mapNotNull { span ->
         val spot = byId[span.spotId] ?: return@mapNotNull null
-        if (!spot.isNamedZone) return@mapNotNull null
+        if (!spot.isNamedZone || span.host.isLiner) return@mapNotNull null
         val text = spot.label.trim()
-        WearZoneNameRequest(text, measure(text), xAt(span.startMm), xAt(span.endMm))
+        WearZoneNameRequest(
+            text, measure(text), xAt(span.startMm), xAt(span.endMm),
+            slideLeftX = xAt(span.host.startMm), slideRightX = xAt(span.host.startMm + span.host.lengthMm),
+        )
     }
 }

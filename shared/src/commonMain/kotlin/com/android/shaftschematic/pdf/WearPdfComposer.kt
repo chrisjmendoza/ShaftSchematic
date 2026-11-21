@@ -584,31 +584,30 @@ fun composeWearPdfOnCanvas(
         // Liner names centered under their span on the main profile — a reference tying each wear band
         // to its broken-out (zoomed) strip below. Only the liners that get a strip on this page.
         val linerNameXs = drawWearLinerNamesOnProfile(c, onPageGroups, shaftCy + rPxProfile(maxDiaMm), profileBottom, contentLeft, contentRight, ::xAt, text, linerTitles)
-        // Each named wear area's name under its band, in the same row, slid clear of the liner
-        // names (WearZoneNames.kt). No named area, nothing drawn.
-        if (resolvedComponents != null) {
-            drawWearZoneNamesOnProfile(
-                c, resolveWearAreaSpans(effectiveRecord.spots, wearAreaHosts(resolvedComponents)),
-                effectiveRecord.spots, linerNameXs, shaftCy + rPxProfile(maxDiaMm), profileBottom,
-                contentLeft, contentRight, ::xAt, text,
-            )
-        }
 
         // Measured-Ø callouts (body/taper readings): leader from the drawn bottom surface at the
         // station down to the value, in the band reserved below the names/direction row. Same
-        // engine + construction as the detail strips and the overlay canvas.
-        if (profileDiaPlan != null) {
-            val placed = profileDiaPlan.finish(
-                row0Top = shaftCy + rPxProfile(maxDiaMm) + WEAR_PROFILE_NAMES_ROW_PT + 2f,
-                labelTextHeight = profileDiaRowHeightPt,
-                rowGap = WEAR_DIA_ROW_GAP_PT,
-                surfaceYAt = { i ->
-                    shaftCy + rPxProfile(profileDia.surfaceDiaByKey[profileDiaPlan.stations[i].key] ?: maxDiaMm)
-                },
-                leaderStartGap = 2f,
+        // engine + construction as the detail strips and the overlay canvas. Planned BEFORE the
+        // zone names, whose row their leaders cross.
+        val placedDia = profileDiaPlan?.finish(
+            row0Top = shaftCy + rPxProfile(maxDiaMm) + WEAR_PROFILE_NAMES_ROW_PT + 2f,
+            labelTextHeight = profileDiaRowHeightPt,
+            rowGap = WEAR_DIA_ROW_GAP_PT,
+            surfaceYAt = { i ->
+                shaftCy + rPxProfile(profileDia.surfaceDiaByKey[profileDiaPlan.stations[i].key] ?: maxDiaMm)
+            },
+            leaderStartGap = 2f,
+        )
+        // Each named wear area's name on a body under its band, in the same row, slid along its
+        // part clear of the liner names and the Ø leaders (WearZoneNames.kt). None, nothing drawn.
+        if (resolvedComponents != null) {
+            drawWearZoneNamesOnProfile(
+                c, resolveWearAreaSpans(effectiveRecord.spots, wearAreaHosts(resolvedComponents)),
+                effectiveRecord.spots, linerNameXs, placedDia.orEmpty(),
+                shaftCy + rPxProfile(maxDiaMm), profileBottom, contentLeft, contentRight, ::xAt, text,
             )
-            drawDiaCallouts(c, placed, dim, diaText)
         }
+        if (placedDia != null) drawDiaCallouts(c, placedDia, dim, diaText)
     }
 
     // ── Per-liner detail strips ─────────────────────────────────────────────
@@ -787,20 +786,34 @@ private fun drawWearLinerNamesOnProfile(
     return drawn
 }
 
+/** The x ranges where the callouts' leader segments cross the band `[top, bottom]`, padded. */
+private fun leaderXsCrossing(
+    callouts: List<PlacedDiaCallout>,
+    top: Float,
+    bottom: Float,
+    pad: Float,
+): List<ClosedFloatingPointRange<Float>> = callouts.flatMap { pc ->
+    pc.leader.zipWithNext().mapNotNull { (a, b) ->
+        if (maxOf(a.y, b.y) < top || minOf(a.y, b.y) > bottom) return@mapNotNull null
+        (minOf(a.x, b.x) - pad)..(maxOf(a.x, b.x) + pad)
+    }
+}
+
 /** The baseline of the main profile's names row — liner names and wear-zone names share it. */
 private fun wearProfileNamesBaseline(shaftBottomY: Float, bandBottom: Float, p: Paint): Float =
     (shaftBottomY + p.textSize + 12f).coerceAtMost(bandBottom - 2f)
 
 /**
- * Each named wear area's name (`WearSpot.label`) under its band on the main profile, in the
- * liner-names row, placed by [placeWearZoneNames] clear of the liner names already drawn there
- * ([linerNameXs]) and of each other.
+ * Each named wear area's name (`WearSpot.label`) on a body under its band on the main profile, in
+ * the liner-names row, placed by [placeWearZoneNames] clear of the liner names already drawn there
+ * ([linerNameXs]), of the Ø callout leaders crossing the row ([diaCallouts]) and of each other.
  */
 private fun drawWearZoneNamesOnProfile(
     c: Canvas,
     spans: List<WearAreaSpan>,
     spots: List<WearSpot>,
     linerNameXs: List<ClosedFloatingPointRange<Float>>,
+    diaCallouts: List<PlacedDiaCallout>,
     shaftBottomY: Float,
     bandBottom: Float,
     contentLeft: Float,
@@ -815,7 +828,9 @@ private fun drawWearZoneNamesOnProfile(
     val requests = wearZoneNameRequests(spans, spots, xAt) { s -> p.measureText(ellipsizeToWidth(s, p, hiX - loX)) }
     if (requests.isEmpty()) return
     val y = wearProfileNamesBaseline(shaftBottomY, bandBottom, p)
-    placeWearZoneNames(requests, linerNameXs, loX, hiX).forEach { placed ->
+    val fm = p.fontMetrics
+    val leaderXs = leaderXsCrossing(diaCallouts, y + fm.ascent, y + fm.descent, pad = 2f)
+    placeWearZoneNames(requests, linerNameXs + leaderXs, loX, hiX).forEach { placed ->
         c.drawText(ellipsizeToWidth(placed.text, p, hiX - loX), placed.left, y, p)
     }
 }

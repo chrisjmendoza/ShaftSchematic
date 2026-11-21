@@ -290,12 +290,7 @@ class SheetTextOverlapTest {
     fun `schematic plus runout - the TIR line clears the footer`() {
         val c = consolidated(includeBubbles = true, includeWearInfo = false, blank = false, face = false)
         assertNoOverlap("Schematic + Runout", c)
-        val tir = c.boxes.first { it.text.startsWith("TIR's taken") }
-        val heading = c.boxes.first { it.text == FOOTER_AFT_TAPER_HEADER }
-        assertTrue(
-            "TIR line (bottom ${tir.rect.bottom}) must sit above the footer heading (top ${heading.rect.top})",
-            tir.rect.bottom <= heading.rect.top,
-        )
+        assertTirUnderFooter("Schematic + Runout", c, pageH)
     }
 
     // ── Every consolidated combination ───────────────────────────────────────
@@ -377,10 +372,10 @@ class SheetTextOverlapTest {
 
     @Test
     fun `a sheet that affords the floor prints exactly as asked`() {
-        val (_, inline) = probed(DualUnitLayout.INLINE)
+        val (_, inline) = probed(DualUnitLayout.INLINE, sheetH = pageH + TIR_ROW_UNDER_FOOTER_PT)
         assertEquals(SheetDualMode.INLINE, inline.dualMode)
         assertEquals(0f, inline.footerTightenedPt, 0f)
-        val (_, single) = probed(null)
+        val (_, single) = probed(null, sheetH = pageH + TIR_ROW_UNDER_FOOTER_PT)
         assertEquals(SheetDualMode.SINGLE, single.dualMode)
         assertEquals(0f, single.footerTightenedPt, 0f)
     }
@@ -398,14 +393,28 @@ class SheetTextOverlapTest {
         )
     }
 
-    /** The TIR line sits above the footer, and the footer's last row stays on the page. */
-    private fun assertFooterClear(name: String, c: RecordingCanvas, sheetH: Float) {
+    /**
+     * The TIR line prints UNDER the footer (on-device request: below the tapers' footer info) —
+     * clear of every footer row above it — and stays on the page.
+     */
+    private fun assertTirUnderFooter(name: String, c: RecordingCanvas, sheetH: Float) {
         val tir = c.boxes.first { it.text.startsWith("TIR's taken") }
         val heading = c.boxes.first { it.text == FOOTER_AFT_TAPER_HEADER }
+        val footerBottom = c.boxes
+            // The footer's rows: from its heading down to the TIR line (the units note in the
+            // bottom margin, when printed, is below both).
+            .filter { it !== tir && it.rect.top >= heading.rect.top - 0.5f && it.rect.top < tir.rect.top }
+            .maxOf { it.rect.bottom }
         assertTrue(
-            "$name: TIR line (bottom ${tir.rect.bottom}) must sit above the footer heading (top ${heading.rect.top})",
-            tir.rect.bottom <= heading.rect.top,
+            "$name: TIR line (top ${tir.rect.top}) must sit under the footer rows (bottom $footerBottom)",
+            tir.rect.top >= footerBottom,
         )
+        assertTrue("$name: TIR line ${tir.rect.bottom} runs past the page bottom $sheetH", tir.rect.bottom <= sheetH)
+    }
+
+    /** The TIR line sits under the footer, and nothing runs off the page. */
+    private fun assertFooterClear(name: String, c: RecordingCanvas, sheetH: Float) {
+        assertTirUnderFooter(name, c, sheetH)
         val lowest = c.boxes.maxOf { it.rect.bottom }
         assertTrue("$name: lowest text ${lowest} runs past the page bottom $sheetH", lowest <= sheetH)
     }
@@ -416,12 +425,15 @@ class SheetTextOverlapTest {
         // document printing one unit departs further from what was asked than a tighter footer.
         for (layout in DualUnitLayout.entries) {
             val name = "full footer, $layout"
-            val (c, out) = probed(layout, sheetSpec = fullFooterSpec, prefs = fullFooterPrefs)
+            val (c, out) = probed(
+                layout, sheetSpec = fullFooterSpec, prefs = fullFooterPrefs,
+                sheetH = pageH + TIR_ROW_UNDER_FOOTER_PT,
+            )
             assertEquals(name, SheetDualMode.INLINE, out.dualMode)
             assertTrue("$name: footer should tighten: ${out.footerTightenedPt}", out.footerTightenedPt > 0f)
             assertAtFloor(name, out)
             assertNoOverlap(name, c)
-            assertFooterClear(name, c, pageH)
+            assertFooterClear(name, c, pageH + TIR_ROW_UNDER_FOOTER_PT)
             assertTrue(
                 "$name: a dual sheet prints its mm values: ${c.boxes.map { it.text }}",
                 c.boxes.any { "[" in it.text && "mm" in it.text },
@@ -429,8 +441,15 @@ class SheetTextOverlapTest {
         }
     }
 
+    /**
+     * The row the TIR line takes under the footer (TIR_LINE_HEIGHT_PT at 100%). With the coupling
+     * face drawn it is the whole cost of moving the line there — the face held the lane anyway —
+     * so the threshold fixtures below get that much more page to keep the scenario each one sets up.
+     */
+    private val TIR_ROW_UNDER_FOOTER_PT = 20f
+
     /** A page this short leaves the full-footer job no room for dual even at the tightest pitch. */
-    private val noDualPageH = 580f
+    private val noDualPageH = 580f + TIR_ROW_UNDER_FOOTER_PT
 
     @Test
     fun `past the tightest dual footer the sheet prints the primary unit only`() {
@@ -457,7 +476,7 @@ class SheetTextOverlapTest {
     fun `a primary-only sheet still tightens its footer when it must`() {
         // Shorter still: even the single-unit footer at its printed pitch leaves the shaft under
         // the floor, so after the units fall back the footer tightens too.
-        val sheetH = 550f
+        val sheetH = 550f + TIR_ROW_UNDER_FOOTER_PT
         val (c, out) = probed(DualUnitLayout.INLINE, sheetSpec = fullFooterSpec, prefs = fullFooterPrefs, sheetH = sheetH)
         assertEquals(SheetDualMode.SINGLE, out.dualMode)
         assertTrue("footer should tighten: ${out.footerTightenedPt}", out.footerTightenedPt > 0f)
@@ -615,7 +634,7 @@ class SheetTextOverlapTest {
     }
 
     @Test
-    fun `a consolidated sheet asked for the largest size prints larger and keeps the TIR line above it`() {
+    fun `a consolidated sheet asked for the largest size prints larger and keeps the TIR line under it`() {
         // Bubbles, the coupling face lane and the rails all share this page with the footer, so it
         // may step down — but it never prints at 100% when a larger step fits, and never collides.
         val base = plainConsolidated(PdfPrefs())
@@ -625,12 +644,7 @@ class SheetTextOverlapTest {
             "footer heading should grow: ${footerHeadingHeight(base)} → ${footerHeadingHeight(c)}",
             footerHeadingHeight(c) > footerHeadingHeight(base) * 1.2f,
         )
-        val tir = c.boxes.first { it.text.startsWith("TIR's taken") }
-        val heading = c.boxes.first { it.text == FOOTER_AFT_TAPER_HEADER }
-        assertTrue(
-            "TIR line (bottom ${tir.rect.bottom}) must sit above the footer heading (top ${heading.rect.top})",
-            tir.rect.bottom <= heading.rect.top,
-        )
+        assertTirUnderFooter("plain consolidated, largest footer", c, pageH)
     }
 
     @Test

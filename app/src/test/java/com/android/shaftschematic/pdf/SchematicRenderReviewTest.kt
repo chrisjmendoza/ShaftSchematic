@@ -121,6 +121,16 @@ class SchematicRenderReviewTest {
         )
         save("wear_named_zones.png", bmp)
 
+        // Default strip election (liners only): the packing readings print as callouts under the
+        // main profile, their leaders crossing the names row the zone name sits in.
+        val (bmpD, cD) = bitmapPage()
+        composeWearPdf(
+            page = pageOn(cD, PDF_PAGE_WIDTH_PT, PDF_PAGE_HEIGHT_PT),
+            spec = spec, project = ProjectInfo(), unit = UnitSystem.INCHES,
+            resolvedComponents = resolveComponents(spec), wearRecord = record.copy(stripComponentIds = null),
+        )
+        save("wear_named_zones_default_strips.png", bmpD)
+
         // In-profile readings at a liner's very ends: pushed in off its end lines.
         val (bmp2, c2) = bitmapPage()
         composeRunoutPdfOnCanvas(
@@ -514,6 +524,11 @@ class SchematicRenderReviewTest {
             "consolidated_dye_pen.png", midTaper,
             config = midTaper.runoutConfig.copy(showDyePenTest = true, showCouplingFace = true),
             wearRecord = midTaper.wearRecord.copy(dyePenResult = DyePenResult.PASS),
+        )
+        // No face and no test row: nothing above the footer but the bubbles; the TIR line under it.
+        renderConsolidated(
+            "consolidated_no_lane.png", midTaper,
+            config = midTaper.runoutConfig.copy(showDyePenTest = false, showSparkTest = false, showCouplingFace = false),
         )
     }
 

@@ -578,10 +578,14 @@ Body OD and liner OD each get a leader-line "Ø" callout hanging **BELOW** the s
 `pdf/notes/DiameterLeaderRenderer.kt`). Body callouts previously alternated above/below;
 they are now all-BELOW, same as liners.
 
-- **Grouping:** one callout per unique OD, anchored at the horizontal center of the
-  *longest* segment carrying that OD. Bodies group by `Body.diaMm`; liners group by
-  `Liner.odMm`. Bodies and liners are **separate groups** — a liner OD is never silently
-  merged with a body OD even when the values match numerically.
+- **Grouping (bodies only):** bodies print one callout per unique Ø (`Body.diaMm`), anchored at
+  the horizontal center of the *longest* run carrying it. **Liners are never grouped**: every liner
+  whose "Show Ø on drawing" is on prints its own callout at its own center (on-device report: a FWD
+  liner sharing the AFT liner's 5.001" OD printed no Ø with its switch on). Bodies and liners are
+  **separate** — a liner OD is never silently merged with a body OD even when the values match
+  numerically. In the join below, each liner pairs only with a body touching IT; the longest liner
+  of a Ø claims a body group first, and a liner whose body group is already taken keeps its own
+  one-leader callout.
 - **One value, two leaders, where a liner meets its own Ø:** a liner and a shown body TOUCHING
   it at the same Ø (within 0.001 mm, body end = liner start or body start = liner end within
   0.01 mm, both resolving to the same display unit) print the value ONCE, with a leader to each

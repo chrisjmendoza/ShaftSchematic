@@ -300,10 +300,12 @@ liner — packing, a grounding strap). `WearSpot.label` (verbatim, blank = unnam
 area) is set by the card's ONE "Area: Packing | Grounding strap | Seal | Other" row
 (`WearAreaNameRow`; Other opens a typed name, re-tapping the selected chip clears it). It never
 enters `ShaftSpec` — nothing splits, collides or reaches the schematic. On the WEAR sheet only, the
-name prints after its host's strip title ("Bare shaft (Packing)", `withWearZoneNames`) and under
-its band in the main profile's names row, slid clear of the liner names by the schematic's own
-`BelowShaftLabelLayout` (`placeWearZoneNames`, `pdf/WearZoneNames.kt`); the consolidated sheet
-prints no zone name. A body's valued readings inside its named areas trace through the ONE
+name prints after its host's strip title ("Bare shaft (Packing)", `withWearZoneNames`) and, for a
+zone on a BODY, under its band in the main profile's names row, sliding along its body clear of the
+liner names and the Ø callout leaders crossing that row (planned first) by the schematic's own
+`BelowShaftLabelLayout` (`placeWearZoneNames`, `pdf/WearZoneNames.kt`) — a LINER's zone stays off
+that row, where the liner's own name sits, and prints in its strip title only; the consolidated
+sheet prints no zone name. Overlapping named zones on one body trace as one (merged in `zonesOn`). A body's valued readings inside its named areas trace through the ONE
 `wearBodyZoneTraces` (`geom/WearTraceMath.kt` — each zone a liner-style band, surface at both
 ends), drawn by the ONE `drawBodyZoneTrace` (`pdf/BodyZoneTraceDraw.kt`: the body draws plain, then
 the worn-away metal is cleared to paper and the edge re-stroked, kept off an S-break gap) on the
@@ -351,9 +353,14 @@ readings instead draw INSIDE the profile at their station — one rotated haloed
 `drawDiaReadingsInProfile` (`RunoutPdfComposer`), liners included, `Ø`-prefixed — replacing
 below-shaft callouts there. **The outline takes precedence over the station**: each value's
 knockout is held inside its component's drawn span, the outline stroke + `IN_PROFILE_FACE_GAP_PT`
-clear of its end lines, and values the push would stack are spread apart in order
-(`keepValueColumnsInsideSpan`, `geom/WornSectionMath.kt`; on-device report: a value read near a
-liner end knocked out the liner's end line — a value need not sit exactly on its station); the wear document itself (the authoring surface) keeps its
+clear of its end lines (its DIGITS — the knockout is clipped to the part, `InProfileValue.clipX`,
+unless the digits cannot fit it, when the value prints whole and unclipped), AND clear of the
+worn-section values and every reading placed before it — digits never under another knockout,
+knockouts never over other digits — each moved at most two knockout widths, never past a
+neighbour, to the NEAREST clear spot, else the least-overlapping one
+(`placeValueColumnsClear`, `geom/WornSectionMath.kt`; on-device report: a value read near a liner
+end knocked out the liner's end line — a value need not sit exactly on its station; a push blind
+to the worn-section values once landed one value on another); the wear document itself (the authoring surface) keeps its
 callout engine unchanged. Valued **liner** readings additionally drive the drawn **worn-profile
 trace** WHEREVER they sit — a wear band is a highlight, never a gate (on-device report: a 9.973"
 reading on a 10" liner drew nothing until a wear area was added): the liner is split into its
@@ -609,7 +616,9 @@ one-line retirement switch for a future full consolidation); the Runout tab auth
 election (`ConsolidatedVariant`: All three (default) | Schematic + Runout | Schematic +
 Wear, via `includeBubbles`/`includeWearInfo`), the worn-section editor, the "Shaft
 height" slider, the per-job **"Dye pen test" row** (`RunoutConfig.showDyePenTest`, default
-OFF — `Dye pen test: ☐ PASS ☐ FAIL` in the TIR line's lane, the boxes marked from the ONE
+OFF — `Dye pen test: ☐ PASS ☐ FAIL` in the lane above the footer, at its left (the TIR line
+prints UNDER the footer, below the taper columns, in a row of its own — on-device request; the
+classic sheet, with no footer, keeps it in that lane), the boxes marked from the ONE
 `WearRecord.dyePenResult` the wear sheet prints through the ONE `drawDyePenBoxes`; none or one,
 never both — the shared `DyePenResultChips` clears on re-tap, a blank draft prints both blank),
 its twin the per-job **"Spark test" row** (`RunoutConfig.showSparkTest`, default OFF —
@@ -1584,7 +1593,9 @@ On-shaft diameter callouts (body OD, liner OD — `buildBodyOdCallouts`/`buildLi
 in `ShaftPdfComposer.kt`) all hang **BELOW** the shaft; do not reintroduce above/below
 alternation. Labels use `formatDiaWithUnit` (inches: a whole number bare, any other value at 3 decimals — `10.990"`, never `10.99"`, on-device report — or 4 when it is exactly an odd sixteenth, `10.9375"`, `LengthFormat.formatInchesDecimal`, on-device ruling; mm compact 1-decimal; the ONE exception is the footer `Thread:` line's major Ø, `formatThreadDiaWithUnit`, which prints a size on the 1/32 grid as its fraction, like the length beside it — `5 1/2"` — and drops trailing zeros off the grid — on-device ruling) to match the
 footer's "Ø" text — never the raw 4-decimal format. Bodies and liners are **separate OD
-groups**, never silently deduped, EXCEPT that a liner and a shown body TOUCHING it at the same Ø
+groups**, never silently deduped; bodies group by Ø, but **every shown liner prints its own
+callout** — liners are never grouped by Ø (on-device report: a FWD liner sharing the AFT liner's
+OD lost its callout, switch on) — EXCEPT that a liner and a shown body TOUCHING it at the same Ø
 (same display unit) print ONE value with a leader to each (on-device request) — decided by the ONE
 `joinSharedOdCallouts`; both leaders drop to one row joined by a line, the value past the outer
 one, and `DiameterCalloutLayout.place` checks both leaders. Horizontally-close labels stack onto

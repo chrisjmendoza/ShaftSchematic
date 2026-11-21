@@ -58,6 +58,24 @@ class WearZoneTest {
         assertTrue(verts.any { it.depthFrac > 0f })
     }
 
+    @Test fun `overlapping zones on one body trace as one`() {
+        val a = Triple("B1", 20f * inch, 10f * inch)
+        val b = Triple("B1", 25f * inch, 10f * inch)
+        val inSecond = Triple("B1", 33f * inch, 9.95f * inch)
+        val verts = wearBodyZoneTraces(listOf(body), listOf(a, b), listOf(inZone, inSecond), 0.025f * inch, 0.25f)
+            .getValue("B1")
+        assertEquals(20f * inch, verts.first().localMm, 1e-3f)
+        assertEquals(35f * inch, verts.last().localMm, 1e-3f)
+        assertTrue("both readings trace", verts.count { it.depthFrac > 0.2f } >= 2)
+    }
+
+    @Test fun `a liner's zone name stays off the profile names row`() {
+        val spots = listOf(WearSpot(id = "s", linerId = "L1", label = "Seal"))
+        val host = com.android.shaftschematic.geom.WearAreaHost("L1", 0f, 100f, 50f, isLiner = true)
+        val spans = listOf(com.android.shaftschematic.geom.WearAreaSpan("s", host, 10f, 20f))
+        assertTrue(wearZoneNameRequests(spans, spots, { it }, { 10f }).isEmpty())
+    }
+
     @Test fun `a reading outside every zone, or with no zone, never traces a body`() {
         assertTrue(wearBodyZoneTraces(listOf(body), listOf(zone), listOf(outside), 0.05f * inch, 0.25f).isEmpty())
         assertTrue(wearBodyZoneTraces(listOf(body), emptyList(), listOf(inZone), 0.05f * inch, 0.25f).isEmpty())
