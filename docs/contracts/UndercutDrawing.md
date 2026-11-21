@@ -38,8 +38,12 @@ runout readings / coupler bolt slots (`CLAUDE.md`). Design rationale lives in
   `resolvedComponents`) with every undercut's notch cut into the profile and a faint tint +
   count badge over **every liner** (whether or not it holds cuts) and every bare-shaft
   **cluster window** — the wear-area tap idiom, with a strip (`geom/UndercutMath.kt`'s
-  `UndercutStrip`) as the selectable area, not a bare window or a single component. No
-  pinch-zoom on this canvas; the overlay owns zoom.
+  `UndercutStrip`) as the selectable area, not a bare window or a single component. The canvas
+  pinch-zooms 1×–6× through the ONE `SheetCanvasZoom` (`ui/screen/SheetCanvasZoom.kt`, shared
+  with the Wear tab's overview; on-device report: a short liner was too small to tap): the
+  transform drives the Canvas `graphicsLayer`, a tap is mapped back through it before
+  hit-testing, a one-finger drag pans only while zoomed (at 1× it scrolls the tab), and the pan
+  is held inside the box. Screen state only.
 - **Preview | Options** row directly under the canvas (testTags `undercut_tab_preview`,
   `undercut_tab_options`), above "Add undercut" — the tab's Preview and Options without scrolling
   to its foot (on-device request). Preview opens the same `PdfPreviewOverlay` the foot's Preview

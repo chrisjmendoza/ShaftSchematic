@@ -413,9 +413,11 @@ the UI contract added on top of the existing wear-document tab.
 
 **Overview canvas (`WearRoute.kt`)** — same rendering pattern as `RunoutRoute`'s preview
 canvas (`ShaftLayout.compute` + `ShaftRenderer.draw` against `resolvedComponents`, never raw
-spec), but deliberately **no pinch-to-zoom** — this canvas only needs a single tap gesture, so
-skipping the transformable/zoom state kept the tap-coordinate math simple (no scale/offset to
-divide out). After `ShaftRenderer.draw`, `drawWearAffordances` adds a faint `SheetInk.Selection`-tint
+spec). It **pinch-zooms** 1×–6× through the ONE `SheetCanvasZoom` (`ui/screen/SheetCanvasZoom.kt`,
+shared with the Undercut tab's overview; on-device report: a short liner on a long shaft was too
+small to tap) — the transform drives the Canvas `graphicsLayer` and a tap is mapped back through
+it before the hit test below; a one-finger drag pans only while zoomed (at 1× it scrolls the tab)
+and the pan is held inside the box. After `ShaftRenderer.draw`, `drawWearAffordances` adds a faint `SheetInk.Selection`-tint
 fill + border over every liner (tap affordance) and a small count badge above any liner that
 already has ≥1 recorded wear spot. (It has since been generalized to every pit-eligible
 component — bodies and tapers too; see "Wear Pits" below.)
@@ -430,8 +432,8 @@ same shape as `PdfPreviewOverlay`: its own `BackHandler` plus a back-arrow top b
 broken-out canvas supports **pinch-to-zoom / two-finger pan** (2026-07-29, on-device request:
 accurate pit / band / Ø placement) via the RunoutRoute preview's transform pattern —
 `transformable` → `graphicsLayer`, taps inverted through the transform so placement math is
-zoom-independent. (The WearRoute *overview* canvas remains deliberately zoom-free — single
-tap-to-open only.) Layout math
+zoom-independent. (The WearRoute *overview* canvas zooms too, through `SheetCanvasZoom` — see
+above.) Layout math
 is self-contained (draws one liner + short neighbor stubs, not the whole shaft, so it does not
 use `ShaftLayout`): `computeLinerDetailPxPerMm` is width-driven but capped by an available-height
 budget so a very short liner doesn't blow its drawn diameter off-canvas. Neighbor stubs (~24dp)

@@ -8,6 +8,14 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-20
 
+### fix(wear, undercut): pinch to zoom the shaft on the Wear and Undercut tabs
+
+The shaft drawing on the Wear tab and on the Undercut tab now zooms with two fingers, up to 6×, so
+a short liner on a long shaft can be zoomed in on and tapped (on-device report). Once zoomed in,
+one finger drags along the shaft; at normal size a one-finger drag still scrolls the page. Pinch
+back out to see the whole shaft. Every other drawing — the Schematic and Final previews, the
+Runout tab, the wear and undercut detail pages and every PDF preview — already zoomed.
+
 ### feat(liner): enter a liner by where it starts and where it ends
 
 The liner card and the Add Liner dialog have a new **End from AFT** / **End from FWD** field under
