@@ -106,6 +106,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.android.shaftschematic.ui.adaptive.readableWidth
+import com.android.shaftschematic.ui.input.nameKeyboard
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -227,6 +228,7 @@ fun TemplatesRoute(
                     onValueChange = { value = it },
                     singleLine = true,
                     label = { Text("Template name") },
+                    keyboardOptions = nameKeyboard(),
                     modifier = Modifier.fillMaxWidth(),
                 )
             },

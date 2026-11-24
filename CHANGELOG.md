@@ -6,6 +6,18 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ---
 
+## 2026-11-23
+
+### feat(input): text fields start with capital letters
+
+Name fields — job number, customer, vessel, item, a custom date, component and wear area names,
+file, template, profile and section sheet names, and the mate dialog's fields — now ask the
+keyboard to capitalise every word ("Acme Boating"). Notes fields (the start card's Notes, the wear
+and undercut notes) read as a paragraph and capitalise only the first word of each sentence. The
+draw-plate thread size box capitalises every letter ("1 1/4 NC", "M30"). It is a keyboard hint
+only: what is typed is stored as typed, so capitals typed in a name ("BC") stay capitals, and a
+letter switched back to lower case stays lower case. Number fields, calculator fields and search boxes are unchanged.
+
 ## 2026-11-20
 
 ### feat(consolidated): the TIR line prints under the footer

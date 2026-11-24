@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -34,6 +33,9 @@ import com.android.shaftschematic.ui.input.shouldCommitOnBlur
 import com.android.shaftschematic.util.UnitSystem
 import com.android.shaftschematic.util.isLengthText
 import com.android.shaftschematic.util.toMmOrNull
+import com.android.shaftschematic.ui.input.allCapsKeyboard
+import com.android.shaftschematic.ui.input.nameKeyboard
+import com.android.shaftschematic.ui.input.notesKeyboard
 
 /**
  * The editor's start card — ALWAYS the carousel's first page, on the Schematic and the Final tab,
@@ -284,6 +286,8 @@ internal fun CommitTextField(
     minHeight: Dp = Dp.Unspecified,
     /** Content at the end of the box (the draw-plate thread-series toggle); none by default. */
     trailing: (@Composable () -> Unit)? = null,
+    /** Every letter a capital (a thread size); a single-line field otherwise capitalises words. */
+    allCaps: Boolean = false,
 ) {
     var text by remember(initialText) { mutableStateOf(initialText) }
     var textWhenFocused by remember(initialText) { mutableStateOf<String?>(null) }
@@ -326,9 +330,12 @@ internal fun CommitTextField(
         trailingIcon = trailing,
         singleLine = singleLine,
         maxLines = if (singleLine) 1 else 5,
-        keyboardOptions = KeyboardOptions(
-            imeAction = if (singleLine) ImeAction.Next else ImeAction.Default
-        ),
+        // A single line holds a name (Customer, Vessel…); the multi-line box is the Notes paragraph.
+        keyboardOptions = when {
+            !singleLine -> notesKeyboard()
+            allCaps -> allCapsKeyboard(ImeAction.Next)
+            else -> nameKeyboard(ImeAction.Next)
+        },
         modifier = modifier
             .fillMaxWidth()
             .let { if (minHeight != Dp.Unspecified) it.heightIn(min = minHeight) else it }
