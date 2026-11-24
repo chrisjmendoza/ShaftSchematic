@@ -33,6 +33,7 @@ import com.android.shaftschematic.settings.DRAWING_PROFILE_MAX_COUNT
 import com.android.shaftschematic.settings.DRAWING_PROFILE_NAME_MAX_CHARS
 import com.android.shaftschematic.settings.DrawingProfile
 import com.android.shaftschematic.ui.input.nameKeyboard
+import com.android.shaftschematic.ui.input.raiseKnownCodes
 
 /**
  * Settings → Drawing → "Profiles": save the current drawing look under a name, apply a saved one,
@@ -63,7 +64,8 @@ internal fun DrawingProfilesSection(
     var confirmRestore by rememberSaveable { mutableStateOf(false) }
 
     val names = remember(profiles) { profiles.keys.sortedBy { it.lowercase() } }
-    val typedName = nameText.trim()
+    // The name Save stores: a code typed last ("skf") is raised as well.
+    val typedName = raiseKnownCodes(nameText, finished = true).trim()
     val replacesExisting = typedName.isNotEmpty() && profiles.containsKey(typedName)
     val atCap = !replacesExisting && profiles.size >= DRAWING_PROFILE_MAX_COUNT
 
@@ -86,7 +88,7 @@ internal fun DrawingProfilesSection(
             OutlinedTextField(
                 value = nameText,
                 onValueChange = { raw ->
-                    if (raw.length <= DRAWING_PROFILE_NAME_MAX_CHARS) nameText = raw
+                    if (raw.length <= DRAWING_PROFILE_NAME_MAX_CHARS) nameText = raiseKnownCodes(raw)
                 },
                 label = { Text("Profile name") },
                 keyboardOptions = nameKeyboard(),
@@ -232,7 +234,7 @@ internal fun DrawingProfilesSection(
                 OutlinedTextField(
                     value = text,
                     onValueChange = { raw ->
-                        if (raw.length <= DRAWING_PROFILE_NAME_MAX_CHARS) text = raw
+                        if (raw.length <= DRAWING_PROFILE_NAME_MAX_CHARS) text = raiseKnownCodes(raw)
                     },
                     label = { Text("Profile name") },
                     keyboardOptions = nameKeyboard(),
@@ -245,7 +247,7 @@ internal fun DrawingProfilesSection(
                     enabled = text.isNotBlank(),
                     onClick = {
                         pendingRename = null
-                        onRename(target, text)
+                        onRename(target, raiseKnownCodes(text, finished = true))
                     },
                 ) { Text("Rename") }
             },

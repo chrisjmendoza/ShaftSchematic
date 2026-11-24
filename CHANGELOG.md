@@ -8,6 +8,13 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com/) and fo
 
 ## 2026-11-23
 
+### feat(input): name fields write shop codes in capitals
+
+Name fields now raise shop codes to capitals as you type them — NC, NF, UNC, UNF, NPT, BC, OD, ID,
+SKF and LLC — so "acme bc" becomes "Acme BC". Only a whole word that is a code changes ("abc" and
+"uncle" stay as typed). A code is raised once a space or punctuation follows it, or when the field
+saves if it is the last word. Notes fields are unchanged.
+
 ### feat(input): text fields start with capital letters
 
 Name fields — job number, customer, vessel, item, a custom date, component and wear area names,

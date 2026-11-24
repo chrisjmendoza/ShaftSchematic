@@ -98,6 +98,7 @@ import java.util.Locale
 import com.android.shaftschematic.ui.theme.strongChipContainer
 import com.android.shaftschematic.ui.theme.strongChipLabel
 import com.android.shaftschematic.ui.input.nameKeyboard
+import com.android.shaftschematic.ui.input.raiseKnownCodes
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Carousel height constant
@@ -1116,19 +1117,19 @@ internal fun EditableCardTitle(
         LaunchedEffect(componentId) { focusRequester.requestFocus() }
         OutlinedTextField(
             value = text,
-            onValueChange = { text = it },
+            onValueChange = { text = raiseKnownCodes(it) },
             singleLine = true,
             placeholder = { Text(title) },
             keyboardOptions = nameKeyboard(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = {
-                onCommitLabel(text.trim().takeIf { it.isNotEmpty() })
+                onCommitLabel(raiseKnownCodes(text, finished = true).trim().takeIf { it.isNotEmpty() })
                 editing = false
             }),
             modifier = Modifier.fillMaxWidth().focusRequester(focusRequester)
                 .onFocusChanged { f ->
                     if (f.isFocused) hasFocusedOnce = true
                     if (hasFocusedOnce && !f.isFocused) {
-                        onCommitLabel(text.trim().takeIf { it.isNotEmpty() })
+                        onCommitLabel(raiseKnownCodes(text, finished = true).trim().takeIf { it.isNotEmpty() })
                         editing = false
                     }
                 }

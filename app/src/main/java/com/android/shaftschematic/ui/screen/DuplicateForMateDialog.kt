@@ -24,6 +24,7 @@ import com.android.shaftschematic.io.InternalStorage
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.util.DocumentNaming
 import com.android.shaftschematic.ui.input.nameKeyboard
+import com.android.shaftschematic.ui.input.raiseKnownCodes
 
 /**
  * The name a mate is offered under: the source's project information re-run through the
@@ -125,7 +126,8 @@ internal fun DuplicateForMateDialog(
         mutableStateOf(TextFieldValue(seed, TextRange(seed.length)))
     }
 
-    val fileName = mateFileNameOrNull(name.text, existingBaseNames)
+    // What Create stores: a code typed last ("bc") is raised as well.
+    val fileName = mateFileNameOrNull(raiseKnownCodes(name.text, finished = true), existingBaseNames)
     val blankName = InternalStorage.normalizeShaftDocName(name.text) == null
 
     AlertDialog(
@@ -136,7 +138,7 @@ internal fun DuplicateForMateDialog(
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = name,
-                    onValueChange = { name = it },
+                    onValueChange = { name = raiseKnownCodes(it) },
                     label = { Text("Name") },
                     keyboardOptions = nameKeyboard(),
                     singleLine = true,
@@ -151,7 +153,7 @@ internal fun DuplicateForMateDialog(
                 )
                 OutlinedTextField(
                     value = job,
-                    onValueChange = { job = it },
+                    onValueChange = { job = raiseKnownCodes(it) },
                     label = { Text("Job Number") },
                     keyboardOptions = nameKeyboard(),
                     singleLine = true,
@@ -159,7 +161,7 @@ internal fun DuplicateForMateDialog(
                 )
                 OutlinedTextField(
                     value = cust,
-                    onValueChange = { cust = it },
+                    onValueChange = { cust = raiseKnownCodes(it) },
                     label = { Text("Customer") },
                     keyboardOptions = nameKeyboard(),
                     singleLine = true,
@@ -167,7 +169,7 @@ internal fun DuplicateForMateDialog(
                 )
                 OutlinedTextField(
                     value = ves,
-                    onValueChange = { ves = it },
+                    onValueChange = { ves = raiseKnownCodes(it) },
                     label = { Text("Vessel") },
                     keyboardOptions = nameKeyboard(),
                     singleLine = true,
@@ -188,7 +190,15 @@ internal fun DuplicateForMateDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { onCreate(fileName ?: return@TextButton, job.text, cust.text, ves.text, side) },
+                onClick = {
+                    onCreate(
+                        fileName ?: return@TextButton,
+                        raiseKnownCodes(job.text, finished = true),
+                        raiseKnownCodes(cust.text, finished = true),
+                        raiseKnownCodes(ves.text, finished = true),
+                        side,
+                    )
+                },
                 enabled = fileName != null,
                 modifier = Modifier.testTag("mate_create"),
             ) { Text("Create") }
