@@ -36,6 +36,7 @@ import com.android.shaftschematic.util.toMmOrNull
 import com.android.shaftschematic.ui.input.allCapsKeyboard
 import com.android.shaftschematic.ui.input.nameKeyboard
 import com.android.shaftschematic.ui.input.notesKeyboard
+import com.android.shaftschematic.ui.input.raiseKnownCodes
 
 /**
  * The editor's start card — ALWAYS the carousel's first page, on the Schematic and the Final tab,
@@ -297,8 +298,16 @@ internal fun CommitTextField(
     var settledText by remember(initialText) { mutableStateOf(initialText) }
     val isDirty = text != settledText
     val focusManager = LocalFocusManager.current
+    // A single-line name raises shop codes ("bc" → "BC"); the Notes paragraph and an all-caps
+    // field do not need it.
+    val raisesCodes = singleLine && !allCaps
+
+    fun finish() {
+        if (raisesCodes) text = raiseKnownCodes(text, finished = true)
+    }
 
     fun acceptEdit(): Boolean {
+        finish()
         settledText = text
         textWhenFocused = text
         onCommit(text)
@@ -325,7 +334,7 @@ internal fun CommitTextField(
 
     OutlinedTextField(
         value = text,
-        onValueChange = { text = it },
+        onValueChange = { text = if (raisesCodes) raiseKnownCodes(it) else it },
         label = { Text(label) },
         trailingIcon = trailing,
         singleLine = singleLine,
@@ -343,6 +352,7 @@ internal fun CommitTextField(
                 if (f.isFocused) {
                     if (textWhenFocused == null) textWhenFocused = text
                 } else if (shouldCommitOnBlur(textWhenFocused, text)) {
+                    finish()
                     settledText = text
                     textWhenFocused = null
                     onCommit(text)

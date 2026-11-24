@@ -10,7 +10,10 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
  * expressions and search boxes use neither.
  */
 
-/** A name (customer, vessel, component, file): every word starts with a capital — "Acme Boating". */
+/**
+ * A name (customer, vessel, component, file): every word starts with a capital — "Acme Boating".
+ * A name field also raises shop codes whole ("bc" → "BC") through [raiseKnownCodes].
+ */
 fun nameKeyboard(imeAction: ImeAction = ImeAction.Default): KeyboardOptions =
     KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = imeAction)
 

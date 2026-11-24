@@ -69,6 +69,7 @@ import com.android.shaftschematic.ui.screen.RenameShaftDocumentDialog
 import com.android.shaftschematic.io.ShaftBackup
 import com.android.shaftschematic.ui.adaptive.readableWidth
 import com.android.shaftschematic.ui.input.nameKeyboard
+import com.android.shaftschematic.ui.input.raiseKnownCodes
 
 /**
 # InternalDocRoutes – open/save shaft docs *inside app storage*
@@ -665,7 +666,7 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
             OutlinedTextField(
                 value = name,
                 onValueChange = {
-                    name = it
+                    name = raiseKnownCodes(it)
                     error = null
                 },
                 label = { Text("File name") },
@@ -720,6 +721,7 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
 
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(onClick = {
+                    name = raiseKnownCodes(name, finished = true)
                     val normalized = InternalStorage.normalizeShaftDocName(name.text)
                     if (normalized == null) {
                         error = "Enter a file name."
@@ -745,6 +747,7 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
             }
 
             OutlinedButton(onClick = {
+                name = raiseKnownCodes(name, finished = true)
                 val base = stripShaftDocExtension(name.text.trim()).ifBlank { "Shaft" }
                 saveCopyLauncher.launchPicker(base + SHAFT_DOT_EXT, what = "save a copy") {
                     scope.launch { snackbarHostState.showSnackbar(NO_PICKER_MESSAGE) }
@@ -854,7 +857,7 @@ private fun SaveAsTemplateDialog(
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = text,
-                    onValueChange = { text = it },
+                    onValueChange = { text = raiseKnownCodes(it) },
                     label = { Text("Template name") },
                     keyboardOptions = nameKeyboard(),
                     singleLine = true,
@@ -869,7 +872,7 @@ private fun SaveAsTemplateDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { onSave(text.text) },
+                onClick = { onSave(raiseKnownCodes(text.text, finished = true)) },
                 enabled = text.text.isNotBlank(),
                 modifier = Modifier.testTag("template_save_confirm"),
             ) { Text("Save") }

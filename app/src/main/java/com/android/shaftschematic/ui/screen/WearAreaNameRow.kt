@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.WearAreaName
 import com.android.shaftschematic.ui.input.nameKeyboard
+import com.android.shaftschematic.ui.input.raiseKnownCodes
 
 /**
  * The wear-area card's "Area:" row — what runs on the area (on-device request: wear where there
@@ -75,7 +76,7 @@ internal fun WearAreaNameRow(
             var focusText by remember(spotId, label) { mutableStateOf<String?>(null) }
             OutlinedTextField(
                 value = draft,
-                onValueChange = { draft = it },
+                onValueChange = { draft = raiseKnownCodes(it) },
                 label = { Text("Area name") },
                 keyboardOptions = nameKeyboard(),
                 singleLine = true,
@@ -88,7 +89,10 @@ internal fun WearAreaNameRow(
                         } else {
                             val captured = focusText
                             focusText = null
-                            if (captured != null && draft != captured) onCommit(draft)
+                            if (captured != null && draft != captured) {
+                                draft = raiseKnownCodes(draft, finished = true)
+                                onCommit(draft)
+                            }
                         }
                     },
             )

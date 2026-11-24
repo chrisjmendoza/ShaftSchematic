@@ -107,6 +107,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.android.shaftschematic.ui.adaptive.readableWidth
 import com.android.shaftschematic.ui.input.nameKeyboard
+import com.android.shaftschematic.ui.input.raiseKnownCodes
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -225,7 +226,7 @@ fun TemplatesRoute(
             text = {
                 OutlinedTextField(
                     value = value,
-                    onValueChange = { value = it },
+                    onValueChange = { value = raiseKnownCodes(it) },
                     singleLine = true,
                     label = { Text("Template name") },
                     keyboardOptions = nameKeyboard(),
@@ -240,7 +241,7 @@ fun TemplatesRoute(
                         // Same sanitizer documents get: `*?:` typed here would otherwise ride
                         // straight into a filename that the Open screen would never have made.
                         val to = TemplateStorage.normalizeTemplateName(
-                            DocumentNaming.sanitizePart(value.text)
+                            DocumentNaming.sanitizePart(raiseKnownCodes(value.text, finished = true))
                         )
                         // Renaming a template to the name it already has is a no-op, not a
                         // collision — the store would report TARGET_EXISTS against itself.

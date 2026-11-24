@@ -28,6 +28,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.android.shaftschematic.ui.input.nameKeyboard
+import com.android.shaftschematic.ui.input.raiseKnownCodes
 
 /** Test tag on the rename dialog's name field. */
 const val RENAME_DOC_FIELD_TAG = "rename_doc_field"
@@ -125,7 +126,7 @@ fun RenameShaftDocumentDialog(
                     value = value,
                     onValueChange = {
                         if (it.text != value.text) refusal = null
-                        value = it
+                        value = raiseKnownCodes(it)
                     },
                     singleLine = true,
                     label = { Text("Name") },
@@ -143,6 +144,7 @@ fun RenameShaftDocumentDialog(
         confirmButton = {
             TextButton(
                 onClick = {
+                    value = raiseKnownCodes(value, finished = true)
                     when (val outcome = renameOutcomeFor(fromName, value.text)) {
                         RenameOutcome.Blank -> refusal = RENAME_BLANK_NAME_MESSAGE
 

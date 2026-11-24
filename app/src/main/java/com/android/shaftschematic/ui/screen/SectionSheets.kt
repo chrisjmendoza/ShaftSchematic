@@ -49,6 +49,7 @@ import com.android.shaftschematic.util.buildLinerTitleById
 import com.android.shaftschematic.util.buildTaperTitleById
 import com.android.shaftschematic.util.buildThreadTitleById
 import com.android.shaftschematic.ui.input.nameKeyboard
+import com.android.shaftschematic.ui.input.raiseKnownCodes
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Section sheets — the PDF preview's sheet picker and the dialog that edits the job's
@@ -254,7 +255,7 @@ private fun SectionEditDialog(
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = name,
-                    onValueChange = { name = it },
+                    onValueChange = { name = raiseKnownCodes(it) },
                     label = { Text("Name") },
                     keyboardOptions = nameKeyboard(),
                     supportingText = { Text("Prints at the top of the sheet and names its file.") },
@@ -290,7 +291,7 @@ private fun SectionEditDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { onSave(name, firstId, lastId) },
+                onClick = { onSave(raiseKnownCodes(name, finished = true), firstId, lastId) },
                 enabled = prints,
                 modifier = Modifier.testTag("section_save"),
             ) { Text("Save") }
