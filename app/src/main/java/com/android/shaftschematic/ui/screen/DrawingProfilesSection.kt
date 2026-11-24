@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.settings.DRAWING_PROFILE_MAX_COUNT
 import com.android.shaftschematic.settings.DRAWING_PROFILE_NAME_MAX_CHARS
 import com.android.shaftschematic.settings.DrawingProfile
+import com.android.shaftschematic.ui.input.nameKeyboard
 
 /**
  * Settings → Drawing → "Profiles": save the current drawing look under a name, apply a saved one,
@@ -88,6 +89,7 @@ internal fun DrawingProfilesSection(
                     if (raw.length <= DRAWING_PROFILE_NAME_MAX_CHARS) nameText = raw
                 },
                 label = { Text("Profile name") },
+                keyboardOptions = nameKeyboard(),
                 singleLine = true,
                 modifier = Modifier
                     .weight(1f)
@@ -233,6 +235,7 @@ internal fun DrawingProfilesSection(
                         if (raw.length <= DRAWING_PROFILE_NAME_MAX_CHARS) text = raw
                     },
                     label = { Text("Profile name") },
+                    keyboardOptions = nameKeyboard(),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )

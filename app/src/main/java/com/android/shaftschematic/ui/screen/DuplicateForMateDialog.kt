@@ -23,6 +23,7 @@ import com.android.shaftschematic.doc.stripShaftDocExtension
 import com.android.shaftschematic.io.InternalStorage
 import com.android.shaftschematic.model.ShaftPosition
 import com.android.shaftschematic.util.DocumentNaming
+import com.android.shaftschematic.ui.input.nameKeyboard
 
 /**
  * The name a mate is offered under: the source's project information re-run through the
@@ -137,6 +138,7 @@ internal fun DuplicateForMateDialog(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("Name") },
+                    keyboardOptions = nameKeyboard(),
                     singleLine = true,
                     isError = fileName == null,
                     supportingText = {
@@ -151,6 +153,7 @@ internal fun DuplicateForMateDialog(
                     value = job,
                     onValueChange = { job = it },
                     label = { Text("Job Number") },
+                    keyboardOptions = nameKeyboard(),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().testTag("mate_job_number"),
                 )
@@ -158,6 +161,7 @@ internal fun DuplicateForMateDialog(
                     value = cust,
                     onValueChange = { cust = it },
                     label = { Text("Customer") },
+                    keyboardOptions = nameKeyboard(),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().testTag("mate_customer"),
                 )
@@ -165,6 +169,7 @@ internal fun DuplicateForMateDialog(
                     value = ves,
                     onValueChange = { ves = it },
                     label = { Text("Vessel") },
+                    keyboardOptions = nameKeyboard(),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().testTag("mate_vessel"),
                 )

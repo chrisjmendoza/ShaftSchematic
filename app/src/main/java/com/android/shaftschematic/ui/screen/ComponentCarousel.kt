@@ -26,7 +26,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
@@ -98,6 +97,7 @@ import kotlinx.coroutines.launch
 import java.util.Locale
 import com.android.shaftschematic.ui.theme.strongChipContainer
 import com.android.shaftschematic.ui.theme.strongChipLabel
+import com.android.shaftschematic.ui.input.nameKeyboard
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Carousel height constant
@@ -1119,7 +1119,7 @@ internal fun EditableCardTitle(
             onValueChange = { text = it },
             singleLine = true,
             placeholder = { Text(title) },
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardOptions = nameKeyboard(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = {
                 onCommitLabel(text.trim().takeIf { it.isNotEmpty() })
                 editing = false

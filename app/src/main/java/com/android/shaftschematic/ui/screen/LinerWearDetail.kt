@@ -160,6 +160,7 @@ import com.android.shaftschematic.util.valueForSave
 import kotlinx.coroutines.launch
 import com.android.shaftschematic.ui.theme.strongChipContainer
 import com.android.shaftschematic.ui.theme.strongChipLabel
+import com.android.shaftschematic.ui.input.notesKeyboard
 
 /**
  * ComponentWearDetail
@@ -1517,6 +1518,7 @@ private fun WearSpotCard(
                 value = noteDraft,
                 onValueChange = { noteDraft = it },
                 label = { Text("Notes") },
+                keyboardOptions = notesKeyboard(),
                 singleLine = false,
                 maxLines = 3,
                 modifier = Modifier

@@ -48,6 +48,7 @@ import com.android.shaftschematic.util.buildBodyTitleById
 import com.android.shaftschematic.util.buildLinerTitleById
 import com.android.shaftschematic.util.buildTaperTitleById
 import com.android.shaftschematic.util.buildThreadTitleById
+import com.android.shaftschematic.ui.input.nameKeyboard
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Section sheets — the PDF preview's sheet picker and the dialog that edits the job's
@@ -255,6 +256,7 @@ private fun SectionEditDialog(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("Name") },
+                    keyboardOptions = nameKeyboard(),
                     supportingText = { Text("Prints at the top of the sheet and names its file.") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().testTag("section_name"),

@@ -68,6 +68,7 @@ import com.android.shaftschematic.ui.screen.DuplicateForMateDialog
 import com.android.shaftschematic.ui.screen.RenameShaftDocumentDialog
 import com.android.shaftschematic.io.ShaftBackup
 import com.android.shaftschematic.ui.adaptive.readableWidth
+import com.android.shaftschematic.ui.input.nameKeyboard
 
 /**
 # InternalDocRoutes – open/save shaft docs *inside app storage*
@@ -668,6 +669,7 @@ fun SaveLocalDocumentRoute(               // ← renamed (no clash with SAF)
                     error = null
                 },
                 label = { Text("File name") },
+                keyboardOptions = nameKeyboard(),
                 isError = error != null,
                 supportingText = {
                     when {
@@ -854,6 +856,7 @@ private fun SaveAsTemplateDialog(
                     value = text,
                     onValueChange = { text = it },
                     label = { Text("Template name") },
+                    keyboardOptions = nameKeyboard(),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().testTag("template_name_field"),
                 )

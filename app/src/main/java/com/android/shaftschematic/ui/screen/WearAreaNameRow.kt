@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.android.shaftschematic.model.WearAreaName
+import com.android.shaftschematic.ui.input.nameKeyboard
 
 /**
  * The wear-area card's "Area:" row — what runs on the area (on-device request: wear where there
@@ -76,6 +77,7 @@ internal fun WearAreaNameRow(
                 value = draft,
                 onValueChange = { draft = it },
                 label = { Text("Area name") },
+                keyboardOptions = nameKeyboard(),
                 singleLine = true,
                 modifier = Modifier
                     .fillMaxWidth()

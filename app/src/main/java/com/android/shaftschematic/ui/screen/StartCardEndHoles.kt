@@ -108,6 +108,7 @@ private fun EndHolesBlock(
                     initialText = holes.drawPlateSize,
                     onCommit = { onChange(holes.copy(drawPlateSize = it)) },
                     modifier = Modifier.testTag("end_${tag}_draw_plate_size"),
+                    allCaps = true,
                     trailing = {
                         ThreadSeriesToggle(holes.drawPlateSeries, "end_${tag}_draw_plate_series") {
                             onChange(holes.copy(drawPlateSeries = it))

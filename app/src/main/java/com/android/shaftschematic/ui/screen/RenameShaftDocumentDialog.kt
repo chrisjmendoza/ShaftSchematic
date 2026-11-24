@@ -27,6 +27,7 @@ import com.android.shaftschematic.util.DocumentNaming
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.android.shaftschematic.ui.input.nameKeyboard
 
 /** Test tag on the rename dialog's name field. */
 const val RENAME_DOC_FIELD_TAG = "rename_doc_field"
@@ -128,6 +129,7 @@ fun RenameShaftDocumentDialog(
                     },
                     singleLine = true,
                     label = { Text("Name") },
+                    keyboardOptions = nameKeyboard(),
                     isError = refusal != null,
                     supportingText = refusal?.let { msg ->
                         { Text(msg, modifier = Modifier.testTag(RENAME_DOC_REFUSAL_TAG)) }

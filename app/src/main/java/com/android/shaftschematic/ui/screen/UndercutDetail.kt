@@ -247,6 +247,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlin.math.max
 import kotlin.math.min
+import com.android.shaftschematic.ui.input.notesKeyboard
 
 /**
  * UndercutDetail
@@ -3668,6 +3669,7 @@ private fun UndercutDraftCard(
                 value = draft.note,
                 onValueChange = { onDraftChange(draft.copy(note = it)) },
                 label = { Text("Notes") },
+                keyboardOptions = notesKeyboard(),
                 singleLine = false,
                 maxLines = 3,
                 modifier = Modifier.fillMaxWidth(),
